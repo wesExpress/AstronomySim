@@ -97,7 +97,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     
     // determine uniforms
     dm_vec3 a_c = dm_vec3_set(1,1,1);
-    float   a_strength = 0.33f;
+    float   a_strength = 0.00f;
     a_c = dm_vec3_scale(a_c, a_strength);
     
     default_scene_uni uni = { 0 };
