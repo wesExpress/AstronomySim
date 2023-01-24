@@ -13,15 +13,12 @@ SIMPLE ENTRY POINT
 ********************/
 int main(int argc, char** argv)
 {
+    uint32_t return_code;
     /////////////////////////////////////////////////////
-    if(!dm_init(100,100,DEFAULT_SCREEN_WIDTH,DEFAULT_SCREEN_HEIGHT,"test",true)) 
-    {
-        getchar();
-        return INIT_FAIL;
-    }
+    if(!dm_init(100,100,DEFAULT_SCREEN_WIDTH,DEFAULT_SCREEN_HEIGHT,"test",true)) return_code = INIT_FAIL;
     /////////////////////////////////////////////////////
     
-    uint32_t return_code = app_run();
+    if(return_code == SUCCESS) return_code = app_run();
     
     // shutdown dark matter
     dm_shutdown();
