@@ -1,8 +1,7 @@
 #define DM_IMPL
-#define DM_SLOT_ARRAY_BIG_INDEX
-#include "../dm.h"
+#include "DarkMatter/dm.h"
 
-#include "app.h"
+#include "app/app.h"
 
 #define DEFAULT_SCREEN_WIDTH  1980
 #define DEFAULT_SCREEN_HEIGHT 1080
@@ -15,7 +14,11 @@ SIMPLE ENTRY POINT
 int main(int argc, char** argv)
 {
     /////////////////////////////////////////////////////
-    if(!dm_init(100,100,DEFAULT_SCREEN_WIDTH,DEFAULT_SCREEN_HEIGHT,"test",true)) return INIT_FAIL;
+    if(!dm_init(100,100,DEFAULT_SCREEN_WIDTH,DEFAULT_SCREEN_HEIGHT,"test",true)) 
+    {
+        getchar();
+        return INIT_FAIL;
+    }
     /////////////////////////////////////////////////////
     
     uint32_t return_code = app_run();

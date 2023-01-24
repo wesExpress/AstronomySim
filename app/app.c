@@ -1,7 +1,7 @@
 #include "app.h"
 #include "camera.h"
-#include "default_pass.h"
-#include "gravity.h"
+#include "../systems/default_pass.h"
+#include "../systems/gravity.h"
 
 #define BILBOARD_SIZE (0.05f)
 #define M_SCALE       (1e9)    // kg
