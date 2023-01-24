@@ -1,0 +1,17 @@
+build/*
+*/out/*
+out/*
+.vs/*
+bin/*
+
+.vscode/*
+
+.DS_STORE
+
+*.cod
+*.air
+*.metallib
+
+*.4coder
+
+*.fxc
