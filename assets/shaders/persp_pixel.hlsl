@@ -6,6 +6,13 @@ struct PS_INPUT
 	float3 frag_pos     : FRAG_POS;
 	float4 obj_diffuse  : OBJ_DIFFUSE1;
 	float4 obj_specular : OBJ_SPECULAR1;
+	float  logz         : LOGZ;
+};
+
+struct PS_OUTPUT
+{
+	float4 color : SV_Target;
+	float  depth : SV_Depth;
 };
 
 cbuffer scene_cb : register(b0)
@@ -14,15 +21,17 @@ cbuffer scene_cb : register(b0)
 	float4 light_color;
 	float4 ambient_color;
 	float3 light_pos;
-	float  padding;
+	float  fcoef_inv;
 	float3 view_pos;
 };
 
 SamplerState sample_state;
 Texture2D obj_texture : register(t0);
 
-float4 p_main(PS_INPUT input) : SV_Target
+PS_OUTPUT p_main(PS_INPUT input)
 {
+	PS_OUTPUT output = (PS_OUTPUT)0;
+
 	float3 norm_normal = normalize(input.normal);
 	float3 light_dir = normalize(light_pos - input.frag_pos);
 	float3 view_dir = normalize(view_pos - input.frag_pos);
@@ -36,5 +45,9 @@ float4 p_main(PS_INPUT input) : SV_Target
 	float4 diffuse  = diff * light_color * input.obj_diffuse * texture_color;
 	float4 specular = spec * light_color * input.obj_specular * texture_color; 
 
-	return (ambient_color * input.obj_diffuse * texture_color + diffuse + specular);
+	output.color = (ambient_color * input.obj_diffuse * texture_color + diffuse + specular);
+	
+	output.depth = log2(input.logz) * fcoef_inv;
+
+	return output;
 }

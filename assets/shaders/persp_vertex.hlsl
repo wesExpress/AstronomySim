@@ -17,6 +17,7 @@ struct PS_INPUT
 	float3 frag_pos     : FRAG_POS;
 	float4 obj_diffuse  : OBJ_DIFFUSE1;
 	float4 obj_specular : OBJ_SPECULAR1;
+	float  logz         : LOGZ;
 };
 
 cbuffer scene_cb : register(b0)
@@ -25,7 +26,7 @@ cbuffer scene_cb : register(b0)
 	float4 light_color;
 	float4 ambient_color;
 	float3 light_pos;
-	float  padding;
+	float  fcoef_inv;
 	float3 view_pos;
 };
 
@@ -43,6 +44,8 @@ PS_INPUT v_main(VS_INPUT input)
 
 	output.obj_diffuse = input.obj_diffuse;
 	output.obj_specular = input.obj_specular;
+
+	output.logz = 1.0f + output.position.w;
 
 	return output;
 }
