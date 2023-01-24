@@ -1,5 +1,12 @@
 #include "app.h"
+
+#define STRESS_TEST
+
+#ifdef STRESS_TEST
 #include "stress_test.h"
+#else
+#include "space_sim.h"
+#endif
 
 #define APP_FUNC_CHECK(FUNC) {\
 return_code app_return = FUNC;\
@@ -9,7 +16,11 @@ if(app_return != SUCCESS) return app_return;\
 return_code app_run()
 {
     ////////////////////////////////////
+#ifdef STRESS_TEST
     APP_FUNC_CHECK(stress_test_init());
+#else
+    APP_FUNC_CHECK(space_sim_init());
+#endif
     ////////////////////////////////////
     
     // main loop
@@ -34,7 +45,11 @@ return_code app_run()
         if(!dm_begin_update()) break;
         
         //////////////////////////////////////
+#ifdef STRESS_TEST
         APP_FUNC_CHECK(stress_test_update());
+#else
+        APP_FUNC_CHECK(space_sim_update());
+#endif
         //////////////////////////////////////
         
         if(dm_input_key_just_pressed(DM_KEY_P)) dm_physics_toggle_pause();
@@ -46,7 +61,11 @@ return_code app_run()
         if(!dm_renderer_begin_frame()) return RENDER_FAIL;
         
         //////////////////////////////////////
+#ifdef STRESS_TEST
         APP_FUNC_CHECK(stress_test_render());
+#else
+        APP_FUNC_CHECK(space_sim_render());
+#endif
         //////////////////////////////////////
         
         render_time = dm_timer_elapsed_ms(&render_timer);
