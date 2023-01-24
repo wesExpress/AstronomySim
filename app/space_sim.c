@@ -9,27 +9,32 @@ typedef struct space_sim_data_t
     dm_entity entities[2];
 } space_sim_data;
 
-space_sim_data app_data = { 0 };
+space_sim_data space_data = { 0 };
+
+#define G          6.673e-11f
+#define EARTH_G    9.8f
+#define E_G_OVER_G 1.47e11f   // kg / m^2
 
 return_code space_sim_init()
 {
     const dm_vec4 white = dm_vec4_set(1,1,1,1);
     const float gray_scale = 0.5f;
     
-    const float r_moon = 1.7374e6f;   // m
-    const float m_moon = 7.3459e22f;  // kg
+    //const float r_moon = 1.7374e6f;   // m
+    //const float m_moon = 7.3459e22f;  // kg
+    float r_planet = 1e4f;
     const dm_vec4 c_moon = dm_vec4_set(white.x * gray_scale, white.y * gray_scale, white.z * gray_scale, 1);
     
     // gravity system
     gravity_system_init();
     
     // init camera
-    init_camera(dm_vec3_set(r_moon * 4,0,0), dm_vec3_set(-1,0,0), 0.1f, 1e13f, 45.0f, 0.3f, 5.0f, DM_SCREEN_WIDTH, DM_SCREEN_HEIGHT, &app_data.camera);
+    init_camera(dm_vec3_set(r_planet * 4,0,0), dm_vec3_set(-1,0,0), 0.1f, 1e13f, 45.0f, 0.3f, 5.0f, DM_SCREEN_WIDTH, DM_SCREEN_HEIGHT, &space_data.camera);
     
     // link camera view_proj to debug draw pass
-    dm_debug_render_set_view_proj(&app_data.camera.view_proj);
-    dm_debug_render_set_inv_view(&app_data.camera.inv_view);
-    dm_debug_render_set_far_plane(&app_data.camera.far_plane);
+    dm_debug_render_set_view_proj(&space_data.camera.view_proj);
+    dm_debug_render_set_inv_view(&space_data.camera.inv_view);
+    dm_debug_render_set_far_plane(&space_data.camera.far_plane);
     
     // render passes
     float* positions = NULL;
@@ -47,7 +52,7 @@ return_code space_sim_init()
     dm_geometry_icosphere(4, &positions, &normals, &tex_coords, &indices, num_vertices, &num_vertices, &num_indices, &meshes[num_meshes++]);
     
     // submit data
-    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), &app_data.camera)) return INIT_FAIL;
+    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), &space_data.camera)) return INIT_FAIL;
     
     dm_free(positions);
     dm_free(normals);
@@ -57,17 +62,30 @@ return_code space_sim_init()
     // entities
     // big planet and box for flying around
     
-    // planet (using moon data)
-    dm_vec3 scale = { r_moon,r_moon,r_moon };
+    // planet
+    float m_planet = r_planet * r_planet * E_G_OVER_G;
+    
+    dm_vec3 scale = { r_planet,r_planet,r_planet };
     dm_vec3 pos   = { 0 };
     dm_quat rot   = { 0,0,0,1 };
     
-    app_data.entities[0] = dm_ecs_create_entity();
-    dm_ecs_entity_add_transform_v(app_data.entities[0], pos, scale, rot);
-    dm_ecs_entity_add_collision(app_data.entities[0], DM_COLLISION_SHAPE_SPHERE);
-    dm_ecs_entity_add_physics_at_rest(app_data.entities[0], m_moon, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC); 
-    dm_ecs_entity_add_mesh(app_data.entities[0], 1);
-    dm_ecs_entity_add_material(app_data.entities[0], c_moon, c_moon);
+    space_data.entities[0] = dm_ecs_create_entity();
+    dm_ecs_entity_add_transform_v(space_data.entities[0], pos, scale, rot);
+    dm_ecs_entity_add_collision(space_data.entities[0], DM_COLLISION_SHAPE_SPHERE);
+    dm_ecs_entity_add_physics_at_rest(space_data.entities[0], m_planet, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC); 
+    dm_ecs_entity_add_mesh(space_data.entities[0], 1);
+    dm_ecs_entity_add_material(space_data.entities[0], c_moon, c_moon);
+    
+    // box (space ship lmao)
+    scale = dm_vec3_set(10,0.5f,1);
+    pos = dm_vec3_set(r_planet + 30.0f,0,0);
+    
+    space_data.entities[1] = dm_ecs_create_entity();
+    dm_ecs_entity_add_transform_v(space_data.entities[1], pos, scale, rot);
+    dm_ecs_entity_add_collision(space_data.entities[1], DM_COLLISION_SHAPE_BOX);
+    dm_ecs_entity_add_physics_at_rest(space_data.entities[1], 100.0f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC); 
+    dm_ecs_entity_add_mesh(space_data.entities[1], 0);
+    dm_ecs_entity_add_material(space_data.entities[1], dm_vec4_set(1,0,0,1), dm_vec4_set(1,0,0,1));
     
     return SUCCESS;
 }
@@ -78,8 +96,24 @@ return_code space_sim_update()
     uint32_t height = DM_SCREEN_HEIGHT;
     
     // update camera
-    resize_camera(width, height, &app_data.camera);
-    update_camera(dm_get_delta_time(), &app_data.camera);
+    resize_camera(width, height, &space_data.camera);
+    
+    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    
+    float* vel_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_X);
+    float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Y);
+    float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Z);
+    
+    dm_entity rocket = space_data.entities[1];
+    dm_vec3 pos = { pos_x[rocket],pos_y[rocket],pos_z[rocket] };
+    dm_vec3 vel = { vel_x[rocket],vel_y[rocket],vel_z[rocket] };
+    
+    dm_imgui_text_fmt(10,475, 1,1,0,1, "Rocket pos: x:%0.2f, y:%0.2f, z:%0.2f", pos.x, pos.y, pos.z);
+    dm_imgui_text_fmt(10,500, 1,1,0,1, "Rocket vel: x:%0.2f, y:%0.2f, z:%0.2f", vel.x, vel.y, vel.z);
+    
+    track_camera(pos, 10.0f, &space_data.camera);
     
     return SUCCESS;
 }

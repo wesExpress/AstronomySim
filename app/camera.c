@@ -86,6 +86,7 @@ void update_camera(float delta_time, view_camera* camera)
     }
     
     if(moved || rotated) update_camera_view(camera);
+    //update_camera_view(camera);
 }
 
 void resize_camera(uint32_t width, uint32_t height, view_camera* camera)
@@ -96,4 +97,31 @@ void resize_camera(uint32_t width, uint32_t height, view_camera* camera)
     camera->height = height;
     
     update_camera_proj(camera);
+}
+
+void track_camera(dm_vec3 pos, float distance, view_camera* camera)
+{
+    float speed = dm_get_delta_time() * camera->move_speed;
+    int delta_x, delta_y;
+    dm_input_get_mouse_delta(&delta_x, &delta_y);
+    
+    static float dx = 0.0f;
+    static float dy = 0.0f;
+    
+    dx -= (float)delta_x * camera->look_sens;
+    dy += (float)delta_y * camera->look_sens;
+    
+    float aspect_ratio = DM_SCREEN_WIDTH_F / DM_SCREEN_HEIGHT_F;
+    
+    float d_horz = distance * dm_cosd(dy);
+    float d_vert = distance * dm_sind(dy);
+    
+    float xOffset = d_horz * dm_sind(-dx);
+    float zOffset = d_horz * dm_cosd(-dx);
+    
+    camera->pos.x = pos.x + xOffset;
+    camera->pos.y = pos.y - d_vert;
+    camera->pos.z = pos.z + zOffset;
+    
+    update_camera_view(camera);
 }

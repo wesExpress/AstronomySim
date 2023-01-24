@@ -17,4 +17,6 @@ void init_camera(dm_vec3 pos, dm_vec3 forward, float near_plane, float far_plane
 void update_camera(float delta_time, view_camera* camera);
 void resize_camera(uint32_t width, uint32_t height, view_camera* camera);
 
+void track_camera(dm_vec3 pos, float angle, view_camera* camera);
+
 #endif //CAMERA_H

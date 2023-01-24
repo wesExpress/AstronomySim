@@ -24,7 +24,7 @@ typedef struct stress_test_data_t
     view_camera camera;
 } stress_test_data;
 
-static stress_test_data app_data = { 0 };
+static stress_test_data stress_data = { 0 };
 
 dm_entity stress_test_make_object()
 {
@@ -97,7 +97,7 @@ void stress_test_debug_draw()
     
     for(uint32_t i=0; i<NUM_OBJECTS; i++)
     {
-        dm_entity entity = app_data.objects[i];
+        dm_entity entity = stress_data.objects[i];
         
         bool* is_colliding = dm_ecs_get_component_member(DM_COMPONENT_COLLISION, DM_COLLISION_MEM_IS_COLLIDING);
         bool* possibly_colliding = dm_ecs_get_component_member(DM_COMPONENT_COLLISION, DM_COLLISION_MEM_POSSIBLY_COLLIDING);
@@ -136,11 +136,11 @@ return_code stress_test_init()
     
     // init camera
     float d = 6;
-    init_camera(dm_vec3_set(d,d,d), dm_vec3_set(-1,-1,-1), 0.1f, 100.0f, 45.0f, 0.3f, 5.0f, DM_SCREEN_WIDTH, DM_SCREEN_HEIGHT, &app_data.camera);
+    init_camera(dm_vec3_set(d,d,d), dm_vec3_set(-1,-1,-1), 0.1f, 100.0f, 45.0f, 0.3f, 5.0f, DM_SCREEN_WIDTH, DM_SCREEN_HEIGHT, &stress_data.camera);
     
     // link camera view_proj to debug draw pass
-    dm_debug_render_set_view_proj(&app_data.camera.view_proj);
-    dm_debug_render_set_inv_view(&app_data.camera.inv_view);
+    dm_debug_render_set_view_proj(&stress_data.camera.view_proj);
+    dm_debug_render_set_inv_view(&stress_data.camera.inv_view);
     
     // render passes
     float* positions = NULL;
@@ -161,7 +161,7 @@ return_code stress_test_init()
     dm_geometry_icosphere(4, &positions, &normals, &tex_coords, &indices, num_vertices, &num_vertices, &num_indices, &meshes[num_meshes++]);
     
     // submit data
-    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), &app_data.camera)) return INIT_FAIL;
+    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), &stress_data.camera)) return INIT_FAIL;
     
     dm_free(positions);
     dm_free(normals);
@@ -170,7 +170,7 @@ return_code stress_test_init()
     
     for(uint32_t i=0; i<NUM_OBJECTS; i++)
     {
-        app_data.objects[i] = stress_test_make_object();
+        stress_data.objects[i] = stress_test_make_object();
     }
     
     return SUCCESS;
@@ -182,18 +182,18 @@ return_code stress_test_update()
     uint32_t height = DM_SCREEN_HEIGHT;
     
     // update camera
-    resize_camera(width, height, &app_data.camera);
-    update_camera(dm_get_delta_time(), &app_data.camera);
+    resize_camera(width, height, &stress_data.camera);
+    update_camera(dm_get_delta_time(), &stress_data.camera);
     
     return SUCCESS;
 }
 
 return_code stress_test_render()
 {
-    if(dm_input_key_just_pressed(DM_KEY_TAB)) app_data.debug_draw = !app_data.debug_draw;
+    if(dm_input_key_just_pressed(DM_KEY_TAB)) stress_data.debug_draw = !stress_data.debug_draw;
     
     // debug drawing
-    if(app_data.debug_draw) stress_test_debug_draw();
+    if(stress_data.debug_draw) stress_test_debug_draw();
     
     return SUCCESS;
 }
