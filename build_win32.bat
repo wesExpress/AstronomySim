@@ -3,7 +3,7 @@ SetLocal EnableDelayedExpansion
 
 SET SRC_DIR=%cd%
 
-SET /A opengl=0
+SET /A opengl=1
 SET /A debug=1
 SET /A simd_256=1
 
@@ -50,6 +50,8 @@ REM hlsl shaders
 IF /I "%opengl%" EQU "0" (
 	SET fxc_flags=/Fc /Od /Zi
 	
+	if not exist "assets/shaders" mkdir assets\shaders
+
 	REM  app shaders
 	cd ../assets/shaders
 	
@@ -69,7 +71,7 @@ IF /I "%opengl%" EQU "0" (
 
 		fxc %fxc_flags% !shader_flags! !fname! /Fo !output!
 
-		move !output! ../../build/
+		move !output! ../../build/assets/shaders
 	)
 
 	REM dark matter default shaders
@@ -91,11 +93,27 @@ IF /I "%opengl%" EQU "0" (
 
 		fxc %fxc_flags% !shader_flags! !fname! /Fo !output!
 
-		move !output! ../../../build/
+		move !output! ../../../build/assets/shaders
 	)
+
+	cd ../../..
+) ELSE (
+	
+	if not exist "assets/shaders" mkdir assets\shaders
+	
+	cd ../assets/shaders
+	FOR /R %%f IN (*.glsl) DO (
+		copy /y "%%f" ..\..\build\assets\shaders\
+	)
+
+	cd ../../DarkMatter/assets/shaders
+	FOR /R %%f IN (*.glsl) DO (
+		copy /y "%%f" ..\..\..\build\assets\shaders\
+	)
+
+	cd ../../..
 )
 
-cd ../../..
 if not exist "build/assets" mkdir build\assets
 
 if not exist "build/assets/textures" mkdir build\assets\textures

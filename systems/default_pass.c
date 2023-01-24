@@ -204,9 +204,9 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     
     if(!dm_renderer_create_pipeline(pipeline_desc, &handles.pipeline)) return false;
 #ifdef DM_OPENGL
-    if(!dm_renderer_create_renderpass("persp_vertex.glsl", "persp_pixel.glsl", vb_buffers, 2, unis, num_unis, attrib_descs, num_attribs, &handles.pass)) return false;
+    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, 2, unis, num_unis, attrib_descs, num_attribs, &handles.pass)) return false;
 #else
-    if(!dm_renderer_create_renderpass("persp_vertex.fxc", "persp_pixel.fxc", unis, num_unis, attrib_descs, num_attribs, &handles.pass)) return false;
+    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, num_unis, attrib_descs, num_attribs, &handles.pass)) return false;
 #endif
     
     if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, true, "default_texture", &handles.default_texture)) return false;

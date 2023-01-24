@@ -6,8 +6,6 @@
 #define DEFAULT_SCREEN_WIDTH  1980
 #define DEFAULT_SCREEN_HEIGHT 1080
 
-#define BILBOARD_SIZE (0.05f)
-
 /******************
 SIMPLE ENTRY POINT
 ********************/
