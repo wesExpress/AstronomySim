@@ -76,9 +76,12 @@ return_code space_sim_init()
     dm_ecs_entity_add_mesh(space_data.entities[0], 1);
     dm_ecs_entity_add_material(space_data.entities[0], c_moon, c_moon);
     
+    dm_physics_add_angular_momentum(space_data.entities[0], dm_vec3_set(0.0f,1e25f,0.0f));
+    
     // box (space ship lmao)
     scale = dm_vec3_set(10,0.5f,1);
-    pos = dm_vec3_set(r_planet + 30.0f,0,0);
+    pos = dm_vec3_set(r_planet + 1000.0f,0,0);
+    rot = dm_quat_set(dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f);
     
     space_data.entities[1] = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(space_data.entities[1], pos, scale, rot);
@@ -113,7 +116,17 @@ return_code space_sim_update()
     dm_imgui_text_fmt(10,475, 1,1,0,1, "Rocket pos: x:%0.2f, y:%0.2f, z:%0.2f", pos.x, pos.y, pos.z);
     dm_imgui_text_fmt(10,500, 1,1,0,1, "Rocket vel: x:%0.2f, y:%0.2f, z:%0.2f", vel.x, vel.y, vel.z);
     
-    track_camera(pos, 10.0f, &space_data.camera);
+    static float distance = 10.0f;
+    
+    if(dm_input_mouse_has_scrolled())
+    {
+        int t = dm_input_get_mouse_scroll();
+        distance += (float)t;
+        
+        distance = DM_CLAMP(distance, 10.0f, 50.0f);
+    }
+    
+    track_camera(pos, distance, &space_data.camera);
     
     return SUCCESS;
 }
