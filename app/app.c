@@ -1,6 +1,6 @@
 #include "app.h"
 
-#define STRESS_TEST
+//#define STRESS_TEST
 
 #ifdef STRESS_TEST
 #include "stress_test.h"

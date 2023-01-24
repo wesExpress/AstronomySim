@@ -5,6 +5,7 @@
 
 typedef struct space_sim_data_t
 {
+    view_camera camera;
     dm_entity entities[2];
 } space_sim_data;
 
