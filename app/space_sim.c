@@ -5,6 +5,7 @@
 
 typedef struct space_sim_data_t
 {
+    dm_entity entities[2];
 } space_sim_data;
 
 space_sim_data app_data = { 0 };

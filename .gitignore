@@ -12,6 +12,4 @@ bin/*
 *.air
 *.metallib
 
-*.4coder
-
 *.fxc
