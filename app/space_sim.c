@@ -24,9 +24,7 @@ return_code space_sim_init()
     const dm_vec4 white = dm_vec4_set(1,1,1,1);
     const float gray_scale = 0.5f;
     
-    //const float r_moon = 1.7374e6f;   // m
-    //const float m_moon = 7.3459e22f;  // kg
-    float r_planet = 1e3f;
+    float r_planet = 100.0f; // m
     const dm_vec4 c_moon = dm_vec4_set(white.x * gray_scale, white.y * gray_scale, white.z * gray_scale, 1);
     
     // gravity system
@@ -80,32 +78,31 @@ return_code space_sim_init()
     dm_ecs_entity_add_mesh(PLANET_1, 1);
     dm_ecs_entity_add_material(PLANET_1, c_moon, c_moon);
     
-    //dm_physics_add_angular_momentum(PLANET_1, dm_vec3_set(0.0f,1e21f,0.0f));
+    dm_physics_add_angular_momentum(PLANET_1, dm_vec3_set(0.0f,1e15f,0.0f));
     
     // planet 2
-    /*
     const float moon_orbit = r_planet * 3.0f;
-    scale = dm_vec3_scale(scale, 0.2f);
+    scale = dm_vec3_scale(scale, 0.1f);
     pos   = dm_vec3_set(0,0,moon_orbit);
     const float vc = dm_sqrtf(G * m_planet / moon_orbit);
     
     PLANET_2 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(PLANET_2, pos, scale, rot);
     dm_ecs_entity_add_collision(PLANET_2, DM_COLLISION_SHAPE_SPHERE);
-    dm_ecs_entity_add_physics(PLANET_2, dm_vec3_set(0,0,vc), dm_vec3_set(0,1e13f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet * 0.1f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
+    dm_ecs_entity_add_physics(PLANET_2, dm_vec3_set(vc,0,0), dm_vec3_set(0,1e16f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet * 0.01f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(PLANET_2, 1);
     dm_ecs_entity_add_material(PLANET_2, c_moon, c_moon);
-    */
-    // box (space ship lmao)
-    scale = dm_vec3_set(5,0.5f,1);
+    
+    // sphere (space ship lmao)
+    scale = dm_vec3_set(1,1,1);
     pos = dm_vec3_set(r_planet + 100.0f,0,0);
-    rot = dm_quat_set(dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f);
+    //rot = dm_quat_set(dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f);
     
     ROCKET = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(ROCKET, pos, scale, rot);
-    dm_ecs_entity_add_collision(ROCKET, DM_COLLISION_SHAPE_BOX);
+    dm_ecs_entity_add_collision(ROCKET, DM_COLLISION_SHAPE_SPHERE);
     dm_ecs_entity_add_physics_at_rest(ROCKET, 100.0f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC); 
-    dm_ecs_entity_add_mesh(ROCKET, 0);
+    dm_ecs_entity_add_mesh(ROCKET, 1);
     dm_ecs_entity_add_material(ROCKET, dm_vec4_set(1,0,0,1), dm_vec4_set(1,0,0,1));
     
     //dm_physics_add_impulse(ROCKET, dm_vec3_set(0,0,-15));
@@ -119,7 +116,19 @@ return_code space_sim_update()
     float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
     float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
     
+    float* force_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
+    float* force_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
+    float* force_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
+    
     dm_vec3 pos = { pos_x[ROCKET],pos_y[ROCKET],pos_z[ROCKET] };
+    
+    if(dm_ecs_entity_is_colliding(ROCKET))
+    {
+        dm_vec3 f = dm_vec3_set(force_x[ROCKET], force_y[ROCKET], force_z[ROCKET]);
+        dm_vec3 up = dm_vec3_negate(f);
+        
+        
+    }
     
     uint32_t width = DM_SCREEN_WIDTH;
     uint32_t height = DM_SCREEN_HEIGHT;
