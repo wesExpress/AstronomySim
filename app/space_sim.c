@@ -6,7 +6,7 @@
 typedef struct space_sim_data_t
 {
     view_camera camera;
-    dm_entity entities[2];
+    dm_entity entities[3];
 } space_sim_data;
 
 space_sim_data space_data = { 0 };
@@ -15,6 +15,10 @@ space_sim_data space_data = { 0 };
 #define EARTH_G    9.8f
 #define E_G_OVER_G 1.47e11f   // kg / m^2
 
+#define PLANET_1 space_data.entities[0]
+#define PLANET_2 space_data.entities[1]
+#define ROCKET    space_data.entities[2]
+
 return_code space_sim_init()
 {
     const dm_vec4 white = dm_vec4_set(1,1,1,1);
@@ -22,7 +26,7 @@ return_code space_sim_init()
     
     //const float r_moon = 1.7374e6f;   // m
     //const float m_moon = 7.3459e22f;  // kg
-    float r_planet = 1e4f;
+    float r_planet = 1e3f;
     const dm_vec4 c_moon = dm_vec4_set(white.x * gray_scale, white.y * gray_scale, white.z * gray_scale, 1);
     
     // gravity system
@@ -60,35 +64,51 @@ return_code space_sim_init()
     dm_free(indices);
     
     // entities
-    // big planet and box for flying around
+    // two planets and box for flying around
     
-    // planet
+    // planet 1
     float m_planet = r_planet * r_planet * E_G_OVER_G;
     
     dm_vec3 scale = { r_planet,r_planet,r_planet };
     dm_vec3 pos   = { 0 };
     dm_quat rot   = { 0,0,0,1 };
     
-    space_data.entities[0] = dm_ecs_create_entity();
-    dm_ecs_entity_add_transform_v(space_data.entities[0], pos, scale, rot);
-    dm_ecs_entity_add_collision(space_data.entities[0], DM_COLLISION_SHAPE_SPHERE);
-    dm_ecs_entity_add_physics_at_rest(space_data.entities[0], m_planet, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC); 
-    dm_ecs_entity_add_mesh(space_data.entities[0], 1);
-    dm_ecs_entity_add_material(space_data.entities[0], c_moon, c_moon);
+    PLANET_1 = dm_ecs_create_entity();
+    dm_ecs_entity_add_transform_v(PLANET_1, pos, scale, rot);
+    dm_ecs_entity_add_collision(PLANET_1, DM_COLLISION_SHAPE_SPHERE);
+    dm_ecs_entity_add_physics_at_rest(PLANET_1, m_planet, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC); 
+    dm_ecs_entity_add_mesh(PLANET_1, 1);
+    dm_ecs_entity_add_material(PLANET_1, c_moon, c_moon);
     
-    dm_physics_add_angular_momentum(space_data.entities[0], dm_vec3_set(0.0f,1e25f,0.0f));
+    //dm_physics_add_angular_momentum(PLANET_1, dm_vec3_set(0.0f,1e21f,0.0f));
     
+    // planet 2
+    /*
+    const float moon_orbit = r_planet * 3.0f;
+    scale = dm_vec3_scale(scale, 0.2f);
+    pos   = dm_vec3_set(0,0,moon_orbit);
+    const float vc = dm_sqrtf(G * m_planet / moon_orbit);
+    
+    PLANET_2 = dm_ecs_create_entity();
+    dm_ecs_entity_add_transform_v(PLANET_2, pos, scale, rot);
+    dm_ecs_entity_add_collision(PLANET_2, DM_COLLISION_SHAPE_SPHERE);
+    dm_ecs_entity_add_physics(PLANET_2, dm_vec3_set(0,0,vc), dm_vec3_set(0,1e13f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet * 0.1f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
+    dm_ecs_entity_add_mesh(PLANET_2, 1);
+    dm_ecs_entity_add_material(PLANET_2, c_moon, c_moon);
+    */
     // box (space ship lmao)
-    scale = dm_vec3_set(10,0.5f,1);
+    scale = dm_vec3_set(5,0.5f,1);
     pos = dm_vec3_set(r_planet + 100.0f,0,0);
     rot = dm_quat_set(dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f);
     
-    space_data.entities[1] = dm_ecs_create_entity();
-    dm_ecs_entity_add_transform_v(space_data.entities[1], pos, scale, rot);
-    dm_ecs_entity_add_collision(space_data.entities[1], DM_COLLISION_SHAPE_BOX);
-    dm_ecs_entity_add_physics_at_rest(space_data.entities[1], 100.0f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC); 
-    dm_ecs_entity_add_mesh(space_data.entities[1], 0);
-    dm_ecs_entity_add_material(space_data.entities[1], dm_vec4_set(1,0,0,1), dm_vec4_set(1,0,0,1));
+    ROCKET = dm_ecs_create_entity();
+    dm_ecs_entity_add_transform_v(ROCKET, pos, scale, rot);
+    dm_ecs_entity_add_collision(ROCKET, DM_COLLISION_SHAPE_BOX);
+    dm_ecs_entity_add_physics_at_rest(ROCKET, 100.0f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC); 
+    dm_ecs_entity_add_mesh(ROCKET, 0);
+    dm_ecs_entity_add_material(ROCKET, dm_vec4_set(1,0,0,1), dm_vec4_set(1,0,0,1));
+    
+    //dm_physics_add_impulse(ROCKET, dm_vec3_set(0,0,-15));
     
     return SUCCESS;
 }
@@ -99,8 +119,7 @@ return_code space_sim_update()
     float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
     float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
     
-    dm_entity rocket = space_data.entities[1];
-    dm_vec3 pos = { pos_x[rocket],pos_y[rocket],pos_z[rocket] };
+    dm_vec3 pos = { pos_x[ROCKET],pos_y[ROCKET],pos_z[ROCKET] };
     
     uint32_t width = DM_SCREEN_WIDTH;
     uint32_t height = DM_SCREEN_HEIGHT;
@@ -140,19 +159,18 @@ return_code space_sim_render()
     float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Y);
     float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Z);
     
-    dm_entity rocket = space_data.entities[1];
-    dm_vec3 pos = { pos_x[rocket],pos_y[rocket],pos_z[rocket] };
-    dm_vec3 vel = { vel_x[rocket],vel_y[rocket],vel_z[rocket] };
-    dm_quat rot = { rot_i[rocket],rot_j[rocket],rot_k[rocket],rot_r[rocket] };
+    dm_vec3 pos = { pos_x[ROCKET],pos_y[ROCKET],pos_z[ROCKET] };
+    dm_vec3 vel = { vel_x[ROCKET],vel_y[ROCKET],vel_z[ROCKET] };
+    dm_quat rot = { rot_i[ROCKET],rot_j[ROCKET],rot_k[ROCKET],rot_r[ROCKET] };
     
     dm_imgui_text_fmt(10,475, 1,1,0,1, "Rocket pos: x:%0.2f, y:%0.2f, z:%0.2f", pos.x, pos.y, pos.z);
     dm_imgui_text_fmt(10,500, 1,1,0,1, "Rocket vel: x:%0.2f, y:%0.2f, z:%0.2f", vel.x, vel.y, vel.z);
     dm_imgui_text_fmt(10,525, 1,1,0,1, "Rocket rot: i:%0.2f, j:%0.2f, k:%0.2f, r:%0.2f", rot.i,rot.j,rot.k,rot.r);
     
     dm_entity planet = space_data.entities[0];
-    pos = dm_vec3_set(pos_x[planet], pos_y[planet], pos_z[planet]);
-    vel = dm_vec3_set(vel_x[planet], vel_y[planet], vel_z[planet]);
-    rot = dm_quat_set(rot_i[planet], rot_k[planet], rot_k[planet], rot_r[planet]);
+    pos = dm_vec3_set(pos_x[PLANET_1], pos_y[PLANET_1], pos_z[PLANET_1]);
+    vel = dm_vec3_set(vel_x[PLANET_1], vel_y[PLANET_1], vel_z[PLANET_1]);
+    rot = dm_quat_set(rot_i[PLANET_1], rot_k[PLANET_1], rot_k[PLANET_1], rot_r[PLANET_1]);
     
     dm_imgui_text_fmt(10,550, 1,0,1,1, "Planet pos: x:%0.2f, y:%0.2f, z:%0.2f", pos.x, pos.y, pos.z);
     dm_imgui_text_fmt(10,575, 1,0,1,1, "Planet vel: x:%0.2f, y:%0.2f, z:%0.2f", vel.x, vel.y, vel.z);
