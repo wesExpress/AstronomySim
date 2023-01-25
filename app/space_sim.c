@@ -78,7 +78,7 @@ return_code space_sim_init()
     dm_ecs_entity_add_mesh(PLANET_1, 1);
     dm_ecs_entity_add_material(PLANET_1, c_moon, c_moon);
     
-    dm_physics_add_angular_momentum(PLANET_1, dm_vec3_set(0.0f,1e15f,0.0f));
+    dm_physics_add_angular_momentum(PLANET_1, dm_vec3_set(0.0f,1e13f,0.0f));
     
     // planet 2
     const float moon_orbit = r_planet * 3.0f;
@@ -94,9 +94,9 @@ return_code space_sim_init()
     dm_ecs_entity_add_material(PLANET_2, c_moon, c_moon);
     
     // sphere (space ship lmao)
-    scale = dm_vec3_set(1,1,1);
-    pos = dm_vec3_set(r_planet + 100.0f,0,0);
-    //rot = dm_quat_set(dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f);
+    scale = dm_vec3_set(0.5f,0.5f,0.5f);
+    pos = dm_vec3_set(r_planet + 20.0f,0,0);
+    rot = dm_quat_set(dm_random_float()*2.0f - 1.0f, dm_random_float()*2.0f - 1.0f, dm_random_float()*2.0f - 1.0f, dm_random_float()*2.0f - 1.0f);
     
     ROCKET = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(ROCKET, pos, scale, rot);
@@ -105,7 +105,7 @@ return_code space_sim_init()
     dm_ecs_entity_add_mesh(ROCKET, 1);
     dm_ecs_entity_add_material(ROCKET, dm_vec4_set(1,0,0,1), dm_vec4_set(1,0,0,1));
     
-    //dm_physics_add_impulse(ROCKET, dm_vec3_set(0,0,-15));
+    dm_physics_add_impulse(ROCKET, dm_vec3_set(0,0,-15));
     
     return SUCCESS;
 }
@@ -167,6 +167,9 @@ return_code space_sim_render()
     float* vel_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_X);
     float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Y);
     float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Z);
+    float* w_x   = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_W_X);
+    float* w_y   = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_W_Y);
+    float* w_z   = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_W_Z);
     
     dm_vec3 pos = { pos_x[ROCKET],pos_y[ROCKET],pos_z[ROCKET] };
     dm_vec3 vel = { vel_x[ROCKET],vel_y[ROCKET],vel_z[ROCKET] };
@@ -180,10 +183,31 @@ return_code space_sim_render()
     pos = dm_vec3_set(pos_x[PLANET_1], pos_y[PLANET_1], pos_z[PLANET_1]);
     vel = dm_vec3_set(vel_x[PLANET_1], vel_y[PLANET_1], vel_z[PLANET_1]);
     rot = dm_quat_set(rot_i[PLANET_1], rot_k[PLANET_1], rot_k[PLANET_1], rot_r[PLANET_1]);
+    dm_vec3 w = dm_vec3_set(w_x[PLANET_1], w_y[PLANET_1], w_z[PLANET_1]);
     
     dm_imgui_text_fmt(10,550, 1,0,1,1, "Planet pos: x:%0.2f, y:%0.2f, z:%0.2f", pos.x, pos.y, pos.z);
     dm_imgui_text_fmt(10,575, 1,0,1,1, "Planet vel: x:%0.2f, y:%0.2f, z:%0.2f", vel.x, vel.y, vel.z);
     dm_imgui_text_fmt(10,600, 1,1,0,1, "Planet rot: i:%0.2f, j:%0.2f, k:%0.2f, r:%0.2f", rot.i,rot.j,rot.k,rot.r);
+    dm_imgui_text_fmt(10,625, 1,1,0,1, "Planet rot: x:%0.2f, y:%0.2f, z:%0.2f", w.x, w.y, w.z);
+    
+    static bool debug_draw = false;
+    
+    if(dm_input_key_just_pressed(DM_KEY_TAB)) debug_draw = !debug_draw;
+    
+    if(debug_draw)
+    {
+        dm_debug_render_transform(PLANET_1);
+        dm_debug_render_force_vector(PLANET_1);
+        dm_debug_render_velocity_vector(PLANET_1);
+        
+        dm_debug_render_transform(PLANET_2);
+        dm_debug_render_force_vector(PLANET_2);
+        dm_debug_render_velocity_vector(PLANET_2);
+        
+        dm_debug_render_transform(ROCKET);
+        dm_debug_render_force_vector(ROCKET);
+        dm_debug_render_velocity_vector(ROCKET);
+    }
     
     return SUCCESS;
 }

@@ -98,7 +98,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     
     // determine uniforms
     dm_vec3 a_c = dm_vec3_set(1,1,1);
-    float   a_strength = 0.5f;
+    float   a_strength = 0.2f;
     a_c = dm_vec3_scale(a_c, a_strength);
     
     default_scene_uni uni = { 0 };
@@ -109,7 +109,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
 #endif
     uni.light_color = dm_vec4_set(1,1,1,1);
     uni.ambient_color = dm_vec4_set(a_c.x,a_c.y,a_c.z, 1);
-    uni.light_pos = dm_vec3_set(0,20,0);
+    uni.light_pos = dm_vec3_set(1500,0,1500);
     uni.fcoef_inv = 1.0f / dm_log2f(handles.camera->far_plane + 1);
     uni.view_pos = handles.camera->pos;
     
