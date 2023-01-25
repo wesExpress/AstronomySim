@@ -80,7 +80,7 @@ return_code space_sim_init()
     
     // box (space ship lmao)
     scale = dm_vec3_set(10,0.5f,1);
-    pos = dm_vec3_set(r_planet + 1000.0f,0,0);
+    pos = dm_vec3_set(r_planet + 100.0f,0,0);
     rot = dm_quat_set(dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f, dm_random_float() * 2.0f - 1.0f);
     
     space_data.entities[1] = dm_ecs_create_entity();
@@ -95,35 +95,30 @@ return_code space_sim_init()
 
 return_code space_sim_update()
 {
+    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    
+    dm_entity rocket = space_data.entities[1];
+    dm_vec3 pos = { pos_x[rocket],pos_y[rocket],pos_z[rocket] };
+    
     uint32_t width = DM_SCREEN_WIDTH;
     uint32_t height = DM_SCREEN_HEIGHT;
     
     // update camera
     resize_camera(width, height, &space_data.camera);
     
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    static float distance = 30.0f;
     
-    float* vel_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_X);
-    float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Y);
-    float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Z);
-    
-    dm_entity rocket = space_data.entities[1];
-    dm_vec3 pos = { pos_x[rocket],pos_y[rocket],pos_z[rocket] };
-    dm_vec3 vel = { vel_x[rocket],vel_y[rocket],vel_z[rocket] };
-    
-    dm_imgui_text_fmt(10,475, 1,1,0,1, "Rocket pos: x:%0.2f, y:%0.2f, z:%0.2f", pos.x, pos.y, pos.z);
-    dm_imgui_text_fmt(10,500, 1,1,0,1, "Rocket vel: x:%0.2f, y:%0.2f, z:%0.2f", vel.x, vel.y, vel.z);
-    
-    static float distance = 10.0f;
-    
-    if(dm_input_mouse_has_scrolled())
+    if(dm_input_is_key_pressed(DM_KEY_LSHIFT))
     {
-        int t = dm_input_get_mouse_scroll();
-        distance += (float)t;
-        
-        distance = DM_CLAMP(distance, 10.0f, 50.0f);
+        if(dm_input_mouse_has_scrolled())
+        {
+            int t = dm_input_get_mouse_scroll();
+            distance += (float)t;
+            
+            distance = DM_CLAMP(distance, 10.0f, 50.0f);
+        }
     }
     
     track_camera(pos, distance, &space_data.camera);
@@ -133,5 +128,35 @@ return_code space_sim_update()
 
 return_code space_sim_render()
 {
+    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    float* rot_i = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_I);
+    float* rot_j = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_J);
+    float* rot_k = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_K);
+    float* rot_r = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_R);
+    
+    float* vel_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_X);
+    float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Y);
+    float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Z);
+    
+    dm_entity rocket = space_data.entities[1];
+    dm_vec3 pos = { pos_x[rocket],pos_y[rocket],pos_z[rocket] };
+    dm_vec3 vel = { vel_x[rocket],vel_y[rocket],vel_z[rocket] };
+    dm_quat rot = { rot_i[rocket],rot_j[rocket],rot_k[rocket],rot_r[rocket] };
+    
+    dm_imgui_text_fmt(10,475, 1,1,0,1, "Rocket pos: x:%0.2f, y:%0.2f, z:%0.2f", pos.x, pos.y, pos.z);
+    dm_imgui_text_fmt(10,500, 1,1,0,1, "Rocket vel: x:%0.2f, y:%0.2f, z:%0.2f", vel.x, vel.y, vel.z);
+    dm_imgui_text_fmt(10,525, 1,1,0,1, "Rocket rot: i:%0.2f, j:%0.2f, k:%0.2f, r:%0.2f", rot.i,rot.j,rot.k,rot.r);
+    
+    dm_entity planet = space_data.entities[0];
+    pos = dm_vec3_set(pos_x[planet], pos_y[planet], pos_z[planet]);
+    vel = dm_vec3_set(vel_x[planet], vel_y[planet], vel_z[planet]);
+    rot = dm_quat_set(rot_i[planet], rot_k[planet], rot_k[planet], rot_r[planet]);
+    
+    dm_imgui_text_fmt(10,550, 1,0,1,1, "Planet pos: x:%0.2f, y:%0.2f, z:%0.2f", pos.x, pos.y, pos.z);
+    dm_imgui_text_fmt(10,575, 1,0,1,1, "Planet vel: x:%0.2f, y:%0.2f, z:%0.2f", vel.x, vel.y, vel.z);
+    dm_imgui_text_fmt(10,600, 1,1,0,1, "Planet rot: i:%0.2f, j:%0.2f, k:%0.2f, r:%0.2f", rot.i,rot.j,rot.k,rot.r);
+    
     return SUCCESS;
 }

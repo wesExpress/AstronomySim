@@ -108,20 +108,14 @@ void track_camera(dm_vec3 pos, float distance, view_camera* camera)
     static float dx = 0.0f;
     static float dy = 0.0f;
     
-    dx -= (float)delta_x * camera->look_sens;
-    dy += (float)delta_y * camera->look_sens;
+    dx += (float)delta_x * camera->look_sens;
+    dy -= (float)delta_y * camera->look_sens;
     
-    float aspect_ratio = DM_SCREEN_WIDTH_F / DM_SCREEN_HEIGHT_F;
+    camera->pos.x = pos.x + distance * dm_sind(dy) * dm_cosd(dx);
+    camera->pos.y = pos.y + distance * dm_cosd(dy);
+    camera->pos.z = pos.z + distance * dm_sind(dy) * dm_sind(dx);
     
-    float d_horz = distance * dm_cosd(dy);
-    float d_vert = distance * dm_sind(dy);
-    
-    float xOffset = d_horz * dm_sind(-dx);
-    float zOffset = d_horz * dm_cosd(-dx);
-    
-    camera->pos.x = pos.x + xOffset;
-    camera->pos.y = pos.y - d_vert;
-    camera->pos.z = pos.z + zOffset;
+    camera->forward = dm_vec3_sub_vec3(pos, camera->pos);
     
     update_camera_view(camera);
 }
