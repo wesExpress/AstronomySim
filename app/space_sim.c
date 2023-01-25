@@ -78,7 +78,7 @@ return_code space_sim_init()
     dm_ecs_entity_add_mesh(PLANET_1, 1);
     dm_ecs_entity_add_material(PLANET_1, c_moon, c_moon);
     
-    dm_physics_add_angular_momentum(PLANET_1, dm_vec3_set(0.0f,1e13f,0.0f));
+    dm_physics_add_angular_momentum(PLANET_1, dm_vec3_set(0.0f,1e18f,0.0f));
     
     // planet 2
     const float moon_orbit = r_planet * 3.0f;
@@ -94,15 +94,15 @@ return_code space_sim_init()
     dm_ecs_entity_add_material(PLANET_2, c_moon, c_moon);
     
     // sphere (space ship lmao)
-    scale = dm_vec3_set(0.5f,0.5f,0.5f);
-    pos = dm_vec3_set(r_planet + 20.0f,0,0);
-    rot = dm_quat_set(dm_random_float()*2.0f - 1.0f, dm_random_float()*2.0f - 1.0f, dm_random_float()*2.0f - 1.0f, dm_random_float()*2.0f - 1.0f);
+    scale = dm_vec3_set(1,1,1);
+    pos = dm_vec3_set(r_planet + 30.0f,0,0);
+    //rot = dm_quat_set(dm_random_float()*2.0f - 1.0f, dm_random_float()*2.0f - 1.0f, dm_random_float()*2.0f - 1.0f, dm_random_float()*2.0f - 1.0f);
     
     ROCKET = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(ROCKET, pos, scale, rot);
-    dm_ecs_entity_add_collision(ROCKET, DM_COLLISION_SHAPE_SPHERE);
+    dm_ecs_entity_add_collision(ROCKET, DM_COLLISION_SHAPE_BOX);
     dm_ecs_entity_add_physics_at_rest(ROCKET, 100.0f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC); 
-    dm_ecs_entity_add_mesh(ROCKET, 1);
+    dm_ecs_entity_add_mesh(ROCKET, 0);
     dm_ecs_entity_add_material(ROCKET, dm_vec4_set(1,0,0,1), dm_vec4_set(1,0,0,1));
     
     dm_physics_add_impulse(ROCKET, dm_vec3_set(0,0,-15));

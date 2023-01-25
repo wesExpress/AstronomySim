@@ -109,7 +109,7 @@ void track_camera(dm_vec3 pos, float distance, view_camera* camera)
     static float dy = 0.0f;
     
     dx += (float)delta_x * camera->look_sens;
-    dy -= (float)delta_y * camera->look_sens;
+    dy += (float)delta_y * camera->look_sens;
     
     camera->pos.x = pos.x + distance * dm_sind(dy) * dm_cosd(dx);
     camera->pos.y = pos.y + distance * dm_cosd(dy);
