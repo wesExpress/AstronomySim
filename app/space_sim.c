@@ -96,7 +96,7 @@ return_code space_sim_init()
     PLANET_1 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(PLANET_1, pos, scale, rot);
     dm_ecs_entity_add_collision(PLANET_1, DM_COLLISION_SHAPE_SPHERE);
-    dm_ecs_entity_add_physics(PLANET_1, dm_vec3_set(vc,0,0), dm_vec3_set(0,1e19f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
+    dm_ecs_entity_add_physics(PLANET_1, dm_vec3_set(vc,0,0), dm_vec3_set(0,5e18f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(PLANET_1, 1);
     dm_ecs_entity_add_material(PLANET_1, c_moon, c_moon);
     
@@ -159,7 +159,7 @@ return_code space_sim_update()
     dm_vec3 pos = { pos_x[ROCKET],pos_y[ROCKET],pos_z[ROCKET] };
     float   d = dm_vec3_len(pos);
     
-    if(d > 1000.0f) space_sim_update_positions(pos);
+    //if(d > 1000.0f) space_sim_update_positions(pos);
     
     // resize camera
     uint32_t width = DM_SCREEN_WIDTH;

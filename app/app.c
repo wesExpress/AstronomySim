@@ -44,14 +44,6 @@ return_code app_run()
         // update
         if(!dm_begin_update()) break;
         
-        //////////////////////////////////////
-#ifdef STRESS_TEST
-        APP_FUNC_CHECK(stress_test_update());
-#else
-        APP_FUNC_CHECK(space_sim_update());
-#endif
-        //////////////////////////////////////
-        
         if(dm_input_key_just_pressed(DM_KEY_P)) dm_physics_toggle_pause();
         
         // render
@@ -77,6 +69,14 @@ return_code app_run()
         
         // wrap up frame
         if(!dm_renderer_end_frame()) return RENDER_FAIL;
+        
+        //////////////////////////////////////
+#ifdef STRESS_TEST
+        APP_FUNC_CHECK(stress_test_update());
+#else
+        APP_FUNC_CHECK(space_sim_update());
+#endif
+        //////////////////////////////////////
         
         if(!dm_end_update()) return RENDER_FAIL;
         
