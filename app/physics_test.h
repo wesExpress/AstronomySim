@@ -39,7 +39,7 @@ return_code physics_test_init()
     dm_ecs_entity_add_physics_at_rest(physics_data.entities[1], 1.0f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_material(physics_data.entities[1], gray, gray);
     
-    //dm_physics_add_impulse(physics_data.entities[1], dm_vec3_set(4.0f,0,5.0f));
+    //dm_physics_add_impulse(physics_data.entities[1], dm_vec3_set(5.5f,0,5.0f));
     
     return SUCCESS;
 }
