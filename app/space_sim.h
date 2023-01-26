@@ -24,8 +24,8 @@ return_code space_sim_init()
     const dm_vec4 white = dm_vec4_set(1,1,1,1);
     const float gray_scale = 0.5f;
     
-    float r_planet = 50.0f; // m
-    float r_star   = 100.0f;
+    float r_planet = 100.0f; // m
+    float r_star   = 1e3f;
     const dm_vec4 c_moon = dm_vec4_set(white.x * gray_scale, white.y * gray_scale, white.z * gray_scale, 1);
     
     // gravity system
@@ -59,7 +59,7 @@ return_code space_sim_init()
     PLANET_1 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(PLANET_1, pos, scale, rot);
     dm_ecs_entity_add_collision(PLANET_1, DM_COLLISION_SHAPE_SPHERE);
-    dm_ecs_entity_add_physics(PLANET_1, dm_vec3_set(vc,0,0), dm_vec3_set(0,5e18f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
+    dm_ecs_entity_add_physics(PLANET_1, dm_vec3_set(vc,0,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(PLANET_1, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(PLANET_1, c_moon, c_moon);
     
@@ -69,7 +69,7 @@ return_code space_sim_init()
     
     ROCKET = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(ROCKET, pos, scale, rot);
-#if 1
+#if 0
     dm_ecs_entity_add_collision(ROCKET, DM_COLLISION_SHAPE_SPHERE);
     dm_ecs_entity_add_mesh(ROCKET, ICOSPHERE_MESH);
 #else
@@ -123,9 +123,9 @@ return_code space_sim_update(view_camera* camera)
     float* force_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
     
     dm_vec3 pos = { pos_x[ROCKET],pos_y[ROCKET],pos_z[ROCKET] };
-    float   d = dm_vec3_len(pos);
+    float   d   = dm_vec3_len(pos);
     
-    //if(d > 1000.0f) space_sim_update_positions(pos);
+    if(d > 1000.0f) space_sim_update_positions(pos);
     
     // scrolling
     static float distance = 30.0f;

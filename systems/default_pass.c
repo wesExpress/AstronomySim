@@ -109,7 +109,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
 #endif
     uni.light_color = dm_vec4_set(1,1,1,1);
     uni.ambient_color = dm_vec4_set(a_c.x,a_c.y,a_c.z, 1);
-    uni.light_pos = dm_vec3_set(1500,0,1500);
+    uni.light_pos = dm_vec3_set(0,0,0);
     uni.fcoef_inv = 1.0f / dm_log2f(handles.camera->far_plane + 1);
     uni.view_pos = handles.camera->pos;
     

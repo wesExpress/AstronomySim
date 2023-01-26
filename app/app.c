@@ -17,7 +17,7 @@ static application_data app_data = { 0 };
 
 //#define STRESS_TEST
 #ifndef STRESS_TEST
-#define PHYSICS_TEST
+//#define PHYSICS_TEST
 #endif
 
 #ifdef STRESS_TEST
@@ -37,7 +37,7 @@ return_code app_run()
 {
     // init camera
     float d = 6.0f;
-    init_camera(dm_vec3_set(d,d,d), dm_vec3_set(-1,-1,-1), 0.1f, 100.0f, 45.0f, 0.3f, 5.0f, DM_SCREEN_WIDTH, DM_SCREEN_HEIGHT, &app_data.camera);
+    init_camera(dm_vec3_set(d,d,d), dm_vec3_set(-1,-1,-1), 0.01f, 1e10f, 45.0f, 0.3f, 5.0f, DM_SCREEN_WIDTH, DM_SCREEN_HEIGHT, &app_data.camera);
     
     // link camera view_proj to debug draw pass
     dm_debug_render_set_view_proj(&app_data.camera.view_proj);
@@ -135,6 +135,8 @@ return_code app_run()
         // wrap up frame
         if(!dm_renderer_end_frame()) return RENDER_FAIL;
         
+        if(!dm_end_update()) return RENDER_FAIL;
+        
         //////////////////////////////////////
 #ifdef STRESS_TEST
         APP_FUNC_CHECK(stress_test_update(&app_data.camera));
@@ -144,8 +146,6 @@ return_code app_run()
         APP_FUNC_CHECK(space_sim_update(&app_data.camera));
 #endif
         //////////////////////////////////////
-        
-        if(!dm_end_update()) return RENDER_FAIL;
         
         frame_counter++;
     }
