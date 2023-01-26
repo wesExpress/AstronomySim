@@ -135,6 +135,7 @@ return_code app_run()
         // wrap up frame
         if(!dm_renderer_end_frame()) return RENDER_FAIL;
         
+        // DarkMatter end update
         if(!dm_end_update()) return RENDER_FAIL;
         
         //////////////////////////////////////

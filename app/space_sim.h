@@ -117,12 +117,13 @@ return_code space_sim_update(view_camera* camera)
     float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
     float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
     float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
-    
-    float* force_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
-    float* force_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
-    float* force_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
+    float* rot_i = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_I);
+    float* rot_j = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_J);
+    float* rot_k = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_K);
+    float* rot_r = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_R);
     
     dm_vec3 pos = { pos_x[ROCKET],pos_y[ROCKET],pos_z[ROCKET] };
+    dm_quat rot = dm_quat_set(rot_i[ROCKET], rot_j[ROCKET], rot_k[ROCKET], rot_r[ROCKET]);
     float   d   = dm_vec3_len(pos);
     
     if(d > 10000.0f) space_sim_update_positions(pos);
@@ -139,6 +140,40 @@ return_code space_sim_update(view_camera* camera)
             
             distance = DM_CLAMP(distance, 5.0f, 50.0f);
         }
+    }
+    
+    if(dm_input_is_key_pressed(DM_KEY_Q))
+    {
+        dm_vec3 dw = dm_vec3_set(0.1f,0,0);
+        dw = dm_vec3_rotate(dw, rot);
+        dm_quat delta_rot = dm_vec3_mul_quat(dw, rot);
+        delta_rot = dm_quat_scale(delta_rot, 0.5f);
+        rot = dm_quat_norm(dm_quat_add_quat(rot, delta_rot));
+        
+        rot_i[ROCKET] = rot.i;
+        rot_j[ROCKET] = rot.j;
+        rot_k[ROCKET] = rot.k;
+        rot_r[ROCKET] = rot.r;
+    }
+    else if(dm_input_is_key_pressed(DM_KEY_E))
+    {
+        dm_vec3 dw = dm_vec3_set(-0.1f,0,0);
+        dw = dm_vec3_rotate(dw, rot);
+        dm_quat delta_rot = dm_vec3_mul_quat(dw, rot);
+        delta_rot = dm_quat_scale(delta_rot, 0.5f);
+        rot = dm_quat_norm(dm_quat_add_quat(rot, delta_rot));
+        
+        rot_i[ROCKET] = rot.i;
+        rot_j[ROCKET] = rot.j;
+        rot_k[ROCKET] = rot.k;
+        rot_r[ROCKET] = rot.r;
+    }
+    
+    if(dm_input_is_key_pressed(DM_KEY_G))
+    {
+        float mag = 10000.0f;
+        dm_vec3 force = dm_vec3_rotate(dm_vec3_unit_y, rot);
+        dm_physics_apply_force(ROCKET, dm_vec3_scale(force, mag));
     }
     
     // update camera
