@@ -91,7 +91,7 @@ return_code space_sim_init()
     PLANET_2 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(PLANET_2, pos, scale, rot);
     dm_ecs_entity_add_collision(PLANET_2, DM_COLLISION_SHAPE_SPHERE);
-    dm_ecs_entity_add_physics(PLANET_2, dm_vec3_set(vc,0,0), dm_vec3_set(0,1e16f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet * 0.01f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
+    dm_ecs_entity_add_physics(PLANET_2, dm_vec3_set(vc,0,0), dm_vec3_set(0,1e16f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet * 0.1f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(PLANET_2, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(PLANET_2, c_moon, c_moon);
     
@@ -142,32 +142,18 @@ return_code space_sim_update(view_camera* camera)
         }
     }
     
-    if(dm_input_is_key_pressed(DM_KEY_Q))
-    {
-        dm_vec3 dw = dm_vec3_set(0.1f,0,0);
-        dw = dm_vec3_rotate(dw, rot);
-        dm_quat delta_rot = dm_vec3_mul_quat(dw, rot);
-        delta_rot = dm_quat_scale(delta_rot, 0.5f);
-        rot = dm_quat_norm(dm_quat_add_quat(rot, delta_rot));
-        
-        rot_i[ROCKET] = rot.i;
-        rot_j[ROCKET] = rot.j;
-        rot_k[ROCKET] = rot.k;
-        rot_r[ROCKET] = rot.r;
-    }
-    else if(dm_input_is_key_pressed(DM_KEY_E))
-    {
-        dm_vec3 dw = dm_vec3_set(-0.1f,0,0);
-        dw = dm_vec3_rotate(dw, rot);
-        dm_quat delta_rot = dm_vec3_mul_quat(dw, rot);
-        delta_rot = dm_quat_scale(delta_rot, 0.5f);
-        rot = dm_quat_norm(dm_quat_add_quat(rot, delta_rot));
-        
-        rot_i[ROCKET] = rot.i;
-        rot_j[ROCKET] = rot.j;
-        rot_k[ROCKET] = rot.k;
-        rot_r[ROCKET] = rot.r;
-    }
+    dm_vec3 rocket_right   = dm_ecs_entity_get_transform_right(ROCKET);
+    dm_vec3 rocket_up      = dm_ecs_entity_get_transform_up(ROCKET);
+    dm_vec3 rocket_forward = dm_ecs_entity_get_transform_forward(ROCKET);
+    
+    if(dm_input_is_key_pressed(DM_KEY_Q)) dm_physics_apply_torque(ROCKET, dm_vec3_scale(rocket_up, 2));
+    else if(dm_input_is_key_pressed(DM_KEY_E)) dm_physics_apply_torque(ROCKET, dm_vec3_scale(rocket_up, -2));
+    
+    if(dm_input_is_key_pressed(DM_KEY_A)) dm_physics_apply_torque(ROCKET, dm_vec3_scale(rocket_right, 2));
+    else if(dm_input_is_key_pressed(DM_KEY_D)) dm_physics_apply_torque(ROCKET, dm_vec3_scale(rocket_right, -2));
+    
+    if(dm_input_is_key_pressed(DM_KEY_W)) dm_physics_apply_torque(ROCKET, dm_vec3_scale(rocket_forward, 2));
+    else if(dm_input_is_key_pressed(DM_KEY_S)) dm_physics_apply_torque(ROCKET, dm_vec3_scale(rocket_forward, -2));
     
     if(dm_input_is_key_pressed(DM_KEY_G))
     {
