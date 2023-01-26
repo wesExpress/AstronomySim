@@ -119,3 +119,9 @@ void track_camera(dm_vec3 pos, float distance, view_camera* camera)
     
     update_camera_view(camera);
 }
+
+void set_camera_pos(dm_vec3 pos, view_camera* camera)
+{
+    camera->pos = pos;
+    update_camera_view(camera);
+}
