@@ -125,7 +125,7 @@ return_code space_sim_update(view_camera* camera)
     dm_vec3 pos = { pos_x[ROCKET],pos_y[ROCKET],pos_z[ROCKET] };
     float   d   = dm_vec3_len(pos);
     
-    if(d > 1000.0f) space_sim_update_positions(pos);
+    if(d > 10000.0f) space_sim_update_positions(pos);
     
     // scrolling
     static float distance = 30.0f;
