@@ -41,6 +41,7 @@ typedef struct default_handles_t
     uint32_t num_meshes;
     
     view_camera* camera;
+    dm_vec3 light_pos;
 } default_handles;
 
 static default_handles handles = { 0 };
@@ -109,7 +110,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
 #endif
     uni.light_color = dm_vec4_set(1,1,1,1);
     uni.ambient_color = dm_vec4_set(a_c.x,a_c.y,a_c.z, 1);
-    uni.light_pos = dm_vec3_set(0,0,0);
+    uni.light_pos = handles.light_pos;
     uni.fcoef_inv = 1.0f / dm_log2f(handles.camera->far_plane + 1);
     uni.view_pos = handles.camera->pos;
     
@@ -226,4 +227,9 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     DM_ECS_REGISTER_SYSTEM(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, default_render_pass, render_system);
     
     return true;
+}
+
+void default_pass_set_light_pos(dm_vec3 pos)
+{
+    handles.light_pos = pos;
 }

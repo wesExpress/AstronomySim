@@ -165,11 +165,16 @@ return_code space_sim_update(view_camera* camera)
     // update camera
     track_camera(pos, distance, camera);
     
+    // update light pos
+    pos = dm_vec3_set(pos_x[STAR], pos_y[STAR], pos_z[STAR]);
+    default_pass_set_light_pos(pos);
+    
     return SUCCESS;
 }
 
 return_code space_sim_render()
 {
+    /*
     float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
     float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
     float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
@@ -212,7 +217,7 @@ return_code space_sim_render()
     dm_imgui_text_fmt(10,675, 1,0,1,1, "Moon vel: x:%0.2f, y:%0.2f, z:%0.2f", vel.x, vel.y, vel.z);
     dm_imgui_text_fmt(10,700, 1,0,1,1, "Moon rot: i:%0.2f, j:%0.2f, k:%0.2f, r:%0.2f", rot.i,rot.j,rot.k,rot.r);
     dm_imgui_text_fmt(10,725, 1,0,1,1, "Moon w: x:%0.2f, y:%0.2f, z:%0.2f", w.x, w.y, w.z);
-    
+    */
     static bool debug_draw = false;
     
     if(dm_input_key_just_pressed(DM_KEY_TAB)) debug_draw = !debug_draw;
