@@ -1,7 +1,7 @@
 #ifndef __CAMERA_H__
 #define __CAMERA_H__
 
-#include "../dm.h"
+#include "../DarkMatter/dm.h"
 
 typedef struct view_camera_t
 {

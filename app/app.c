@@ -84,7 +84,6 @@ return_code app_run()
     double render_time     = 0;
     uint32_t frame_counter = 0;
     uint32_t fps           = 0;
-    bool debug_draw        = false;
     
     dm_timer frame_timer = { 0 };
     dm_timer_start(&frame_timer);

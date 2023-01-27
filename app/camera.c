@@ -101,7 +101,6 @@ void resize_camera(uint32_t width, uint32_t height, view_camera* camera)
 
 void track_camera(dm_vec3 pos, float distance, view_camera* camera)
 {
-    float speed = dm_get_delta_time() * camera->move_speed;
     int delta_x, delta_y;
     dm_input_get_mouse_delta(&delta_x, &delta_y);
     

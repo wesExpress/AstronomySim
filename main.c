@@ -12,7 +12,7 @@ SIMPLE ENTRY POINT
 ********************/
 int main(int argc, char** argv)
 {
-    uint32_t return_code;
+    uint32_t return_code = SUCCESS;
     /////////////////////////////////////////////////////
     if(!dm_init(100,100,DEFAULT_SCREEN_WIDTH,DEFAULT_SCREEN_HEIGHT,"test",true)) return_code = INIT_FAIL;
     /////////////////////////////////////////////////////

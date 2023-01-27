@@ -201,12 +201,12 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     
     if(!dm_renderer_create_static_vertex_buffer(vertices, sizeof(default_vertex) * num_vertices, sizeof(default_vertex), &handles.vb)) return false;
     if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(default_instance) * DM_MAX_INSTS, sizeof(default_instance), &handles.instb)) return false;
-    dm_render_handle vb_buffers[] = { handles.vb, handles.instb };
     
     dm_free(vertices);
     
     if(!dm_renderer_create_pipeline(pipeline_desc, &handles.pipeline)) return false;
 #ifdef DM_OPENGL
+    dm_render_handle vb_buffers[] = { handles.vb, handles.instb };
     if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, 2, unis, num_unis, attrib_descs, num_attribs, &handles.pass)) return false;
 #else
     if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, num_unis, attrib_descs, num_attribs, &handles.pass)) return false;
