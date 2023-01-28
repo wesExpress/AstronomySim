@@ -25,9 +25,9 @@ return_code physics_test_init()
     dm_ecs_entity_add_material(physics_data.entities[0], gray, gray);
     
     physics_data.entities[1] = dm_ecs_create_entity();
-    dm_ecs_entity_add_transform_v(physics_data.entities[1], dm_vec3_set(-4,0,-4), dm_vec3_set(0.25f,0.25f,0.25f), dm_quat_set(0,0,0,1));
+    dm_ecs_entity_add_transform_v(physics_data.entities[1], dm_vec3_set(-4,0,-4), dm_vec3_set(0.25f,0.5f,0.25f), dm_quat_set(0.5f,0,1,1));
 #if 1
-    dm_ecs_entity_add_collision_capsule(physics_data.entities[1], 1, 1);
+    dm_ecs_entity_add_collision_capsule(physics_data.entities[1], 0.5f, 1);
     dm_ecs_entity_add_mesh(physics_data.entities[1], BOX_MESH);
 #else
     dm_ecs_entity_add_collision_box(physics_data.entities[1], dm_vec3_set(-0.25f,-0.25f,-0.25f), dm_vec3_set(0.25f,0.25f,0.25f));
@@ -36,7 +36,7 @@ return_code physics_test_init()
     dm_ecs_entity_add_physics_at_rest(physics_data.entities[1], 1.0f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_material(physics_data.entities[1], gray, gray);
     
-    dm_physics_add_impulse(physics_data.entities[1], dm_vec3_set(1,0,1));
+    //dm_physics_add_impulse(physics_data.entities[1], dm_vec3_set(1,0,1));
     
     return SUCCESS;
 }

@@ -64,7 +64,7 @@ return_code space_sim_init()
     dm_ecs_entity_add_material(PLANET_1, c_moon, c_moon);
     
     // space ship 
-    scale = dm_vec3_set(1,1,1);
+    scale = dm_vec3_set(1,2,1);
     pos = dm_vec3_set(0,0,planet_orbit + r_planet + 100.0f);
     
     ROCKET = dm_ecs_create_entity();
@@ -73,7 +73,7 @@ return_code space_sim_init()
     dm_ecs_entity_add_collision_sphere(ROCKET, 1);
     dm_ecs_entity_add_mesh(ROCKET, ICOSPHERE_MESH);
 #else
-    dm_ecs_entity_add_collision_box(ROCKET, dm_vec3_scale(scale, -0.5f), dm_vec3_scale(scale, 0.5f));
+    dm_ecs_entity_add_collision_capsule(ROCKET, 0.5f, 2);
     dm_ecs_entity_add_mesh(ROCKET, BOX_MESH);
 #endif
     dm_ecs_entity_add_physics(ROCKET, dm_vec3_set(vc,0,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), 10.0f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);

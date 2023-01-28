@@ -17,7 +17,7 @@ static application_data app_data = { 0 };
 
 //#define STRESS_TEST
 #ifndef STRESS_TEST
-#define PHYSICS_TEST
+//#define PHYSICS_TEST
 #endif
 
 #ifdef STRESS_TEST
