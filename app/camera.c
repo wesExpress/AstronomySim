@@ -75,8 +75,8 @@ void update_camera(float delta_time, view_camera* camera)
         float delta_pitch = look_delta.y;
         float delta_yaw = look_delta.x;
         
-        dm_quat q1 = dm_quat_from_axis_angle_deg(-delta_pitch, right);
-        dm_quat q2 = dm_quat_from_axis_angle_deg(-delta_yaw, dm_vec3_unit_y);
+        dm_quat q1 = dm_quat_from_axis_angle_deg(right, -delta_pitch);
+        dm_quat q2 = dm_quat_from_axis_angle_deg(dm_vec3_unit_y, -delta_yaw);
         dm_quat rot = dm_quat_cross(q1, q2);
         dm_quat_norm_inpl(&rot);
         
