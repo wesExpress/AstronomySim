@@ -100,6 +100,16 @@ return_code app_run()
         // update
         if(!dm_begin_update()) break;
         
+        //////////////////////////////////////
+#ifdef STRESS_TEST
+        APP_FUNC_CHECK(stress_test_update(&app_data.camera));
+#elif defined(PHYSICS_TEST)
+        APP_FUNC_CHECK(physics_test_update(&app_data.camera));
+#else
+        APP_FUNC_CHECK(space_sim_update(&app_data.camera));
+#endif
+        //////////////////////////////////////
+        
         if(dm_input_key_just_pressed(DM_KEY_P)) dm_physics_toggle_pause();
         
         // resize camera
@@ -136,16 +146,6 @@ return_code app_run()
         
         // DarkMatter end update
         if(!dm_end_update()) return RENDER_FAIL;
-        
-        //////////////////////////////////////
-#ifdef STRESS_TEST
-        APP_FUNC_CHECK(stress_test_update(&app_data.camera));
-#elif defined(PHYSICS_TEST)
-        APP_FUNC_CHECK(physics_test_update(&app_data.camera));
-#else
-        APP_FUNC_CHECK(space_sim_update(&app_data.camera));
-#endif
-        //////////////////////////////////////
         
         frame_counter++;
     }

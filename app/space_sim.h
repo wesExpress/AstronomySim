@@ -9,6 +9,9 @@
 typedef struct space_sim_data_t
 {
     dm_entity entities[NUM_OBJECTS];
+    bool align_with_grav;
+    dm_entity nearest_grav_body;
+    dm_vec3   align_axis;
 } space_sim_data;
 
 space_sim_data space_data = { 0 };
@@ -64,12 +67,12 @@ return_code space_sim_init()
     dm_ecs_entity_add_material(PLANET_1, c_moon, c_moon);
     
     // space ship 
-    scale = dm_vec3_set(1,2,1);
+    scale = dm_vec3_set(1,1,1);
     pos = dm_vec3_set(0,0,planet_orbit + r_planet + 100.0f);
     
     ROCKET = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(ROCKET, pos, scale, rot);
-#if 0
+#if 1
     dm_ecs_entity_add_collision_sphere(ROCKET, 1);
     dm_ecs_entity_add_mesh(ROCKET, ICOSPHERE_MESH);
 #else
@@ -147,25 +150,51 @@ return_code space_sim_update(view_camera* camera)
     dm_vec3 rocket_up      = dm_ecs_entity_get_transform_up(ROCKET);
     dm_vec3 rocket_forward = dm_ecs_entity_get_transform_forward(ROCKET);
     
-    if(dm_input_is_key_pressed(DM_KEY_E)) 
+    // align with nearest gravitation object
+    if(dm_input_is_key_pressed(DM_KEY_E))
     {
-        dm_vec3 axis = dm_ecs_entity_get_transform_up(ROCKET);
-        dm_ecs_entity_orient_to_force_vector(ROCKET, axis, 0.1f);
+        float closest_d = FLT_MAX;
+        for(uint32_t i=0; i<NUM_OBJECTS; i++)
+        {
+            if(space_data.entities[i] == ROCKET) continue;
+            
+            dm_vec3 pos_g = dm_vec3_set(pos_x[space_data.entities[i]], pos_y[space_data.entities[i]], pos_z[space_data.entities[i]]);
+            dm_vec3 sep = dm_vec3_sub_vec3(pos, pos_g);
+            float d2 = dm_vec3_len2(sep);
+            
+            if(d2 < closest_d)
+            {
+                space_data.nearest_grav_body = space_data.entities[i];
+                space_data.align_axis = dm_vec3_norm(sep);
+                closest_d = d2;
+            }
+        }
+        
+        dm_quat new_rot = dm_quat_from_to_direction(dm_ecs_entity_get_transform_up(ROCKET), space_data.align_axis);
+        new_rot = dm_quat_add_quat(new_rot, rot);
+        new_rot = dm_quat_norm(new_rot);
+        //new_rot = dm_quat_norm(dm_quat_nlerp(rot, new_rot, 0.3f));
+        rot_i[ROCKET] = new_rot.i;
+        rot_j[ROCKET] = new_rot.j;
+        rot_k[ROCKET] = new_rot.k;
+        rot_r[ROCKET] = new_rot.r;
     }
     
+#if 0
     if(dm_input_is_key_pressed(DM_KEY_G))
     {
         float mag = 10000.0f;
         dm_vec3 force = dm_vec3_rotate(dm_vec3_unit_y, rot);
         dm_physics_apply_force(ROCKET, dm_vec3_scale(force, mag));
     }
-    
+#endif
     if(dm_input_is_key_pressed(DM_KEY_W))
     {
         dm_physics_apply_force(ROCKET, dm_vec3_scale(dm_ecs_entity_get_transform_forward(ROCKET), 1e4));
     }
     
     // update camera
+    pos = dm_vec3_set(pos_x[ROCKET], pos_y[ROCKET], pos_z[ROCKET]);
     track_camera(pos, distance, camera);
     
     // update light pos
@@ -183,6 +212,10 @@ return_code space_sim_render()
     
     if(debug_draw)
     {
+        float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+        float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+        float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+        
         dm_debug_render_transform(PLANET_1);
         dm_debug_render_force_vector(PLANET_1);
         dm_debug_render_velocity_vector(PLANET_1);
@@ -197,7 +230,8 @@ return_code space_sim_render()
         dm_debug_render_relative_velocity_vector(ROCKET, PLANET_1);
         dm_debug_render_aabb(ROCKET);
         
-        
+        dm_vec3 p = dm_vec3_set(pos_x[ROCKET], pos_y[ROCKET], pos_z[ROCKET]);
+        dm_debug_render_arrow_v(p, dm_vec3_add_vec3(p, space_data.align_axis), 1.0f, dm_vec4_set(1,1,0,1));
     }
     
     return SUCCESS;
