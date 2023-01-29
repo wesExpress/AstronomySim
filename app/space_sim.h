@@ -151,7 +151,7 @@ return_code space_sim_update(view_camera* camera)
     dm_vec3 rocket_forward = dm_ecs_entity_get_transform_forward(ROCKET);
     
     // align with nearest gravitation object
-    if(dm_input_is_key_pressed(DM_KEY_E)) space_data.align_with_grav = !space_data.align_with_grav;
+    if(dm_input_key_just_pressed(DM_KEY_E)) space_data.align_with_grav = !space_data.align_with_grav;
     
     if(space_data.align_with_grav)
     {
@@ -175,6 +175,12 @@ return_code space_sim_update(view_camera* camera)
         dm_quat new_rot = dm_quat_from_to_direction(dm_ecs_entity_get_transform_up(ROCKET), space_data.align_axis);
         new_rot = dm_quat_mul_quat(new_rot, rot);
         new_rot = dm_quat_norm(new_rot);
+        
+        if(dm_isnan(new_rot.i) || dm_isnan(new_rot.j) || dm_isnan(new_rot.k) || dm_isnan(new_rot.r))
+        {
+            DM_LOG_ERROR("Rot is NaN");
+            return UPDATE_FAIL;
+        }
         
         rot_i[ROCKET] = new_rot.i;
         rot_j[ROCKET] = new_rot.j;
