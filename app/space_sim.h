@@ -151,7 +151,9 @@ return_code space_sim_update(view_camera* camera)
     dm_vec3 rocket_forward = dm_ecs_entity_get_transform_forward(ROCKET);
     
     // align with nearest gravitation object
-    if(dm_input_is_key_pressed(DM_KEY_E))
+    if(dm_input_is_key_pressed(DM_KEY_E)) space_data.align_with_grav = !space_data.align_with_grav;
+    
+    if(space_data.align_with_grav)
     {
         float closest_d = FLT_MAX;
         for(uint32_t i=0; i<NUM_OBJECTS; i++)
@@ -171,23 +173,15 @@ return_code space_sim_update(view_camera* camera)
         }
         
         dm_quat new_rot = dm_quat_from_to_direction(dm_ecs_entity_get_transform_up(ROCKET), space_data.align_axis);
-        new_rot = dm_quat_add_quat(new_rot, rot);
+        new_rot = dm_quat_mul_quat(new_rot, rot);
         new_rot = dm_quat_norm(new_rot);
-        //new_rot = dm_quat_norm(dm_quat_nlerp(rot, new_rot, 0.3f));
+        
         rot_i[ROCKET] = new_rot.i;
         rot_j[ROCKET] = new_rot.j;
         rot_k[ROCKET] = new_rot.k;
         rot_r[ROCKET] = new_rot.r;
     }
     
-#if 0
-    if(dm_input_is_key_pressed(DM_KEY_G))
-    {
-        float mag = 10000.0f;
-        dm_vec3 force = dm_vec3_rotate(dm_vec3_unit_y, rot);
-        dm_physics_apply_force(ROCKET, dm_vec3_scale(force, mag));
-    }
-#endif
     if(dm_input_is_key_pressed(DM_KEY_W))
     {
         dm_physics_apply_force(ROCKET, dm_vec3_scale(dm_ecs_entity_get_transform_forward(ROCKET), 1e4));
