@@ -182,14 +182,15 @@ return_code space_sim_update(view_camera* camera)
         rot_r[ROCKET] = new_rot.r;
     }
     
-    if(dm_input_is_key_pressed(DM_KEY_W))
-    {
-        dm_physics_apply_force(ROCKET, dm_vec3_scale(dm_ecs_entity_get_transform_forward(ROCKET), 7e2));
-    }
-    
     // update camera
     pos = dm_vec3_set(pos_x[ROCKET], pos_y[ROCKET], pos_z[ROCKET]);
-    track_camera(pos, distance, camera);
+    //track_camera(pos, distance, camera);
+    fps_camera(dm_get_delta_time(), pos, dm_ecs_entity_get_transform_up(ROCKET), camera);
+    
+    if(dm_input_is_key_pressed(DM_KEY_W))
+    {
+        dm_physics_add_impulse(ROCKET, dm_vec3_scale(camera->forward, 2 * dm_get_delta_time()));
+    }
     
     // update light pos
     pos = dm_vec3_set(pos_x[STAR], pos_y[STAR], pos_z[STAR]);
@@ -200,6 +201,7 @@ return_code space_sim_update(view_camera* camera)
 
 return_code space_sim_render()
 {
+#if 0 
     static bool debug_draw = false;
     
     if(dm_input_key_just_pressed(DM_KEY_TAB)) debug_draw = !debug_draw;
@@ -210,23 +212,26 @@ return_code space_sim_render()
         float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
         float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
         
+        /*
         dm_debug_render_transform(PLANET_1);
         dm_debug_render_force_vector(PLANET_1);
         dm_debug_render_velocity_vector(PLANET_1);
-        dm_debug_render_aabb(PLANET_1);
         
         dm_debug_render_transform(PLANET_2);
         dm_debug_render_force_vector(PLANET_2);
         dm_debug_render_velocity_vector(PLANET_2);
+        */
         
         dm_debug_render_transform(ROCKET);
         dm_debug_render_force_vector(ROCKET);
         dm_debug_render_relative_velocity_vector(ROCKET, PLANET_1);
-        dm_debug_render_aabb(ROCKET);
         
+        /*
         dm_vec3 p = dm_vec3_set(pos_x[ROCKET], pos_y[ROCKET], pos_z[ROCKET]);
         dm_debug_render_arrow_v(p, dm_vec3_add_vec3(p, space_data.align_axis), 1.0f, dm_vec4_set(1,1,0,1));
+*/
     }
+#endif
     
     return SUCCESS;
 }

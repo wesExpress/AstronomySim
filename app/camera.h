@@ -7,7 +7,7 @@ typedef struct view_camera_t
 {
     dm_mat4 view, proj, view_proj;
     dm_mat4 inv_view;
-    dm_vec3 pos, forward;
+    dm_vec3 pos, forward, up;
     float near_plane, far_plane, fov;
     float look_sens, move_speed;
     uint32_t width, height;
