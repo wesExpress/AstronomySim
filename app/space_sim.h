@@ -27,7 +27,7 @@ return_code space_sim_init()
     const dm_vec4 white = dm_vec4_set(1,1,1,1);
     const float gray_scale = 0.5f;
     
-    float r_planet = 100.0f; // m
+    float r_planet = 500.0f; // m
     float r_star   = 1e3f;
     const dm_vec4 c_moon = dm_vec4_set(white.x * gray_scale, white.y * gray_scale, white.z * gray_scale, 1);
     
@@ -173,15 +173,8 @@ return_code space_sim_update(view_camera* camera)
         }
         
         dm_quat new_rot = dm_quat_from_to_direction(dm_ecs_entity_get_transform_up(ROCKET), space_data.align_axis);
-        //new_rot = dm_quat_norm(new_rot);
-        
-        if(dm_isnan(new_rot.i) || dm_isnan(new_rot.j) || dm_isnan(new_rot.k) || dm_isnan(new_rot.r))
-        {
-            DM_LOG_ERROR("Rot is NaN");
-            return UPDATE_FAIL;
-        }
-        
         new_rot = dm_quat_mul_quat(new_rot, rot);
+        new_rot = dm_quat_norm(new_rot);
         
         rot_i[ROCKET] = new_rot.i;
         rot_j[ROCKET] = new_rot.j;
@@ -191,7 +184,7 @@ return_code space_sim_update(view_camera* camera)
     
     if(dm_input_is_key_pressed(DM_KEY_W))
     {
-        dm_physics_apply_force(ROCKET, dm_vec3_scale(dm_ecs_entity_get_transform_forward(ROCKET), 1e4));
+        dm_physics_apply_force(ROCKET, dm_vec3_scale(dm_ecs_entity_get_transform_forward(ROCKET), 7e2));
     }
     
     // update camera
