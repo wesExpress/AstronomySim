@@ -50,7 +50,7 @@ return_code space_sim_init()
     dm_ecs_entity_add_mesh(STAR, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(STAR, dm_vec4_set(1,1,0,1), dm_vec4_set(1,1,0,1));
     
-    dm_physics_add_angular_momentum(STAR, dm_vec3_set(0,1e29f,0));
+    dm_physics_add_angular_momentum(STAR, dm_vec3_set(0,1e28f,0));
     
     // planet 1
     const float planet_orbit = r_star * 100.0f;
@@ -62,11 +62,12 @@ return_code space_sim_init()
     PLANET_1 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(PLANET_1, pos, scale, rot);
     dm_ecs_entity_add_collision_sphere(PLANET_1, r_planet);
+    // TODO would really be nice to have planet spinning, but doesn't seem to work with continuous collision
     dm_ecs_entity_add_physics(PLANET_1, dm_vec3_set(vc,0,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(PLANET_1, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(PLANET_1, c_moon, c_moon);
     
-    // space ship 
+    // player
     scale = dm_vec3_set(1,1,1);
     pos = dm_vec3_set(0,0,planet_orbit + r_planet + 100.0f);
     
@@ -95,7 +96,7 @@ return_code space_sim_init()
     PLANET_2 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(PLANET_2, pos, scale, rot);
     dm_ecs_entity_add_collision_sphere(PLANET_2, r_planet * moon_s);
-    dm_ecs_entity_add_physics(PLANET_2, dm_vec3_set(vc,0,0), dm_vec3_set(0,1e16f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet * 0.1f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
+    dm_ecs_entity_add_physics(PLANET_2, dm_vec3_set(vc,0,0), dm_vec3_set(0,1e18f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet * 0.1f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(PLANET_2, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(PLANET_2, c_moon, c_moon);
     
@@ -132,28 +133,14 @@ return_code space_sim_update(view_camera* camera)
     
     if(d > 10000.0f) space_sim_update_positions(pos);
     
-    // scrolling
-    static float distance = 30.0f;
-    
-    if(dm_input_is_key_pressed(DM_KEY_LSHIFT))
-    {
-        if(dm_input_mouse_has_scrolled())
-        {
-            int t = dm_input_get_mouse_scroll();
-            distance += (float)t;
-            
-            distance = DM_CLAMP(distance, 5.0f, 50.0f);
-        }
-    }
-    
     dm_vec3 rocket_right   = dm_ecs_entity_get_transform_right(ROCKET);
     dm_vec3 rocket_up      = dm_ecs_entity_get_transform_up(ROCKET);
     dm_vec3 rocket_forward = dm_ecs_entity_get_transform_forward(ROCKET);
     
     // align with nearest gravitation object
-    if(dm_input_key_just_pressed(DM_KEY_E)) space_data.align_with_grav = !space_data.align_with_grav;
+    //if(dm_input_key_just_pressed(DM_KEY_E)) space_data.align_with_grav = !space_data.align_with_grav;
     
-    if(space_data.align_with_grav)
+    //if(space_data.align_with_grav)
     {
         float closest_d = FLT_MAX;
         for(uint32_t i=0; i<NUM_OBJECTS; i++)
@@ -172,7 +159,7 @@ return_code space_sim_update(view_camera* camera)
             }
         }
         
-        dm_quat new_rot = dm_quat_from_to_direction(dm_ecs_entity_get_transform_up(ROCKET), space_data.align_axis);
+        dm_quat new_rot = dm_quat_from_to_direction(rocket_up, space_data.align_axis);
         new_rot = dm_quat_mul_quat(new_rot, rot);
         new_rot = dm_quat_norm(new_rot);
         
@@ -185,11 +172,16 @@ return_code space_sim_update(view_camera* camera)
     // update camera
     pos = dm_vec3_set(pos_x[ROCKET], pos_y[ROCKET], pos_z[ROCKET]);
     //track_camera(pos, distance, camera);
-    fps_camera(dm_get_delta_time(), pos, dm_ecs_entity_get_transform_up(ROCKET), camera);
+    dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(rocket_up, 2));
+    fps_camera(dm_get_delta_time(), pos, rocket_up, camera);
     
     if(dm_input_is_key_pressed(DM_KEY_W))
     {
         dm_physics_add_impulse(ROCKET, dm_vec3_scale(camera->forward, 2 * dm_get_delta_time()));
+    }
+    else if(dm_input_is_key_pressed(DM_KEY_S))
+    {
+        dm_physics_add_impulse(ROCKET, dm_vec3_scale(camera->forward, -2 * dm_get_delta_time()));
     }
     
     // update light pos
