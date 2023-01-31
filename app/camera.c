@@ -133,7 +133,7 @@ void fps_camera(float delta_time, dm_vec3 pos, dm_vec3 up, view_camera* camera)
     dm_input_get_mouse_delta(&delta_x, &delta_y);
     dm_vec2 look_delta = dm_vec2_set((float)delta_x * camera->look_sens, (float)delta_y * camera->look_sens);
     camera->up = up;
-    dm_vec3 right = dm_vec3_cross(camera->forward, camera->up);
+    camera->right = dm_vec3_cross(camera->forward, camera->up);
     
     camera->pos = pos;
 #if 0 
@@ -168,7 +168,7 @@ void fps_camera(float delta_time, dm_vec3 pos, dm_vec3 up, view_camera* camera)
         float delta_pitch = look_delta.y;
         float delta_yaw = look_delta.x;
         
-        dm_quat q1 = dm_quat_from_axis_angle_deg(right, -delta_pitch);
+        dm_quat q1 = dm_quat_from_axis_angle_deg(camera->right, -delta_pitch);
         dm_quat q2 = dm_quat_from_axis_angle_deg(camera->up, -delta_yaw);
         dm_quat rot = dm_quat_cross(q1, q2);
         dm_quat_norm_inpl(&rot);

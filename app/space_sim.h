@@ -73,7 +73,7 @@ return_code space_sim_init()
     
     ROCKET = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(ROCKET, pos, scale, rot);
-#if 1
+#if 0
     dm_ecs_entity_add_collision_sphere(ROCKET, 1);
     dm_ecs_entity_add_mesh(ROCKET, ICOSPHERE_MESH);
 #else
@@ -175,14 +175,19 @@ return_code space_sim_update(view_camera* camera)
     dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(rocket_up, 2));
     fps_camera(dm_get_delta_time(), pos, rocket_up, camera);
     
-    if(dm_input_is_key_pressed(DM_KEY_W))
-    {
-        dm_physics_add_impulse(ROCKET, dm_vec3_scale(camera->forward, 2 * dm_get_delta_time()));
-    }
-    else if(dm_input_is_key_pressed(DM_KEY_S))
-    {
-        dm_physics_add_impulse(ROCKET, dm_vec3_scale(camera->forward, -2 * dm_get_delta_time()));
-    }
+    float speed = 2.0f * dm_get_delta_time();
+    
+    dm_vec3 impulse = { 0 };
+    if(dm_input_is_key_pressed(DM_KEY_W)) dm_vec3_add_vec3_inpl(impulse, camera->forward, &impulse);
+    else if(dm_input_is_key_pressed(DM_KEY_S)) dm_vec3_sub_vec3_inpl(impulse, camera->forward, &impulse);
+    
+    if(dm_input_is_key_pressed(DM_KEY_A)) dm_vec3_sub_vec3_inpl(impulse, camera->right, &impulse);
+    else if(dm_input_is_key_pressed(DM_KEY_D)) dm_vec3_add_vec3_inpl(impulse, camera->right, &impulse);
+    
+    dm_vec3_norm_inpl(&impulse);
+    dm_vec3_scale_inpl(speed, &impulse);
+    
+    dm_physics_add_impulse(ROCKET, impulse);
     
     // update light pos
     pos = dm_vec3_set(pos_x[STAR], pos_y[STAR], pos_z[STAR]);
