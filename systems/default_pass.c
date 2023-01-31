@@ -148,7 +148,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     return true;
 }
 
-bool default_pass_init(float* positions, float* normals, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes, view_camera* camera)
+bool default_pass_init(float* positions, float* normals, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes, dm_ecs_id light_component_id, view_camera* camera)
 {
     // get vertices in workable format
     default_vertex* vertices = dm_alloc(sizeof(default_vertex) * num_vertices);
@@ -223,8 +223,9 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     
     // register our render system
     dm_ecs_id render_system_component_ids[] = { DM_COMPONENT_TRANSFORM, DM_COMPONENT_MESH, DM_COMPONENT_MATERIAL };
+    dm_ecs_id render_system_exclude_ids[] = { light_component_id };
     dm_ecs_id render_system;
-    DM_ECS_REGISTER_SYSTEM(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, default_render_pass, render_system);
+    DM_ECS_REGISTER_SYSTEM_EXCLUDES(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, render_system_exclude_ids, default_render_pass, render_system);
     
     return true;
 }

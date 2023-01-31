@@ -1,3 +1,5 @@
+#include "components.h"
+
 // constants
 #define G          6.673e-11f
 #define EARTH_G    9.8f
@@ -42,6 +44,7 @@ return_code space_sim_init()
     dm_vec3 pos   = { 0 };
     dm_quat rot   = { 0,0,0,1 };
     const float star_mass = 1e20f;
+    const dm_vec4 star_color = { 1,1,0,1 };
     
     STAR = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(STAR, pos, scale, rot);
@@ -49,6 +52,7 @@ return_code space_sim_init()
     dm_ecs_entity_add_physics_at_rest(STAR, star_mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(STAR, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(STAR, dm_vec4_set(1,1,0,1), dm_vec4_set(1,1,0,1));
+    add_light_component(STAR, star_color, star_color, star_color, dm_vec3_set(0,0,0), dm_vec4_set(1, 0.09f, 0.032f, 0), LIGHT_TYPE_POINT);
     
     dm_physics_add_angular_momentum(STAR, dm_vec3_set(0,1e28f,0));
     

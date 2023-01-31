@@ -2,6 +2,7 @@
 #include "camera.h"
 #include "../systems/default_pass.h"
 #include "../systems/gravity.h"
+#include "components.h"
 
 // wrappers
 #define BOX_MESH 0
@@ -44,6 +45,9 @@ return_code app_run()
     dm_debug_render_set_inv_view(&app_data.camera.inv_view);
     dm_debug_render_set_far_plane(&app_data.camera.far_plane);
     
+    // components
+    dm_ecs_id light_component = register_light_component();
+    
     // mesh data
     float* positions = NULL;
     float* normals = NULL;
@@ -63,7 +67,7 @@ return_code app_run()
     dm_geometry_icosphere(4, &positions, &normals, &tex_coords, &indices, num_vertices, &num_vertices, &num_indices, &meshes[num_meshes++]);
     
     // submit data
-    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), &app_data.camera)) return INIT_FAIL;
+    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), light_component, &app_data.camera)) return INIT_FAIL;
     
     dm_free(positions);
     dm_free(normals);
