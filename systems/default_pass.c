@@ -118,7 +118,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     dm_render_command_clear(0,0,0,1);
     dm_render_command_set_default_viewport();
     
-    dm_render_command_bind_pipeline(handles.pipeline);
+    //dm_render_command_bind_pipeline(handles.pipeline);
     dm_render_command_begin_renderpass(handles.pass);
     dm_render_command_update_uniform(0, &uni, sizeof(uni), handles.pass);
     dm_render_command_bind_uniform(0, 0, handles.pass);
@@ -204,12 +204,12 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     
     dm_free(vertices);
     
-    if(!dm_renderer_create_pipeline(pipeline_desc, &handles.pipeline)) return false;
+    //if(!dm_renderer_create_pipeline(pipeline_desc, &handles.pipeline)) return false;
 #ifdef DM_OPENGL
     dm_render_handle vb_buffers[] = { handles.vb, handles.instb };
-    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, 2, unis, num_unis, attrib_descs, num_attribs, &handles.pass)) return false;
+    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, 2, unis, num_unis, attrib_descs, num_attribs, pipeline_desc, &handles.pass)) return false;
 #else
-    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, num_unis, attrib_descs, num_attribs, &handles.pass)) return false;
+    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, num_unis, attrib_descs, num_attribs, pipeline_desc, &handles.pass)) return false;
 #endif
     
     if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, true, "default_texture", &handles.default_texture)) return false;
