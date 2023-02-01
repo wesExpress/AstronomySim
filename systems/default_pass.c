@@ -118,7 +118,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     dm_render_command_clear(0,0,0,1);
     dm_render_command_set_default_viewport();
     
-    dm_render_command_bind_pipeline(handles.pipeline);
+    //dm_render_command_bind_pipeline(handles.pipeline);
     dm_render_command_begin_renderpass(handles.pass);
     dm_render_command_update_uniform(0, &uni, sizeof(uni), handles.pass);
     dm_render_command_bind_uniform(0, 0, handles.pass);
@@ -148,7 +148,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     return true;
 }
 
-bool default_pass_init(float* positions, float* normals, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes, view_camera* camera)
+bool default_pass_init(float* positions, float* normals, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes, dm_ecs_id light_component_id, view_camera* camera)
 {
     // get vertices in workable format
     default_vertex* vertices = dm_alloc(sizeof(default_vertex) * num_vertices);
@@ -204,12 +204,12 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     
     dm_free(vertices);
     
-    if(!dm_renderer_create_pipeline(pipeline_desc, &handles.pipeline)) return false;
+    //if(!dm_renderer_create_pipeline(pipeline_desc, &handles.pipeline)) return false;
 #ifdef DM_OPENGL
     dm_render_handle vb_buffers[] = { handles.vb, handles.instb };
-    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, 2, unis, num_unis, attrib_descs, num_attribs, &handles.pass)) return false;
+    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, 2, unis, num_unis, attrib_descs, num_attribs, pipeline_desc, &handles.pass)) return false;
 #else
-    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, num_unis, attrib_descs, num_attribs, &handles.pass)) return false;
+    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, num_unis, attrib_descs, num_attribs, pipeline_desc, &handles.pass)) return false;
 #endif
     
     if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, true, "default_texture", &handles.default_texture)) return false;
@@ -223,8 +223,9 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     
     // register our render system
     dm_ecs_id render_system_component_ids[] = { DM_COMPONENT_TRANSFORM, DM_COMPONENT_MESH, DM_COMPONENT_MATERIAL };
+    dm_ecs_id render_system_exclude_ids[] = { light_component_id };
     dm_ecs_id render_system;
-    DM_ECS_REGISTER_SYSTEM(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, default_render_pass, render_system);
+    DM_ECS_REGISTER_SYSTEM_EXCLUDES(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, render_system_exclude_ids, default_render_pass, render_system);
     
     return true;
 }

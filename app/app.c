@@ -2,7 +2,7 @@
 #include "camera.h"
 #include "../systems/default_pass.h"
 #include "../systems/gravity.h"
-#include "../DarkMatter/dm.h"
+#include "components.h"
 
 // wrappers
 #define BOX_MESH 0
@@ -38,12 +38,15 @@ return_code app_run()
 {
     // init camera
     float d = 6.0f;
-    init_camera(dm_vec3_set(d,d,d), dm_vec3_set(-1,-1,-1), 0.01f, 1e10f, 45.0f, 0.3f, 5.0f, DM_SCREEN_WIDTH, DM_SCREEN_HEIGHT, &app_data.camera);
+    init_camera(dm_vec3_set(d,d,d), dm_vec3_set(-1,-1,-1), 0.01f, 1e10f, dm_deg_to_rad(75.0f), 0.3f, 5.0f, DM_SCREEN_WIDTH, DM_SCREEN_HEIGHT, &app_data.camera);
     
     // link camera view_proj to debug draw pass
     dm_debug_render_set_view_proj(&app_data.camera.view_proj);
     dm_debug_render_set_inv_view(&app_data.camera.inv_view);
     dm_debug_render_set_far_plane(&app_data.camera.far_plane);
+    
+    // components
+    dm_ecs_id light_component = register_light_component();
     
     // mesh data
     float* positions = NULL;
@@ -64,7 +67,7 @@ return_code app_run()
     dm_geometry_icosphere(4, &positions, &normals, &tex_coords, &indices, num_vertices, &num_vertices, &num_indices, &meshes[num_meshes++]);
     
     // submit data
-    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), &app_data.camera)) return INIT_FAIL;
+    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), light_component, &app_data.camera)) return INIT_FAIL;
     
     dm_free(positions);
     dm_free(normals);
@@ -100,6 +103,16 @@ return_code app_run()
         
         // update
         if(!dm_begin_update()) break;
+        
+        //////////////////////////////////////
+#ifdef STRESS_TEST
+        APP_FUNC_CHECK(stress_test_update(&app_data.camera));
+#elif defined(PHYSICS_TEST)
+        APP_FUNC_CHECK(physics_test_update(&app_data.camera));
+#else
+        APP_FUNC_CHECK(space_sim_update(&app_data.camera));
+#endif
+        //////////////////////////////////////
         
         if(dm_input_key_just_pressed(DM_KEY_P)) dm_physics_toggle_pause();
         
@@ -137,16 +150,6 @@ return_code app_run()
         
         // DarkMatter end update
         if(!dm_end_update()) return RENDER_FAIL;
-        
-        //////////////////////////////////////
-#ifdef STRESS_TEST
-        APP_FUNC_CHECK(stress_test_update(&app_data.camera));
-#elif defined(PHYSICS_TEST)
-        APP_FUNC_CHECK(physics_test_update(&app_data.camera));
-#else
-        APP_FUNC_CHECK(space_sim_update(&app_data.camera));
-#endif
-        //////////////////////////////////////
         
         frame_counter++;
     }
