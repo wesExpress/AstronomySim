@@ -52,7 +52,7 @@ return_code space_sim_init()
     dm_ecs_entity_add_physics_at_rest(STAR, star_mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(STAR, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(STAR, dm_vec4_set(1,1,0,1), dm_vec4_set(1,1,0,1));
-    add_light_component(STAR, star_color, star_color, star_color, dm_vec3_set(0,0,0), dm_vec4_set(1, 0.09f, 0.032f, 0), LIGHT_TYPE_POINT);
+    add_point_light_component(STAR, star_color, star_color, star_color, dm_vec3_set(0,0,0), 1, 1e-8f, 1e-15f, COMPONENT_LIGHT);
     
     dm_physics_add_angular_momentum(STAR, dm_vec3_set(0,1e28f,0));
     
@@ -196,6 +196,12 @@ return_code space_sim_update(view_camera* camera)
     // update light pos
     pos = dm_vec3_set(pos_x[STAR], pos_y[STAR], pos_z[STAR]);
     default_pass_set_light_pos(pos);
+    
+    float* c = dm_ecs_get_component_member(COMPONENT_LIGHT, LIGHT_MEM_UNION_0);
+    float* l = dm_ecs_get_component_member(COMPONENT_LIGHT, LIGHT_MEM_UNION_1);
+    float* q = dm_ecs_get_component_member(COMPONENT_LIGHT, LIGHT_MEM_UNION_2);
+    
+    default_pass_set_light_params(c[STAR], l[STAR], q[STAR]);
     
     return SUCCESS;
 }

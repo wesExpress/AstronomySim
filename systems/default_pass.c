@@ -26,6 +26,7 @@ typedef struct default_scene_uni_t
     dm_vec4 ambient_color;
     dm_vec3 light_pos;
     float   fcoef_inv;
+    dm_vec4 point_light_params;
     dm_vec3 view_pos;
 } default_scene_uni;
 
@@ -42,6 +43,7 @@ typedef struct default_handles_t
     
     view_camera* camera;
     dm_vec3 light_pos;
+    dm_vec3 point_light_params;
 } default_handles;
 
 static default_handles handles = { 0 };
@@ -112,6 +114,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     uni.ambient_color = dm_vec4_set(a_c.x,a_c.y,a_c.z, 1);
     uni.light_pos = handles.light_pos;
     uni.fcoef_inv = 1.0f / dm_log2f(handles.camera->far_plane + 1);
+    uni.point_light_params = dm_vec4_set_from_vec3(handles.point_light_params);
     uni.view_pos = handles.camera->pos;
     
     // submit all render commands
@@ -233,4 +236,9 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
 void default_pass_set_light_pos(dm_vec3 pos)
 {
     handles.light_pos = pos;
+}
+
+void default_pass_set_light_params(float constant, float linear, float quadratic)
+{
+    handles.point_light_params = dm_vec3_set(constant, linear, quadratic);
 }

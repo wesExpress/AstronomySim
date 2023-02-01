@@ -9,6 +9,8 @@
 #define ICOSAHEDRON_MESH BOX_MESH + 1
 #define ICOSPHERE_MESH ICOSAHEDRON_MESH + 1
 
+dm_ecs_id COMPONENT_LIGHT;
+
 typedef struct application_data_t
 {
     view_camera camera;
@@ -46,7 +48,7 @@ return_code app_run()
     dm_debug_render_set_far_plane(&app_data.camera.far_plane);
     
     // components
-    dm_ecs_id light_component = register_light_component();
+    register_light_component(&COMPONENT_LIGHT);
     
     // mesh data
     float* positions = NULL;
@@ -67,7 +69,7 @@ return_code app_run()
     dm_geometry_icosphere(4, &positions, &normals, &tex_coords, &indices, num_vertices, &num_vertices, &num_indices, &meshes[num_meshes++]);
     
     // submit data
-    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), light_component, &app_data.camera)) return INIT_FAIL;
+    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), COMPONENT_LIGHT, &app_data.camera)) return INIT_FAIL;
     
     dm_free(positions);
     dm_free(normals);

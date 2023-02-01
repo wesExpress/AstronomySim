@@ -22,6 +22,8 @@ cbuffer scene_cb : register(b0)
 	float4 ambient_color;
 	float3 light_pos;
 	float  fcoef_inv;
+	float3 point_light_params;
+	float  padding;
 	float3 view_pos;
 };
 
@@ -42,10 +44,14 @@ PS_OUTPUT p_main(PS_INPUT input)
 
 	float4 texture_color = obj_texture.Sample(sample_state, input.tex_coords);
 
+	float distance = length(light_pos - input.frag_pos);
+	float attenuation = 1.0 / (point_light_params.x + point_light_params.y * distance + point_light_params.z * distance * distance);
+
 	float4 diffuse  = diff * light_color * input.obj_diffuse * texture_color;
 	float4 specular = spec * light_color * input.obj_specular * texture_color; 
+	float4 ambient  = ambient_color * input.obj_diffuse * texture_color;
 
-	output.color = (ambient_color * input.obj_diffuse * texture_color + diffuse + specular);
+	output.color = (ambient + diffuse + specular) * attenuation;
 	
 	output.depth = log2(input.logz) * fcoef_inv;
 

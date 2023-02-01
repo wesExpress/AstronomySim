@@ -27,6 +27,8 @@ cbuffer scene_cb : register(b0)
 	float4 ambient_color;
 	float3 light_pos;
 	float  fcoef_inv;
+	float3 point_light_params;
+	float  padding;
 	float3 view_pos;
 };
 
