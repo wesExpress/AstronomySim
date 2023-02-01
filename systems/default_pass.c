@@ -1,4 +1,3 @@
-#define DM_ECS_DEFAULT_COMPONENTS
 #include "../dm.h"
 #include "default_pass.h"
 
@@ -33,7 +32,6 @@ typedef struct default_scene_uni_t
 typedef struct default_handles_t
 {
     dm_render_handle vb, instb, ib;
-    dm_render_handle pipeline;
     dm_render_handle pass;
     
     dm_render_handle default_texture;
@@ -46,8 +44,7 @@ typedef struct default_handles_t
     dm_vec3 point_light_params;
 } default_handles;
 
-static default_handles handles = { 0 };
-
+static default_handles  handles = { 0 };
 static default_instance instances[DEFAULT_MAX_MESHES][DM_MAX_INSTS] = { 0 };
 static uint32_t         num_insts[DEFAULT_MAX_MESHES] = { 0 };
 
@@ -121,7 +118,6 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     dm_render_command_clear(0,0,0,1);
     dm_render_command_set_default_viewport();
     
-    //dm_render_command_bind_pipeline(handles.pipeline);
     dm_render_command_begin_renderpass(handles.pass);
     dm_render_command_update_uniform(0, &uni, sizeof(uni), handles.pass);
     dm_render_command_bind_uniform(0, 0, handles.pass);
@@ -141,9 +137,11 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     for(uint32_t i=0; i<handles.num_meshes; i++)
     {
         dm_mesh mesh = dm_renderer_get_mesh(handles.meshes[i]);
+        uint32_t num = num_insts[i];
+        if(num==0) continue;
         
-        dm_render_command_update_buffer(handles.instb, &instances[i], sizeof(default_instance) * num_insts[i], 0);
-        dm_render_command_draw_instanced(mesh.index_count, num_insts[i], mesh.index_offset, 0, 0);
+        dm_render_command_update_buffer(handles.instb, &instances[i], sizeof(default_instance) * num, 0);
+        dm_render_command_draw_instanced(mesh.index_count, num, mesh.index_offset, 0, 0);
     }
     
     dm_render_command_end_renderpass(handles.pass);
@@ -177,13 +175,11 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
         DM_MAKE_VERTEX_ATTRIB("OBJ_DIFFUSE", default_instance, diffuse_color, DM_VERTEX_ATTRIB_CLASS_INSTANCE, DM_VERTEX_DATA_T_FLOAT, 4, 0, false),
         DM_MAKE_VERTEX_ATTRIB("OBJ_SPECULAR", default_instance, diffuse_color, DM_VERTEX_ATTRIB_CLASS_INSTANCE, DM_VERTEX_DATA_T_FLOAT, 4, 0, false),
     };
-    uint32_t num_attribs = DM_ARRAY_LEN(attrib_descs);
     
     // uniforms
     dm_uniform unis[] = {
         { .data_size=sizeof(default_scene_uni), .name="scene_uni" }
     };
-    uint32_t num_unis = DM_ARRAY_LEN(unis);
     
     // pipeline desc
     dm_pipeline_desc pipeline_desc = { 0 };
@@ -207,12 +203,11 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     
     dm_free(vertices);
     
-    //if(!dm_renderer_create_pipeline(pipeline_desc, &handles.pipeline)) return false;
 #ifdef DM_OPENGL
     dm_render_handle vb_buffers[] = { handles.vb, handles.instb };
-    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, 2, unis, num_unis, attrib_descs, num_attribs, pipeline_desc, &handles.pass)) return false;
+    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, &handles.pass)) return false;
 #else
-    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, num_unis, attrib_descs, num_attribs, pipeline_desc, &handles.pass)) return false;
+    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, attrib_descs, pipeline_desc, &handles.pass)) return false;
 #endif
     
     if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, true, "default_texture", &handles.default_texture)) return false;

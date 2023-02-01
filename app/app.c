@@ -70,6 +70,7 @@ return_code app_run()
     
     // submit data
     if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), COMPONENT_LIGHT, &app_data.camera)) return INIT_FAIL;
+    if(!light_src_pass_init(positions, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), COMPONENT_LIGHT, &app_data.camera)) return INIT_FAIL;
     
     dm_free(positions);
     dm_free(normals);

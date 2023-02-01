@@ -77,7 +77,7 @@ return_code space_sim_init()
     
     ROCKET = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(ROCKET, pos, scale, rot);
-#if 0
+#if 1
     dm_ecs_entity_add_collision_sphere(ROCKET, 1);
     dm_ecs_entity_add_mesh(ROCKET, ICOSPHERE_MESH);
 #else
@@ -142,9 +142,6 @@ return_code space_sim_update(view_camera* camera)
     dm_vec3 rocket_forward = dm_ecs_entity_get_transform_forward(ROCKET);
     
     // align with nearest gravitation object
-    //if(dm_input_key_just_pressed(DM_KEY_E)) space_data.align_with_grav = !space_data.align_with_grav;
-    
-    //if(space_data.align_with_grav)
     {
         float closest_d = FLT_MAX;
         for(uint32_t i=0; i<NUM_OBJECTS; i++)
