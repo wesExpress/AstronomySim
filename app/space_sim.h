@@ -37,7 +37,7 @@ dm_ecs_id create_star(dm_vec3 pos, float radius, dm_vec3 velocity, float mass, d
     dm_ecs_entity_add_physics_at_rest(star, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(star, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(star, color, color);
-    add_point_light_component(star, WHITE, WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-5f, 1e-14f, COMPONENT_LIGHT);
+    add_point_light_component(star, WHITE, WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-5f, 1e-12f, COMPONENT_LIGHT);
     
     dm_physics_add_impulse(star, velocity);
     
@@ -105,8 +105,7 @@ dm_ecs_id create_player(dm_entity host, float mass, dm_vec4 color)
     dm_ecs_id player = dm_ecs_create_entity();
     
     dm_ecs_entity_add_transform_v(player, pos, dm_vec3_set(1,1,1), dm_quat_set(0,0,0,1));
-    //dm_ecs_entity_add_collision_sphere(player, 1);
-    dm_ecs_entity_add_collision_box(player, dm_vec3_set(-0.5f,-0.5f,-0.5f), dm_vec3_set(0.5f,0.5f,0.5f));
+    dm_ecs_entity_add_collision_sphere(player, 1);
     dm_ecs_entity_add_physics_at_rest(player, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(player, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(player, color, color);
@@ -131,19 +130,18 @@ return_code space_sim_init()
     gravity_system_init();
     
     // entities
-    // star, planet, moon, and box for flying around
     
-    STAR = create_star(dm_vec3_set(0,0,0), 5e3f, dm_vec3_set(0,0,0), 1e20f, dm_vec4_set(1,1,0,1));
-    dm_physics_add_angular_momentum(STAR, dm_vec3_set(0,1e28f,0));
+    // star
+    STAR = create_star(dm_vec3_set(0,0,0), 5e3f, dm_vec3_set(0,0,0), 1e22f, dm_vec4_set(1,1,0,1));
     
     // planet 1
-    PLANET_1 = create_satellite(STAR, 500.0f, 5e5f, 1e17f, dm_vec4_set(0.5f,0.5f,0.5f,1));
+    PLANET_1 = create_satellite(STAR, 500.0f, 5e5f, 5e16f, dm_vec4_set(0.5f,0.5f,0.5f,1));
     
     // player
     PLAYER = create_player(PLANET_1, 10.0f, dm_vec4_set(1,0,0,1));
     
     // moon
-    MOON_1 = create_satellite(PLANET_1, 100.0f, 5e3f, 1e13f, dm_vec4_set(0.25f,0.25f,0.25f,1));
+    MOON_1 = create_satellite(PLANET_1, 100.0f, 2e3f, 1e13f, dm_vec4_set(0.25f,0.25f,0.25f,1));
     
     return SUCCESS;
 }
@@ -156,13 +154,9 @@ void space_sim_update_positions(dm_vec3 p)
     
     for(uint32_t i=0; i<space_data.num_entities; i++)
     {
-        dm_vec3 pos = dm_vec3_set(pos_x[space_data.entities[i]], pos_y[space_data.entities[i]], pos_z[space_data.entities[i]]);
-        
         pos_x[space_data.entities[i]] -= p.x;
         pos_y[space_data.entities[i]] -= p.y;
         pos_z[space_data.entities[i]] -= p.z;
-        
-        pos = dm_vec3_set(pos_x[space_data.entities[i]], pos_y[space_data.entities[i]], pos_z[space_data.entities[i]]);
     }
 }
 
@@ -241,6 +235,7 @@ return_code space_sim_update(view_camera* camera)
 
 return_code space_sim_render()
 {
+    
 #if 1 
     static bool debug_draw = false;
     
