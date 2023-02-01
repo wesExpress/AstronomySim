@@ -23,13 +23,8 @@ struct PS_INPUT
 cbuffer scene_cb : register(b0)
 {
 	matrix view_proj;
-	float4 light_color;
-	float4 ambient_color;
-	float3 light_pos;
-	float  fcoef_inv;
-	float3 point_light_params;
-	float  padding;
 	float3 view_pos;
+	float  fcoef_inv;
 };
 
 PS_INPUT v_main(VS_INPUT input)
