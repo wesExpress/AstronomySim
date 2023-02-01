@@ -2,6 +2,7 @@
 #include "camera.h"
 #include "../systems/default_pass.h"
 #include "../systems/gravity.h"
+#include "../DarkMatter/dm.h"
 
 // wrappers
 #define BOX_MESH 0

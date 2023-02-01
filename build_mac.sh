@@ -13,6 +13,8 @@ c_files="$c_files $(find $SRC_DIR/app -type f -name "*.c")"
 c_files="$c_files $(find $SRC_DIR/systems -type f -name "*.c")"
 external_files="$SRC_DIR/DarkMatter/lib/mt19937/src/mt19937.c $SRC_DIR/DarkMatter/lib/mt19937/src/mt19937_64.c"
 
+objc_files="$SRC_DIR/DarkMatter/impl/platform/dm_platform_mac.m $SRC_DIR/DarkMatter/impl/render/dm_renderer_metal.m"
+
 compiler_flags="-g -fPIC -MD -std=gnu99 -fdiagnostics-absolute-paths -fdeclspec -fPIC -Wall -Wno-missing-braces"
 
 if ((simd_256)); then
@@ -34,4 +36,4 @@ include_flags="-I$SRC_DIR -I$SRC_DIR/DarkMatter/lib/mt19937/include -I$SRC_DIR/D
 linker_flags="-g -framework Cocoa -lobjc -framework QuartzCore -framework CoreFoundation -framework Cocoa -framework Metal"
 
 echo "Building $output..."
-clang $c_files $external_files $compiler_flags -o $output $defines $include_flags $linker_flags
+clang $c_files $external_files $objc_files $compiler_flags -o $output $defines $include_flags $linker_flags
