@@ -6,7 +6,7 @@
 #define E_G_OVER_G 1.47e11f   // kg / m^2
 
 // data
-#define NUM_OBJECTS 4
+#define NUM_OBJECTS 10
 
 typedef struct space_sim_data_t
 {
@@ -21,8 +21,10 @@ space_sim_data space_data = { 0 };
 // entity wrappers
 #define STAR     space_data.entities[0]
 #define PLANET_1 space_data.entities[1]
-#define PLANET_2 space_data.entities[2]
-#define ROCKET   space_data.entities[3]
+#define MOON_1   space_data.entities[2]
+#define PLANET_2 space_data.entities[3]
+#define MOON_2   space_data.entities[4]
+#define ROCKET   space_data.entities[5]
 
 return_code space_sim_init()
 {
@@ -97,12 +99,12 @@ return_code space_sim_init()
     pos   = dm_vec3_set(0,0,planet_orbit + moon_orbit);
     vc += dm_sqrtf(G * m_planet / moon_orbit);
     
-    PLANET_2 = dm_ecs_create_entity();
-    dm_ecs_entity_add_transform_v(PLANET_2, pos, scale, rot);
-    dm_ecs_entity_add_collision_sphere(PLANET_2, r_planet * moon_s);
-    dm_ecs_entity_add_physics(PLANET_2, dm_vec3_set(vc,0,0), dm_vec3_set(0,1e18f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet * 0.1f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
-    dm_ecs_entity_add_mesh(PLANET_2, ICOSPHERE_MESH);
-    dm_ecs_entity_add_material(PLANET_2, c_moon, c_moon);
+    MOON_1 = dm_ecs_create_entity();
+    dm_ecs_entity_add_transform_v(MOON_1, pos, scale, rot);
+    dm_ecs_entity_add_collision_sphere(MOON_1, r_planet * moon_s);
+    dm_ecs_entity_add_physics(MOON_1, dm_vec3_set(vc,0,0), dm_vec3_set(0,1e18f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet * 0.1f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
+    dm_ecs_entity_add_mesh(MOON_1, ICOSPHERE_MESH);
+    dm_ecs_entity_add_material(MOON_1, c_moon, c_moon);
     
     return SUCCESS;
 }
@@ -173,8 +175,6 @@ return_code space_sim_update(view_camera* camera)
     // update camera
     pos = dm_vec3_set(pos_x[ROCKET], pos_y[ROCKET], pos_z[ROCKET]);
     //track_camera(pos, distance, camera);
-    dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(rocket_up, 2));
-    fps_camera(dm_get_delta_time(), pos, rocket_up, camera);
     
     float speed = 2.0f * dm_get_delta_time();
     
@@ -189,6 +189,10 @@ return_code space_sim_update(view_camera* camera)
     dm_vec3_scale_inpl(speed, &impulse);
     
     dm_physics_add_impulse(ROCKET, impulse);
+    
+    // camera is 1.7m off ground
+    dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(rocket_up, 1.7f));
+    fps_camera(dm_get_delta_time(), camera_pos, rocket_up, camera);
     
     // update light pos
     pos = dm_vec3_set(pos_x[STAR], pos_y[STAR], pos_z[STAR]);
