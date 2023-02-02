@@ -38,11 +38,13 @@ void update_camera(float delta_time, view_camera* camera)
 {
     if(!dm_input_is_key_pressed(DM_KEY_LSHIFT)) return;
     
+    camera->up = dm_vec3_unit_y;
+    
     float speed = delta_time * camera->move_speed;
     int delta_x, delta_y;
     dm_input_get_mouse_delta(&delta_x, &delta_y);
     dm_vec2 look_delta = dm_vec2_set((float)delta_x * camera->look_sens, (float)delta_y * camera->look_sens);
-    dm_vec3 right = dm_vec3_cross(camera->forward, dm_vec3_unit_y);
+    camera->right = dm_vec3_cross(camera->forward, camera->up);
     
     dm_vec3 delta_pos = { 0 };
     
@@ -60,9 +62,9 @@ void update_camera(float delta_time, view_camera* camera)
         if(dm_input_is_key_pressed(DM_KEY_Q)) delta_pos.y = -1;
         else if(dm_input_is_key_pressed(DM_KEY_E)) delta_pos.y = 1;
         
-        dm_vec3 move_vec = dm_vec3_scale(right, delta_pos.x);
+        dm_vec3 move_vec = dm_vec3_scale(camera->right, delta_pos.x);
         move_vec = dm_vec3_add_vec3(move_vec, dm_vec3_scale(camera->forward, delta_pos.z));
-        move_vec = dm_vec3_add_vec3(move_vec, dm_vec3_scale(dm_vec3_unit_y, delta_pos.y));
+        move_vec = dm_vec3_add_vec3(move_vec, dm_vec3_scale(camera->up, delta_pos.y));
         move_vec = dm_vec3_norm(move_vec);
         move_vec = dm_vec3_scale(move_vec, speed);
         camera->pos = dm_vec3_add_vec3(camera->pos, move_vec);
@@ -75,8 +77,8 @@ void update_camera(float delta_time, view_camera* camera)
         float delta_pitch = look_delta.y;
         float delta_yaw = look_delta.x;
         
-        dm_quat q1 = dm_quat_from_axis_angle_deg(right, -delta_pitch);
-        dm_quat q2 = dm_quat_from_axis_angle_deg(dm_vec3_unit_y, -delta_yaw);
+        dm_quat q1 = dm_quat_from_axis_angle_deg(camera->right, -delta_pitch);
+        dm_quat q2 = dm_quat_from_axis_angle_deg(camera->up, -delta_yaw);
         dm_quat rot = dm_quat_cross(q1, q2);
         dm_quat_norm_inpl(&rot);
         
@@ -126,8 +128,6 @@ void set_camera_pos(dm_vec3 pos, view_camera* camera)
 
 void fps_camera(float delta_time, dm_vec3 pos, dm_vec3 up, view_camera* camera)
 {
-    //if(!dm_input_is_key_pressed(DM_KEY_LSHIFT)) return;
-    
     float speed = delta_time * camera->move_speed;
     int delta_x, delta_y;
     dm_input_get_mouse_delta(&delta_x, &delta_y);
@@ -136,30 +136,6 @@ void fps_camera(float delta_time, dm_vec3 pos, dm_vec3 up, view_camera* camera)
     camera->right = dm_vec3_cross(camera->forward, camera->up);
     
     camera->pos = pos;
-#if 0 
-    dm_vec3 delta_pos = { 0 };
-    // movement
-    bool moved = (dm_input_is_key_pressed(DM_KEY_A) || dm_input_is_key_pressed(DM_KEY_D) || dm_input_is_key_pressed(DM_KEY_W) || dm_input_is_key_pressed(DM_KEY_S) || dm_input_is_key_pressed(DM_KEY_Q) || dm_input_is_key_pressed(DM_KEY_E));
-    
-    if(moved)
-    {
-        if(dm_input_is_key_pressed(DM_KEY_A)) delta_pos.x = -1;
-        else if(dm_input_is_key_pressed(DM_KEY_D)) delta_pos.x = 1;;
-        
-        if(dm_input_is_key_pressed(DM_KEY_W)) delta_pos.z = 1;
-        else if(dm_input_is_key_pressed(DM_KEY_S)) delta_pos.z = -1;
-        
-        if(dm_input_is_key_pressed(DM_KEY_Q)) delta_pos.y = -1;
-        else if(dm_input_is_key_pressed(DM_KEY_E)) delta_pos.y = 1;
-        
-        dm_vec3 move_vec = dm_vec3_scale(right, delta_pos.x);
-        move_vec = dm_vec3_add_vec3(move_vec, dm_vec3_scale(camera->forward, delta_pos.z));
-        move_vec = dm_vec3_add_vec3(move_vec, dm_vec3_scale(up, delta_pos.y));
-        move_vec = dm_vec3_norm(move_vec);
-        move_vec = dm_vec3_scale(move_vec, speed);
-        camera->pos = dm_vec3_add_vec3(camera->pos, move_vec);
-    }
-#endif
     
     // rotation
     bool rotated = false;

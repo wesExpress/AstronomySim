@@ -270,32 +270,5 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
 
 void default_pass_add_point_light(dm_entity entity)
 {
-    /*
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X); 
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y); 
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z); 
-    
-    float* ambient_r = dm_ecs_get_component_member(light_id, LIGHT_MEM_AMBIENT_R);
-    float* ambient_g = dm_ecs_get_component_member(light_id, LIGHT_MEM_AMBIENT_G);
-    float* ambient_g = dm_ecs_get_component_member(light_id, LIGHT_MEM_AMBIENT_B);
-    float* diffuse_r = dm_ecs_get_component_member(light_id, LIGHT_MEM_DIFFUSE_R);
-    float* diffuse_g = dm_ecs_get_component_member(light_id, LIGHT_MEM_DIFFUSE_G);
-    float* diffuse_b = dm_ecs_get_component_member(light_id, LIGHT_MEM_DIFFUSE_B);
-    float* specular_r = dm_ecs_get_component_member(light_id, LIGHT_MEM_SPECULAR_R);
-    float* specular_g = dm_ecs_get_component_member(light_id, LIGHT_MEM_SPECULAR_G);
-    float* specular_b = dm_ecs_get_component_member(light_id, LIGHT_MEM_SPECULAR_B);
-    float* c = dm_ecs_get_component_member(light_id, LIGHT_MEM_UNION_0);
-    float* l = dm_ecs_get_component_member(light_id, LIGHT_MEM_UNION_1);
-    float* q = dm_ecs_get_component_member(light_id, LIGHT_MEM_UNION_2);
-    
-    handles.lights[LIGHT_TYPE_POINT][handles.num_lights[LIGHT_TYPE_POINT++]] = (default_point_light){
-        .pos=dm_vec4_set(pos_x[entity], pos_y[entity], pos_z[entity], 0),
-        .ambient=dm_vec4_set(ambient_r[entity], ambient_g[entity], ambient_b[entity], 1),
-        .diffuse=dm_vec4_set(diffuse_r[entity], diffuse_g[entity], diffuse_b[entity], 1),
-        .specular=dm_vec4_set(specular_r[entity], specular_g[entity], specular_b[entity], 1),
-        .constant=c[entity], .linear=l[entity], .quadratic=q[entity]
-    };
-*/
-    
     handles.lights[LIGHT_TYPE_POINT][handles.num_lights[LIGHT_TYPE_POINT]++] = entity;
 }
