@@ -22,8 +22,8 @@ space_sim_data space_data = { 0 };
 
 // entities
 dm_ecs_id STAR;
-dm_ecs_id PLANET_1;
-dm_ecs_id MOON_1;
+dm_ecs_id PLANET_1, PLANET_2;
+dm_ecs_id MOON_1, MOON_2;
 dm_ecs_id PLAYER;
 
 #define WHITE    (dm_vec4){1,1,1,1}
@@ -37,7 +37,7 @@ dm_ecs_id create_star(dm_vec3 pos, float radius, dm_vec3 velocity, float mass, d
     dm_ecs_entity_add_physics_at_rest(star, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(star, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(star, color, color);
-    add_point_light_component(star, WHITE, WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-5f, 1e-12f, COMPONENT_LIGHT);
+    add_point_light_component(star, dm_vec4_set(0.25f,0.25f,0.25f,1), WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-5f, 1e-12f, COMPONENT_LIGHT);
     
     dm_physics_add_impulse(star, velocity);
     
@@ -136,14 +136,22 @@ return_code space_sim_init()
     
     // planet 1
     PLANET_1 = create_satellite(STAR, 500.0f, 5e5f, 5e16f, dm_vec4_set(0.5f,0.5f,0.5f,1));
-    dm_physics_add_angular_velocity(PLANET_1, dm_vec3_set(0,0.01f,0));
+    dm_physics_add_angular_velocity(PLANET_1, dm_vec3_set(0,0.025f,0));
     
     // player
     PLAYER = create_player(PLANET_1, 10.0f, dm_vec4_set(1,0,0,1));
     
-    // moon
+    // moon 1
     MOON_1 = create_satellite(PLANET_1, 50.0f, 5e3f, 1e13f, dm_vec4_set(0.25f,0.25f,0.25f,1));
     dm_physics_add_angular_velocity(MOON_1, dm_vec3_set(0,0.05f,0));
+    
+    // planet 2
+    PLANET_2 = create_satellite(STAR, 500.0f, 5e4f, 5e16f, dm_vec4_set(0,1,0,1));
+    dm_physics_add_angular_velocity(PLANET_2, dm_vec3_set(0,0.025f,0));
+    
+    // moon 2
+    MOON_2 = create_satellite(PLANET_2, 50.0f, 5e3f, 1e13f, dm_vec4_set(0,0,1,1));
+    dm_physics_add_angular_velocity(MOON_2, dm_vec3_set(0,0.05f,0));
     
     return SUCCESS;
 }
@@ -237,8 +245,7 @@ return_code space_sim_update(view_camera* camera)
 
 return_code space_sim_render()
 {
-    
-#if 1 
+#if 0 
     static bool debug_draw = false;
     
     if(dm_input_key_just_pressed(DM_KEY_TAB)) debug_draw = !debug_draw;
@@ -260,11 +267,6 @@ return_code space_sim_render()
         dm_debug_render_transform(PLAYER);
         dm_debug_render_force_vector(PLAYER);
         dm_debug_render_relative_velocity_vector(PLAYER, PLANET_1);
-        
-        /*
-        dm_vec3 p = dm_vec3_set(pos_x[ROCKET], pos_y[ROCKET], pos_z[ROCKET]);
-        dm_debug_render_arrow_v(p, dm_vec3_add_vec3(p, space_data.align_axis), 1.0f, dm_vec4_set(1,1,0,1));
-*/
     }
 #endif
     
