@@ -140,7 +140,7 @@ return_code space_sim_init()
     gravity_system_init();
     
     // entities
-#if 1
+#if 0
     // star
     STAR = create_star(dm_vec3_set(0,0,0), 5e3f, dm_vec3_set(0,0,0), 1e22f, dm_vec4_set(1,1,0,1));
     
