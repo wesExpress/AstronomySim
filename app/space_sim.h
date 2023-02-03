@@ -6,9 +6,9 @@
 #define E_G_OVER_G 1.47e11f   // kg / m^2
 
 // data
-#define MAX_ENTITIES   100
-#define MAX_STARS      10
-#define MAX_SATELLITES 30
+#define MAX_ENTITIES   500
+#define MAX_STARS      100
+#define MAX_SATELLITES 300
 
 typedef struct space_sim_data_t
 {
@@ -90,7 +90,7 @@ dm_ecs_id create_satellite(dm_entity host, float radius, float orbit, float mass
     dm_ecs_entity_add_material(satellite, color, color);
     
     dm_physics_add_impulse(satellite, dm_vec3_add_vec3(host_v, dm_vec3_scale(v, vc)));
-    dm_physics_add_angular_velocity(satellite, dm_vec3_set(0,0.01f,0));
+    dm_physics_add_angular_velocity(satellite, dm_vec3_set(0,0.05f,0));
     
     space_data.satellites[space_data.num_satellites++] = satellite;
     space_data.entities[space_data.num_entities++] = satellite;
@@ -158,9 +158,9 @@ return_code space_sim_init()
     MOON_2 = create_satellite(PLANET_2, 50.0f, 5e3f, 1e13f, dm_vec4_set(0,0,1,1));
     dm_physics_add_angular_velocity(MOON_2, dm_vec3_set(0,0.05f,0));
 #else
-    const float star_mass      = 1e22f;
-    const float star_radius    = 5e3f;
-    const float planet_mass    = 1e17f;
+    const float star_mass      = 1e20f;
+    const float star_radius    = 1e4f;
+    const float planet_mass    = 1e19f;
     const float planet_radius  = 500.0f;
     const float moon_mass      = 1e13f;
     const float moon_radius    = 50.0f;
@@ -171,8 +171,8 @@ return_code space_sim_init()
     for(uint32_t i=0; i<MAX_STARS; i++)
     {
         dm_vec3 star_pos = dm_vec3_set(dm_random_float(), dm_random_float(), dm_random_float());
-        star_pos = dm_vec3_scale(star_pos, 1e7f);
-        star_pos = dm_vec3_sub_scalar(star_pos, 5e6f);
+        star_pos = dm_vec3_scale(star_pos, 1e8f);
+        star_pos = dm_vec3_sub_scalar(star_pos, 5e7f);
         
         dm_vec3 star_vel = dm_vec3_set(dm_random_float(), dm_random_float(), dm_random_float());
         star_vel = dm_vec3_scale(star_vel, 100.0f);
@@ -183,7 +183,7 @@ return_code space_sim_init()
         
         for(uint32_t j=0; j<3; j++)
         {
-            float orbit = dm_random_float() * 1e6f + 1e5f;
+            float orbit = dm_random_float() * 5e6f + 1e5f;
             create_satellite(space_data.stars[i], planet_radius, orbit, planet_mass, planet_color);
         }
     }
@@ -222,6 +222,7 @@ return_code space_sim_update(view_camera* camera)
     
     dm_vec3 pos = { pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER] };
     dm_quat rot = dm_quat_set(rot_i[PLAYER], rot_j[PLAYER], rot_k[PLAYER], rot_r[PLAYER]);
+    float   d   = dm_vec3_len(pos);
     
     space_sim_update_positions(pos);
     
@@ -292,9 +293,9 @@ return_code space_sim_render()
         float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
         float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
         
-        dm_debug_render_transform(PLANET_1);
-        dm_debug_render_force_vector(PLANET_1);
-        dm_debug_render_velocity_vector(PLANET_1);
+        dm_debug_render_transform(space_data.satellites[0]);
+        dm_debug_render_force_vector(space_data.satellites[0]);
+        dm_debug_render_velocity_vector(space_data.satellites[0]);
         
         //dm_debug_render_transform(MOON_1);
         //dm_debug_render_force_vector(MOON_1);
@@ -302,7 +303,7 @@ return_code space_sim_render()
         
         dm_debug_render_transform(PLAYER);
         dm_debug_render_force_vector(PLAYER);
-        dm_debug_render_relative_velocity_vector(PLAYER, PLANET_1);
+        dm_debug_render_relative_velocity_vector(PLAYER, space_data.satellites[0]);
     }
 #endif
     
