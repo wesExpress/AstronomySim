@@ -37,7 +37,7 @@ dm_ecs_id create_star(dm_vec3 pos, float radius, dm_vec3 velocity, float mass, d
     dm_ecs_entity_add_physics_at_rest(star, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(star, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(star, color, color);
-    add_point_light_component(star, dm_vec4_set(0.25f,0.25f,0.25f,1), WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-5f, 1e-12f, COMPONENT_LIGHT);
+    add_point_light_component(star, dm_vec4_set(0.1f,0.1f,0.1f,1), WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-6f, 1e-14f, COMPONENT_LIGHT);
     
     dm_physics_add_impulse(star, velocity);
     
@@ -99,7 +99,7 @@ dm_ecs_id create_player(dm_entity host, float mass, dm_vec4 color)
     float* vel_y  = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_Y);
     float* vel_z  = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_Z);
     
-    dm_vec3 pos = dm_vec3_set(pos_x[host] + radii[host], pos_y[host], pos_z[host]);
+    dm_vec3 pos = dm_vec3_set(pos_x[host] + radii[host] + 0.5f, pos_y[host], pos_z[host]);
     dm_vec3 host_v = dm_vec3_set(vel_x[host], vel_y[host], vel_z[host]);
     
     dm_ecs_id player = dm_ecs_create_entity();
@@ -142,7 +142,7 @@ return_code space_sim_init()
     PLAYER = create_player(PLANET_1, 10.0f, dm_vec4_set(1,0,0,1));
     
     // moon 1
-    MOON_1 = create_satellite(PLANET_1, 50.0f, 5e3f, 1e13f, dm_vec4_set(0.25f,0.25f,0.25f,1));
+    MOON_1 = create_satellite(PLANET_1, 50.0f, 2e3f, 1e13f, dm_vec4_set(0.5f,0.5f,0.5f,1));
     dm_physics_add_angular_velocity(MOON_1, dm_vec3_set(0,0.05f,0));
     
     // planet 2
