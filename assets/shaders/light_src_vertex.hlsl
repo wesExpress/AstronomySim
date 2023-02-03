@@ -11,7 +11,6 @@ struct PS_INPUT
 	float4 position     : SV_Position;
 	float2 tex_coords   : TEXCOORD1;
 	float4 obj_diffuse  : OBJ_DIFFUSE1;
-	float4 obj_specular : OBJ_SPECULAR1;
 	float  logz         : LOGZ;
 };
 

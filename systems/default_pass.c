@@ -1,4 +1,4 @@
-#include "../dm.h"
+#include "../DarkMatter/dm.h"
 #include "default_pass.h"
 #include "../app/components.h"
 
@@ -117,7 +117,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
 #ifdef DM_DIRECTX
     scene_uni.view_proj = dm_mat4_transpose(d_handles.camera->view_proj);
 #else
-    scene_uni.view_proj = handles.camera->view_proj;
+    scene_uni.view_proj = d_handles.camera->view_proj;
 #endif
     scene_uni.fcoef_inv = 1.0f / dm_log2f(d_handles.camera->far_plane + 1);
     scene_uni.view_pos = d_handles.camera->pos;
@@ -243,7 +243,7 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     dm_free(vertices);
     
 #ifdef DM_OPENGL
-    dm_render_handle vb_buffers[] = { handles.vb, handles.instb };
+    dm_render_handle vb_buffers[] = { d_handles.vb, d_handles.instb };
     if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, &d_handles.pass)) return false;
 #else
     if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, attrib_descs, pipeline_desc, &d_handles.pass)) return false;

@@ -1,4 +1,4 @@
-#include "../dm.h"
+#include "../DarkMatter/dm.h"
 #include "light_src_pass.h"
 
 #define LIGHT_SRC_MAX_MESHES 100
@@ -72,8 +72,6 @@ bool light_src_pass(dm_entity* entities, uint32_t entity_count)
         
 #ifdef DM_DIRECTX
         inst->model = dm_mat4_transpose(inst->model);
-#else
-        inst->normal = dm_mat4_transpose(inst->normal);
 #endif
         
         inst->diffuse_color = diffuse;
@@ -83,7 +81,7 @@ bool light_src_pass(dm_entity* entities, uint32_t entity_count)
 #ifdef DM_DIRECTX
     uni.view_proj = dm_mat4_transpose(light_handles.camera->view_proj);
 #else
-    uni.view_proj = handles.camera->view_proj;
+    uni.view_proj = light_handles.camera->view_proj;
 #endif
     uni.fcoef_inv = 1.0f / dm_log2f(light_handles.camera->far_plane + 1);
     
@@ -166,8 +164,8 @@ bool light_src_pass_init(float* positions, float* tex_coords, uint32_t num_verti
     dm_free(vertices);
     
 #ifdef DM_OPENGL
-    dm_render_handle vb_buffers[] = { handles.vb, handles.instb };
-    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/light_src_vertex.glsl", "assets/shaders/light_src_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, &handles.pass)) return false;
+    dm_render_handle vb_buffers[] = { light_handles.vb, light_handles.instb };
+    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/light_src_vertex.glsl", "assets/shaders/light_src_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, &light_handles.pass)) return false;
 #else
     if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/light_src_vertex.fxc", "assets/shaders/light_src_pixel.fxc", unis, attrib_descs, pipeline_desc, &light_handles.pass)) return false;
 #endif
