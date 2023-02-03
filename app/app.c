@@ -2,7 +2,7 @@
 #include "camera.h"
 #include "../systems/default_pass.h"
 #include "../systems/gravity.h"
-#include "components.h"
+#include "../systems/light_src_pass.h"
 
 // wrappers
 #define BOX_MESH 0
