@@ -131,7 +131,7 @@ return_code space_sim_init()
     gravity_system_init();
     
     // entities
-#if 1
+#if 0
     float r_planet = 500.0f; // m
     float r_star   = 5e3f;
     

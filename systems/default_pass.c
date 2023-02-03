@@ -26,7 +26,7 @@ typedef struct default_scene_uni_t
     float   fcoef_inv;
 } default_scene_uni;
 
-#define MAX_LIGHTS 5
+#define MAX_LIGHTS 100
 typedef struct default_point_light_t
 {
     dm_vec4 pos;

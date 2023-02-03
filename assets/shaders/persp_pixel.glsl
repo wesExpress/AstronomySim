@@ -11,7 +11,7 @@ struct ps_input
 	float logz;
 };
 
-#define MAX_LIGHTS 5
+#define MAX_LIGHTS 100
 struct point_light
 {
 	vec4 position;
