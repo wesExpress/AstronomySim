@@ -6,12 +6,20 @@
 #define E_G_OVER_G 1.47e11f   // kg / m^2
 
 // data
-#define MAX_ENTITIES 10
+#define MAX_ENTITIES   100
+#define MAX_STARS      10
+#define MAX_SATELLITES 10
 
 typedef struct space_sim_data_t
 {
     dm_entity entities[MAX_ENTITIES];
     uint32_t  num_entities;
+    
+    dm_entity stars[MAX_STARS];
+    uint32_t  num_stars;
+    
+    dm_entity satellites[MAX_SATELLITES];
+    uint32_t  num_satellites;
     
     bool align_with_grav;
     dm_entity nearest_grav_body;
@@ -37,12 +45,13 @@ dm_ecs_id create_star(dm_vec3 pos, float radius, dm_vec3 velocity, float mass, d
     dm_ecs_entity_add_physics_at_rest(star, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(star, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(star, color, color);
-    add_point_light_component(star, dm_vec4_set(0.1f,0.1f,0.1f,1), WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-6f, 1e-14f, COMPONENT_LIGHT);
+    add_point_light_component(star, dm_vec4_set(0.01f,0.01f,0.01f,1), WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-6f, 1e-14f, COMPONENT_LIGHT);
     
     dm_physics_add_impulse(star, velocity);
     
     default_pass_add_point_light(star);
     
+    space_data.stars[space_data.num_stars++] = star;
     space_data.entities[space_data.num_entities++] = star;
     
     return star;
@@ -83,6 +92,7 @@ dm_ecs_id create_satellite(dm_entity host, float radius, float orbit, float mass
     
     dm_physics_add_impulse(satellite, dm_vec3_add_vec3(host_v, dm_vec3_scale(v, vc)));
     
+    space_data.satellites[space_data.num_satellites++] = satellite;
     space_data.entities[space_data.num_entities++] = satellite;
     
     return satellite;
@@ -130,7 +140,7 @@ return_code space_sim_init()
     gravity_system_init();
     
     // entities
-    
+#if 1
     // star
     STAR = create_star(dm_vec3_set(0,0,0), 5e3f, dm_vec3_set(0,0,0), 1e22f, dm_vec4_set(1,1,0,1));
     
@@ -152,6 +162,33 @@ return_code space_sim_init()
     // moon 2
     MOON_2 = create_satellite(PLANET_2, 50.0f, 5e3f, 1e13f, dm_vec4_set(0,0,1,1));
     dm_physics_add_angular_velocity(MOON_2, dm_vec3_set(0,0.05f,0));
+#else
+    const float star_mass      = 1e22f;
+    const float star_radius    = 5e3f;
+    const float planet_mass    = 1e16f;
+    const float planet_radius  = 500.0f;
+    const float moon_mass      = 1e13f;
+    const float moon_radius    = 50.0f;
+    const dm_vec4 star_color   = { 1,1,0,1 };
+    const dm_vec4 planet_color = { 0.5f,0.75f,0.5f,1 };
+    const dm_vec4 moon_color   = { 0.75f,0.75f,0.75f,1 };
+    
+    for(uint32_t i=0; i<MAX_STARS; i++)
+    {
+        dm_vec3 star_pos = dm_vec3_set(dm_random_float(), dm_random_float(), dm_random_float());
+        star_pos = dm_vec3_scale(star_pos, 1e7f);
+        star_pos = dm_vec3_sub_scalar(star_pos, 5e6f);
+        
+        dm_vec3 star_vel = dm_vec3_set(dm_random_float(), dm_random_float(), dm_random_float());
+        star_vel = dm_vec3_scale(star_vel, 100.0f);
+        star_vel = dm_vec3_sub_scalar(star_vel, 50.0f);
+        
+        create_star(star_pos, star_radius, star_vel, star_mass, star_color);
+    }
+    
+    PLANET_1 = create_satellite(space_data.stars[0], planet_radius, 5e4f, planet_mass, planet_color);
+    PLAYER   = create_player(PLANET_1, 10.0f, dm_vec4_set(1,0,0,1));
+#endif
     
     return SUCCESS;
 }

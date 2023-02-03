@@ -58,14 +58,14 @@ typedef struct default_handles_t
     uint32_t     num_lights[LIGHT_TYPE_UNKNOWN];
 } default_handles;
 
-static default_handles  handles = { 0 };
-static default_instance instances[DEFAULT_MAX_MESHES][DM_MAX_INSTS] = { 0 };
-static uint32_t         num_insts[DEFAULT_MAX_MESHES] = { 0 };
+static default_handles  d_handles = { 0 };
+static default_instance default_instances[DEFAULT_MAX_MESHES][DM_MAX_INSTS] = { 0 };
+static uint32_t         default_insts_count[DEFAULT_MAX_MESHES] = { 0 };
 
 // render system for default pass
 bool default_render_pass(dm_entity* entities, uint32_t entity_count)
 {
-    dm_memzero(num_insts, sizeof(uint32_t) * DEFAULT_MAX_MESHES);
+    dm_memzero(default_insts_count, sizeof(uint32_t) * DEFAULT_MAX_MESHES);
     
     float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
     float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
@@ -93,7 +93,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
         dm_vec4 specular = speculars[entity];
         dm_render_handle mesh_handle = mesh_handles[entity];
         
-        default_instance* inst = &instances[mesh_handle][num_insts[mesh_handle]++];
+        default_instance* inst = &default_instances[mesh_handle][default_insts_count[mesh_handle]++];
         
         inst->model = dm_mat_scale(dm_mat4_identity(), scale);
         inst->model = dm_mat4_mul_mat4(inst->model, dm_mat4_rotate_from_quat(rot));
@@ -115,31 +115,31 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     // scene uni
     default_scene_uni scene_uni = { 0 };
 #ifdef DM_DIRECTX
-    scene_uni.view_proj = dm_mat4_transpose(handles.camera->view_proj);
+    scene_uni.view_proj = dm_mat4_transpose(d_handles.camera->view_proj);
 #else
     scene_uni.view_proj = handles.camera->view_proj;
 #endif
-    scene_uni.fcoef_inv = 1.0f / dm_log2f(handles.camera->far_plane + 1);
-    scene_uni.view_pos = handles.camera->pos;
+    scene_uni.fcoef_inv = 1.0f / dm_log2f(d_handles.camera->far_plane + 1);
+    scene_uni.view_pos = d_handles.camera->pos;
     
     // light uni
-    float* ambient_r  = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_AMBIENT_R);
-    float* ambient_g  = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_AMBIENT_G);
-    float* ambient_b  = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_AMBIENT_B);
-    float* diffuse_r  = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_DIFFUSE_R);
-    float* diffuse_g  = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_DIFFUSE_G);
-    float* diffuse_b  = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_DIFFUSE_B);
-    float* specular_r = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_SPECULAR_R);
-    float* specular_g = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_SPECULAR_G);
-    float* specular_b = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_SPECULAR_B);
-    float* c          = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_UNION_0);
-    float* l          = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_UNION_1);
-    float* q          = dm_ecs_get_component_member(handles.light_id, LIGHT_MEM_UNION_2);
+    float* ambient_r  = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_AMBIENT_R);
+    float* ambient_g  = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_AMBIENT_G);
+    float* ambient_b  = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_AMBIENT_B);
+    float* diffuse_r  = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_DIFFUSE_R);
+    float* diffuse_g  = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_DIFFUSE_G);
+    float* diffuse_b  = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_DIFFUSE_B);
+    float* specular_r = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_SPECULAR_R);
+    float* specular_g = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_SPECULAR_G);
+    float* specular_b = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_SPECULAR_B);
+    float* c          = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_UNION_0);
+    float* l          = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_UNION_1);
+    float* q          = dm_ecs_get_component_member(d_handles.light_id, LIGHT_MEM_UNION_2);
     
     default_lights_uni light_uni = { 0 };
-    for(uint32_t i=0; i<handles.num_lights[LIGHT_TYPE_POINT]; i++)
+    for(uint32_t i=0; i<d_handles.num_lights[LIGHT_TYPE_POINT]; i++)
     {
-        dm_entity entity = handles.lights[LIGHT_TYPE_POINT][i];
+        dm_entity entity = d_handles.lights[LIGHT_TYPE_POINT][i];
         light_uni.point_lights[i] = (default_point_light){
             .pos=dm_vec4_set(pos_x[entity], pos_y[entity], pos_z[entity], 0),
             .ambient=dm_vec4_set(ambient_r[entity], ambient_g[entity], ambient_b[entity], 1),
@@ -148,18 +148,18 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
             .constant=c[entity], .linear=l[entity], .quadratic=q[entity]
         };
     }
-    light_uni.num_point_lights = handles.num_lights[LIGHT_TYPE_POINT];
+    light_uni.num_point_lights = d_handles.num_lights[LIGHT_TYPE_POINT];
     
     // submit all render commands
-    dm_render_command_begin_renderpass(handles.pass);
+    dm_render_command_begin_renderpass(d_handles.pass);
     
-    dm_render_command_update_uniform(0, &scene_uni, sizeof(scene_uni), handles.pass);
-    dm_render_command_bind_uniform(0, 0, handles.pass);
+    dm_render_command_update_uniform(0, &scene_uni, sizeof(scene_uni), d_handles.pass);
+    dm_render_command_bind_uniform(0, 0, d_handles.pass);
     
-    dm_render_command_update_uniform(1, &light_uni, sizeof(light_uni), handles.pass);
-    dm_render_command_bind_uniform(1, 1, handles.pass);
+    dm_render_command_update_uniform(1, &light_uni, sizeof(light_uni), d_handles.pass);
+    dm_render_command_bind_uniform(1, 1, d_handles.pass);
     
-    dm_render_command_bind_texture(handles.default_texture, 0);
+    dm_render_command_bind_texture(d_handles.default_texture, 0);
     
 #ifdef DM_DEBUG
     static bool wireframe = false;
@@ -168,21 +168,21 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     dm_render_command_toggle_wireframe(wireframe);
 #endif
     
-    dm_render_command_bind_buffer(handles.ib, 0);
-    dm_render_command_bind_buffer(handles.vb, 0);
-    dm_render_command_bind_buffer(handles.instb, 1);
+    dm_render_command_bind_buffer(d_handles.ib, 0);
+    dm_render_command_bind_buffer(d_handles.vb, 0);
+    dm_render_command_bind_buffer(d_handles.instb, 1);
     
-    for(uint32_t i=0; i<handles.num_meshes; i++)
+    for(uint32_t i=0; i<d_handles.num_meshes; i++)
     {
-        dm_mesh mesh = dm_renderer_get_mesh(handles.meshes[i]);
-        uint32_t num = num_insts[i];
+        dm_mesh mesh = dm_renderer_get_mesh(d_handles.meshes[i]);
+        uint32_t num = default_insts_count[i];
         if(num==0) continue;
         
-        dm_render_command_update_buffer(handles.instb, &instances[i], sizeof(default_instance) * num, 0);
+        dm_render_command_update_buffer(d_handles.instb, &default_instances[i], sizeof(default_instance) * num, 0);
         dm_render_command_draw_instanced(mesh.index_count, num, mesh.index_offset, 0, 0);
     }
     
-    dm_render_command_end_renderpass(handles.pass);
+    dm_render_command_end_renderpass(d_handles.pass);
     
     return true;
 }
@@ -235,29 +235,29 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     pipeline_desc.blend_dest_f = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
     
     // resources
-    if(!dm_renderer_create_static_index_buffer(indices, sizeof(uint32_t) * num_indices, &handles.ib)) return false;
+    if(!dm_renderer_create_static_index_buffer(indices, sizeof(uint32_t) * num_indices, &d_handles.ib)) return false;
     
-    if(!dm_renderer_create_static_vertex_buffer(vertices, sizeof(default_vertex) * num_vertices, sizeof(default_vertex), &handles.vb)) return false;
-    if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(default_instance) * DM_MAX_INSTS, sizeof(default_instance), &handles.instb)) return false;
+    if(!dm_renderer_create_static_vertex_buffer(vertices, sizeof(default_vertex) * num_vertices, sizeof(default_vertex), &d_handles.vb)) return false;
+    if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(default_instance) * DM_MAX_INSTS, sizeof(default_instance), &d_handles.instb)) return false;
     
     dm_free(vertices);
     
 #ifdef DM_OPENGL
     dm_render_handle vb_buffers[] = { handles.vb, handles.instb };
-    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, &handles.pass)) return false;
+    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, &d_handles.pass)) return false;
 #else
-    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, attrib_descs, pipeline_desc, &handles.pass)) return false;
+    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, attrib_descs, pipeline_desc, &d_handles.pass)) return false;
 #endif
     
-    if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, true, "default_texture", &handles.default_texture)) return false;
+    if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, true, "default_texture", &d_handles.default_texture)) return false;
     
     // mesh handles
-    dm_memcpy(handles.meshes, mesh_handles, sizeof(dm_render_handle) * num_meshes);
-    handles.num_meshes = num_meshes;
+    dm_memcpy(d_handles.meshes, mesh_handles, sizeof(dm_render_handle) * num_meshes);
+    d_handles.num_meshes = num_meshes;
     
     // camera handle
-    handles.camera = camera;
-    handles.light_id = light_component_id;
+    d_handles.camera = camera;
+    d_handles.light_id = light_component_id;
     
     // register our render system
     dm_ecs_id render_system_component_ids[] = { DM_COMPONENT_TRANSFORM, DM_COMPONENT_MESH, DM_COMPONENT_MATERIAL };
@@ -270,5 +270,5 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
 
 void default_pass_add_point_light(dm_entity entity)
 {
-    handles.lights[LIGHT_TYPE_POINT][handles.num_lights[LIGHT_TYPE_POINT]++] = entity;
+    d_handles.lights[LIGHT_TYPE_POINT][d_handles.num_lights[LIGHT_TYPE_POINT]++] = entity;
 }

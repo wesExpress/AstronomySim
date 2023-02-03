@@ -33,12 +33,12 @@ typedef struct light_src_handles_t
 } light_src_handles;
 
 static light_src_handles  light_handles = { 0 };
-static light_src_instance instances[LIGHT_SRC_MAX_MESHES][DM_MAX_INSTS] = { 0 };
-static uint32_t           num_insts[LIGHT_SRC_MAX_MESHES] = { 0 };
+static light_src_instance light_instances[LIGHT_SRC_MAX_MESHES][DM_MAX_INSTS] = { 0 };
+static uint32_t           light_insts_count[LIGHT_SRC_MAX_MESHES] = { 0 };
 
 bool light_src_pass(dm_entity* entities, uint32_t entity_count)
 {
-    dm_memzero(num_insts, sizeof(uint32_t) * LIGHT_SRC_MAX_MESHES);
+    dm_memzero(light_insts_count, sizeof(uint32_t) * LIGHT_SRC_MAX_MESHES);
     
     float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
     float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
@@ -64,7 +64,7 @@ bool light_src_pass(dm_entity* entities, uint32_t entity_count)
         dm_vec4 diffuse = diffuses[entity];
         dm_render_handle mesh_handle = mesh_handles[entity];
         
-        light_src_instance* inst = &instances[mesh_handle][num_insts[mesh_handle]++];
+        light_src_instance* inst = &light_instances[mesh_handle][light_insts_count[mesh_handle]++];
         
         inst->model = dm_mat_scale(dm_mat4_identity(), scale);
         inst->model = dm_mat4_mul_mat4(inst->model, dm_mat4_rotate_from_quat(rot));
@@ -106,10 +106,10 @@ bool light_src_pass(dm_entity* entities, uint32_t entity_count)
     for(uint32_t i=0; i<light_handles.num_meshes; i++)
     {
         dm_mesh mesh = dm_renderer_get_mesh(light_handles.meshes[i]);
-        uint32_t num = num_insts[i];
+        uint32_t num = light_insts_count[i];
         if(num==0) continue;
         
-        dm_render_command_update_buffer(light_handles.instb, &instances[i], sizeof(light_src_instance) * num, 0);
+        dm_render_command_update_buffer(light_handles.instb, &light_instances[i], sizeof(light_src_instance) * num, 0);
         dm_render_command_draw_instanced(mesh.index_count, num, mesh.index_offset, 0, 0);
     }
     
