@@ -123,7 +123,7 @@ void stress_test_debug_draw()
     dm_debug_render_line(0,0,0,0,0,1,1,0,0,1,1);
 }
 
-return_code stress_test_init()
+return_code app_init()
 {
     // gravity system
     gravity_system_init();
@@ -137,14 +137,14 @@ return_code stress_test_init()
     return SUCCESS;
 }
 
-return_code stress_test_update(view_camera* camera)
+return_code app_update(view_camera* camera)
 {
     update_camera(dm_get_delta_time(), camera);
     
     return SUCCESS;
 }
 
-return_code stress_test_render()
+return_code app_render()
 {
     if(dm_input_key_just_pressed(DM_KEY_TAB)) stress_data.debug_draw = !stress_data.debug_draw;
     

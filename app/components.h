@@ -3,6 +3,7 @@
 
 #include "../DarkMatter/dm.h"
 
+// generic lighting
 typedef enum light_type
 {
     LIGHT_TYPE_DIRECTIONAL,
@@ -56,5 +57,20 @@ void register_light_component(dm_ecs_id* id);
 void add_direction_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, dm_vec3 direction, dm_ecs_id id);
 void add_point_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, float constant, float linear, float quadratic, dm_ecs_id id);
 void add_spotlight_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, dm_vec3 direction, float cutoff, dm_ecs_id id);
+
+// special blackbody lighting
+typedef struct component_blackbody_t
+{
+    float temperature, luminosity;
+} component_blackbody;
+
+typedef enum component_blackbody_member_t
+{
+    BLACKBODY_MEM_TEMPERATURE, BLACKBODY_MEM_LUMINOSITY,
+    BLACKBODY_MEM_UNKNOWN
+} component_blackbody_member;
+
+void register_blackbody_component(dm_ecs_id* id);
+void add_blackbody_component(dm_entity entity, float temperature, dm_ecs_id id);
 
 #endif //COMPONENTS_H

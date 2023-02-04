@@ -1,6 +1,7 @@
 #include "components.h"
 #include "../DarkMatter/dm.h"
 
+// generic lighters
 void register_light_component(dm_ecs_id* id)
 {
     size_t light_sizes[] = {
@@ -56,4 +57,33 @@ void add_spotlight_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 di
     };
     
     dm_ecs_entity_add_component(entity, id, &l);
+}
+
+// blackbody
+#define STEPHAN_BOLTZMAN 5.67e-8f // W m^-2 K^-4
+void register_blackbody_component(dm_ecs_id* id)
+{
+    size_t blackbody_sizes[] = {
+        sizeof(float), sizeof(float)
+    };
+    
+    DM_ECS_REGISTER_COMPONENT(component_blackbody, blackbody_sizes, *id);
+}
+
+void add_blackbody_component(dm_entity entity, float temperature, dm_ecs_id id)
+{
+    float* scale_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_X);
+    float* scale_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Y);
+    float* scale_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Z);
+    
+    float radius = DM_MAX(scale_x[entity], DM_MAX(scale_y[entity], scale_z[entity]));
+    
+    float luminosity = 4.0f * DM_MATH_PI * radius * radius * STEPHAN_BOLTZMAN * temperature * temperature * temperature * temperature;
+    
+    component_blackbody b = {
+        .temperature=temperature,
+        .luminosity=luminosity
+    };
+    
+    dm_ecs_entity_add_component(entity, id, &b);
 }

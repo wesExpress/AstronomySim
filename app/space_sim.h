@@ -7,7 +7,7 @@
 
 // data
 #define MAX_ENTITIES   500
-#define MAX_STARS      100
+#define MAX_STARS      50
 #define MAX_SATELLITES 300
 
 typedef struct space_sim_data_t
@@ -45,7 +45,7 @@ dm_ecs_id create_star(dm_vec3 pos, float radius, dm_vec3 velocity, float mass, d
     dm_ecs_entity_add_physics_at_rest(star, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(star, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(star, color, color);
-    add_point_light_component(star, dm_vec4_set(0.01f,0.01f,0.01f,1), WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-6f, 1e-14f, COMPONENT_LIGHT);
+    add_point_light_component(star, dm_vec4_set(0.01f,0.01f,0.01f,1), WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-7f, 1e-14f, COMPONENT_LIGHT);
     
     dm_physics_add_impulse(star, velocity);
     
@@ -126,7 +126,7 @@ dm_ecs_id create_player(dm_entity host, float mass, dm_vec4 color)
     return player;
 }
 
-return_code space_sim_init()
+return_code app_init()
 {
     // gravity system
     gravity_system_init();
@@ -159,7 +159,7 @@ return_code space_sim_init()
     dm_physics_add_angular_velocity(MOON_2, dm_vec3_set(0,0.05f,0));
 #else
     const float star_mass      = 1e20f;
-    const float star_radius    = 1e4f;
+    const float star_radius    = 1e5f;
     const float planet_mass    = 1e19f;
     const float planet_radius  = 500.0f;
     const float moon_mass      = 1e13f;
@@ -171,8 +171,8 @@ return_code space_sim_init()
     for(uint32_t i=0; i<MAX_STARS; i++)
     {
         dm_vec3 star_pos = dm_vec3_set(dm_random_float(), dm_random_float(), dm_random_float());
-        star_pos = dm_vec3_scale(star_pos, 1e8f);
-        star_pos = dm_vec3_sub_scalar(star_pos, 5e7f);
+        star_pos = dm_vec3_scale(star_pos, 1e9f);
+        star_pos = dm_vec3_sub_scalar(star_pos, 5e8f);
         
         dm_vec3 star_vel = dm_vec3_set(dm_random_float(), dm_random_float(), dm_random_float());
         star_vel = dm_vec3_scale(star_vel, 100.0f);
@@ -183,7 +183,7 @@ return_code space_sim_init()
         
         for(uint32_t j=0; j<3; j++)
         {
-            float orbit = dm_random_float() * 5e6f + 1e5f;
+            float orbit = dm_random_float() * 5e7f + 1e6f;
             create_satellite(space_data.stars[i], planet_radius, orbit, planet_mass, planet_color);
         }
     }
@@ -210,7 +210,7 @@ void space_sim_update_positions(dm_vec3 p)
     }
 }
 
-return_code space_sim_update(view_camera* camera)
+return_code app_update(view_camera* camera)
 {
     float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
     float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
@@ -224,9 +224,9 @@ return_code space_sim_update(view_camera* camera)
     dm_quat rot = dm_quat_set(rot_i[PLAYER], rot_j[PLAYER], rot_k[PLAYER], rot_r[PLAYER]);
     float   d   = dm_vec3_len(pos);
     
-    space_sim_update_positions(pos);
+    if(d >= 1e4f) space_sim_update_positions(pos);
     
-    dm_vec3 rocket_up      = dm_ecs_entity_get_transform_up(PLAYER);
+    dm_vec3 player_up = dm_ecs_entity_get_transform_up(PLAYER);
     
     // align with nearest gravitation object
     {
@@ -247,7 +247,7 @@ return_code space_sim_update(view_camera* camera)
             }
         }
         
-        dm_quat new_rot = dm_quat_from_to_direction(rocket_up, space_data.align_axis);
+        dm_quat new_rot = dm_quat_from_to_direction(player_up, space_data.align_axis);
         new_rot = dm_quat_mul_quat(new_rot, rot);
         new_rot = dm_quat_norm(new_rot);
         
@@ -273,15 +273,17 @@ return_code space_sim_update(view_camera* camera)
     
     dm_physics_add_impulse(PLAYER, impulse);
     
-    // camera is 1.7m off ground
-    dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(rocket_up, 1.7f));
-    fps_camera(dm_get_delta_time(), camera_pos, rocket_up, camera);
-    
     return SUCCESS;
 }
 
-return_code space_sim_render()
+return_code app_render(view_camera* camera)
 {
+    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    
+    dm_vec3 pos = { pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER] };
+    
 #if 1
     static bool debug_draw = false;
     
@@ -289,23 +291,20 @@ return_code space_sim_render()
     
     if(debug_draw)
     {
-        float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-        float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-        float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
-        
         dm_debug_render_transform(space_data.satellites[0]);
         dm_debug_render_force_vector(space_data.satellites[0]);
         dm_debug_render_velocity_vector(space_data.satellites[0]);
-        
-        //dm_debug_render_transform(MOON_1);
-        //dm_debug_render_force_vector(MOON_1);
-        //dm_debug_render_velocity_vector(MOON_1);
         
         dm_debug_render_transform(PLAYER);
         dm_debug_render_force_vector(PLAYER);
         dm_debug_render_relative_velocity_vector(PLAYER, space_data.satellites[0]);
     }
 #endif
+    
+    // camera is 1.7m off ground
+    dm_vec3 player_up = dm_ecs_entity_get_transform_up(PLAYER);
+    dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(player_up, 1.7f));
+    fps_camera(dm_get_delta_time(), camera_pos, player_up, camera);
     
     return SUCCESS;
 }

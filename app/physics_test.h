@@ -37,7 +37,7 @@ dm_entity make_entity(view_camera* camera)
     return entity;
 }
 
-return_code physics_test_init()
+return_code app_init()
 {
     // gravity system
     gravity_system_init();
@@ -68,7 +68,7 @@ return_code physics_test_init()
     return SUCCESS;
 }
 
-return_code physics_test_update(view_camera* camera)
+return_code app_update(view_camera* camera)
 {
     update_camera(dm_get_delta_time(), camera);
     
@@ -81,7 +81,7 @@ return_code physics_test_update(view_camera* camera)
     return SUCCESS;
 }
 
-return_code physics_test_render()
+return_code app_render()
 {
 #if 0
     for(uint32_t i=1; i<physics_data.num_entities; i++)

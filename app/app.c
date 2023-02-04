@@ -78,13 +78,7 @@ return_code app_run()
     dm_free(indices);
     
     ////////////////////////////////////
-#ifdef STRESS_TEST
-    APP_FUNC_CHECK(stress_test_init());
-#elif defined(PHYSICS_TEST)
-    APP_FUNC_CHECK(physics_test_init());
-#else
-    APP_FUNC_CHECK(space_sim_init());
-#endif
+    APP_FUNC_CHECK(app_init());
     ////////////////////////////////////
     
     // main loop
@@ -104,18 +98,12 @@ return_code app_run()
             dm_timer_start(&frame_timer);
         }
         
+        //////////////////////////////////////
+        APP_FUNC_CHECK(app_update(&app_data.camera));
+        //////////////////////////////////////
+        
         // update
         if(!dm_begin_update()) break;
-        
-        //////////////////////////////////////
-#ifdef STRESS_TEST
-        APP_FUNC_CHECK(stress_test_update(&app_data.camera));
-#elif defined(PHYSICS_TEST)
-        APP_FUNC_CHECK(physics_test_update(&app_data.camera));
-#else
-        APP_FUNC_CHECK(space_sim_update(&app_data.camera));
-#endif
-        //////////////////////////////////////
         
         if(dm_input_key_just_pressed(DM_KEY_P)) dm_physics_toggle_pause();
         
@@ -129,17 +117,12 @@ return_code app_run()
         dm_timer render_timer = { 0 };
         dm_timer_start(&render_timer);
         
-        if(!dm_renderer_begin_frame()) return RENDER_FAIL;
         
         //////////////////////////////////////
-#ifdef STRESS_TEST
-        APP_FUNC_CHECK(stress_test_render());
-#elif defined(PHYSICS_TEST)
-        APP_FUNC_CHECK(physics_test_render());
-#else
-        APP_FUNC_CHECK(space_sim_render());
-#endif
+        APP_FUNC_CHECK(app_render(&app_data.camera));
         //////////////////////////////////////
+        
+        if(!dm_renderer_begin_frame()) return RENDER_FAIL;
         
         render_time = dm_timer_elapsed_ms(&render_timer);
         
