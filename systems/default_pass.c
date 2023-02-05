@@ -195,10 +195,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
 #ifdef DM_DEBUG
     static bool wireframe = false;
     
-    if(dm_input_key_just_pressed(DM_KEY_SPACE)) 
-    {
-        wireframe = !wireframe;
-    }
+    if(dm_input_key_just_pressed(DM_KEY_SPACE)) wireframe = !wireframe;
     dm_render_command_toggle_wireframe(wireframe);
 #endif
     
@@ -297,7 +294,7 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     // register our render system
     dm_ecs_id render_system_component_ids[] = { DM_COMPONENT_TRANSFORM, DM_COMPONENT_MESH, DM_COMPONENT_MATERIAL };
     dm_ecs_id render_system;
-    DM_ECS_REGISTER_SYSTEM_EXCLUDES(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, exclude_ids, default_render_pass, render_system);
+    //DM_ECS_REGISTER_SYSTEM_EXCLUDES(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, exclude_ids, default_render_pass, render_system);
     __dm_ecs_register_system(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, DM_ARRAY_LEN(render_system_component_ids), exclude_ids, num_excludes, default_render_pass, &render_system);
     
     return true;
