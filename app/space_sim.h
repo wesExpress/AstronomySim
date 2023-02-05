@@ -7,7 +7,7 @@
 
 // data
 #define MAX_ENTITIES   500
-#define MAX_STARS      50
+#define MAX_STARS      30
 #define MAX_SATELLITES 300
 
 typedef struct space_sim_data_t
