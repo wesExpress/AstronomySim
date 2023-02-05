@@ -116,7 +116,87 @@ bool light_src_pass(dm_entity* entities, uint32_t entity_count)
     return true;
 }
 
-bool light_src_pass_init(float* positions, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes, dm_ecs_id id, view_camera* camera)
+bool blackbody_pass(dm_entity* entities, uint32_t entity_count)
+{
+    dm_memzero(light_insts_count, sizeof(uint32_t) * LIGHT_SRC_MAX_MESHES);
+    
+    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    float* scale_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_X);
+    float* scale_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Y);
+    float* scale_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Z);
+    float* rot_i = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_I);
+    float* rot_j = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_J);
+    float* rot_k = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_K);
+    float* rot_r = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_R);
+    dm_render_handle* mesh_handles = dm_ecs_get_component_member(DM_COMPONENT_MESH, DM_MESH_MEM_HANDLE);
+    dm_vec4* diffuses = dm_ecs_get_component_member(DM_COMPONENT_MATERIAL, DM_MATERIAL_MEM_DIFFUSE);
+    
+    // update instance buffer
+    for(uint32_t i=0; i<entity_count; i++)
+    {
+        dm_entity entity = entities[i];
+        
+        dm_vec3 pos   = dm_vec3_set(pos_x[entity], pos_y[entity], pos_z[entity]);
+        dm_vec3 scale = dm_vec3_set(scale_x[entity], scale_y[entity], scale_z[entity]);
+        dm_quat rot   = dm_quat_set(rot_i[entity], rot_j[entity], rot_k[entity], rot_r[entity]);
+        dm_vec4 diffuse = diffuses[entity];
+        dm_render_handle mesh_handle = mesh_handles[entity];
+        
+        light_src_instance* inst = &light_instances[mesh_handle][light_insts_count[mesh_handle]++];
+        
+        inst->model = dm_mat_scale(dm_mat4_identity(), scale);
+        inst->model = dm_mat4_mul_mat4(inst->model, dm_mat4_rotate_from_quat(rot));
+        inst->model = dm_mat_translate(inst->model, pos);
+        
+#ifdef DM_DIRECTX
+        inst->model = dm_mat4_transpose(inst->model);
+#endif
+        
+        inst->diffuse_color = diffuse;
+    }
+    
+    light_src_scene_uni uni = { 0 };
+#ifdef DM_DIRECTX
+    uni.view_proj = dm_mat4_transpose(light_handles.camera->view_proj);
+#else
+    uni.view_proj = light_handles.camera->view_proj;
+#endif
+    uni.fcoef_inv = 1.0f / dm_log2f(light_handles.camera->far_plane + 1);
+    
+    // submit all render commands
+    dm_render_command_begin_renderpass(light_handles.pass);
+    dm_render_command_update_uniform(0, &uni, sizeof(uni), light_handles.pass);
+    dm_render_command_bind_uniform(0, 0, light_handles.pass);
+    
+#ifdef DM_DEBUG
+    static bool wireframe = false;
+    
+    if(dm_input_key_just_pressed(DM_KEY_SPACE)) wireframe = !wireframe;
+    dm_render_command_toggle_wireframe(wireframe);
+#endif
+    
+    dm_render_command_bind_buffer(light_handles.ib, 0);
+    dm_render_command_bind_buffer(light_handles.vb, 0);
+    dm_render_command_bind_buffer(light_handles.instb, 1);
+    
+    for(uint32_t i=0; i<light_handles.num_meshes; i++)
+    {
+        dm_mesh mesh = dm_renderer_get_mesh(light_handles.meshes[i]);
+        uint32_t num = light_insts_count[i];
+        if(num==0) continue;
+        
+        dm_render_command_update_buffer(light_handles.instb, &light_instances[i], sizeof(light_src_instance) * num, 0);
+        dm_render_command_draw_instanced(mesh.index_count, num, mesh.index_offset, 0, 0);
+    }
+    
+    dm_render_command_end_renderpass(light_handles.pass);
+    
+    return true;
+}
+
+bool light_src_pass_init(float* positions, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes, dm_ecs_id light_id, dm_ecs_id blackbody_id, view_camera* camera)
 {
     light_src_vertex* vertices = dm_alloc(sizeof(light_src_vertex) * num_vertices);
     for(uint32_t i=0; i<num_vertices; i++)
@@ -178,9 +258,12 @@ bool light_src_pass_init(float* positions, float* tex_coords, uint32_t num_verti
     light_handles.camera = camera;
     
     // register render system
-    dm_ecs_id render_system_component_ids[] = { DM_COMPONENT_TRANSFORM, DM_COMPONENT_MESH, DM_COMPONENT_MATERIAL, id };
+    dm_ecs_id light_src_system_component_ids[] = { DM_COMPONENT_TRANSFORM, DM_COMPONENT_MESH, DM_COMPONENT_MATERIAL, light_id };
     dm_ecs_id render_system;
-    DM_ECS_REGISTER_SYSTEM(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, light_src_pass, render_system);
+    DM_ECS_REGISTER_SYSTEM(DM_ECS_SYSTEM_TIMING_RENDER, light_src_system_component_ids, light_src_pass, render_system);
+    
+    dm_ecs_id blackbody_system_component_ids[] = { DM_COMPONENT_TRANSFORM, DM_COMPONENT_MESH, DM_COMPONENT_MATERIAL, blackbody_id };
+    DM_ECS_REGISTER_SYSTEM(DM_ECS_SYSTEM_TIMING_RENDER, blackbody_system_component_ids, blackbody_pass, render_system);
     
     return true;
 }

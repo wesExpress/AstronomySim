@@ -45,11 +45,13 @@ dm_ecs_id create_star(dm_vec3 pos, float radius, dm_vec3 velocity, float mass, d
     dm_ecs_entity_add_physics_at_rest(star, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(star, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(star, color, color);
+#if 0
     add_point_light_component(star, dm_vec4_set(0.01f,0.01f,0.01f,1), WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-7f, 1e-14f, COMPONENT_LIGHT);
+#else
+    add_blackbody_component(star, 6000.0f, COMPONENT_BLACKBODY);
+#endif
     
     dm_physics_add_impulse(star, velocity);
-    
-    default_pass_add_point_light(star);
     
     space_data.stars[space_data.num_stars++] = star;
     space_data.entities[space_data.num_entities++] = star;

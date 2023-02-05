@@ -61,16 +61,19 @@ void add_spotlight_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 di
 // special blackbody lighting
 typedef struct component_blackbody_t
 {
-    float temperature, luminosity;
+    float   temperature, luminosity;
+    dm_vec4 color;
 } component_blackbody;
 
 typedef enum component_blackbody_member_t
 {
     BLACKBODY_MEM_TEMPERATURE, BLACKBODY_MEM_LUMINOSITY,
+    BLACKBODY_MEM_COLOR_R, BLACKBODY_MEM_COLOR_G, BLACKBODY_MEM_COLOR_B, BLACKBODY_MEM_COLOR_A,
     BLACKBODY_MEM_UNKNOWN
 } component_blackbody_member;
 
 void register_blackbody_component(dm_ecs_id* id);
 void add_blackbody_component(dm_entity entity, float temperature, dm_ecs_id id);
+dm_vec4 compute_blackbody_color(float temperature);
 
 #endif //COMPONENTS_H

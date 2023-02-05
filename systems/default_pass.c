@@ -26,20 +26,28 @@ typedef struct default_scene_uni_t
     float   fcoef_inv;
 } default_scene_uni;
 
-#define MAX_LIGHTS 100
 typedef struct default_point_light_t
 {
     dm_vec4 pos;
     dm_vec4 ambient, diffuse, specular;
-    
-    float constant, linear, quadratic;
-    float padding;
+    dm_vec4 params;
 } default_point_light;
 
+typedef struct default_blackbody_t
+{
+    dm_vec4 pos;
+    dm_vec4 color;
+    dm_vec4 luminosity;
+} default_blackbody;
+
+#define MAX_LIGHTS 100
 typedef struct default_lights_uni_t
 {
     default_point_light point_lights[MAX_LIGHTS];
+    default_blackbody   blackbodies[MAX_LIGHTS];
+    
     uint32_t            num_point_lights;
+    uint32_t            num_blacbodies;
 } default_lights_uni;
 
 typedef struct default_handles_t
@@ -53,9 +61,14 @@ typedef struct default_handles_t
     uint32_t num_meshes;
     
     view_camera* camera;
-    dm_ecs_id    light_id;
-    dm_entity    lights[LIGHT_TYPE_UNKNOWN][MAX_LIGHTS];
-    uint32_t     num_lights[LIGHT_TYPE_UNKNOWN];
+    dm_ecs_id    light_id, blackbody_id;
+    
+    // lights
+    dm_entity lights[LIGHT_TYPE_UNKNOWN][MAX_LIGHTS];
+    uint32_t  num_lights[LIGHT_TYPE_UNKNOWN];
+    
+    dm_entity blackbodies[MAX_LIGHTS];
+    uint32_t  num_blacbodies;
 } default_handles;
 
 static default_handles  d_handles = { 0 };
@@ -145,10 +158,28 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
             .ambient=dm_vec4_set(ambient_r[entity], ambient_g[entity], ambient_b[entity], 1),
             .diffuse=dm_vec4_set(diffuse_r[entity], diffuse_g[entity], diffuse_b[entity], 1),
             .specular=dm_vec4_set(specular_r[entity], specular_g[entity], specular_b[entity], 1),
-            .constant=c[entity], .linear=l[entity], .quadratic=q[entity]
+            .params.x=c[entity], .params.y=l[entity], .params.z=q[entity]
         };
     }
     light_uni.num_point_lights = d_handles.num_lights[LIGHT_TYPE_POINT];
+    
+    // blackbodies
+    float* luminosity = dm_ecs_get_component_member(d_handles.blackbody_id, BLACKBODY_MEM_LUMINOSITY);
+    float* color_r    = dm_ecs_get_component_member(d_handles.blackbody_id, BLACKBODY_MEM_COLOR_R);
+    float* color_g    = dm_ecs_get_component_member(d_handles.blackbody_id, BLACKBODY_MEM_COLOR_G);
+    float* color_b    = dm_ecs_get_component_member(d_handles.blackbody_id, BLACKBODY_MEM_COLOR_B);
+    float* color_a    = dm_ecs_get_component_member(d_handles.blackbody_id, BLACKBODY_MEM_COLOR_A);
+    
+    for(uint32_t i=0; i<d_handles.num_blacbodies; i++)
+    {
+        dm_entity entity = d_handles.blackbodies[i];
+        light_uni.blackbodies[i] = (default_blackbody){
+            .pos=dm_vec4_set(pos_x[entity], pos_y[entity], pos_z[entity], 1),
+            .color=dm_vec4_set(color_r[entity], color_g[entity], color_b[entity], color_a[entity]),
+            .luminosity.x=luminosity[entity]
+        };
+    }
+    light_uni.num_blacbodies = d_handles.num_blacbodies;
     
     // submit all render commands
     dm_render_command_begin_renderpass(d_handles.pass);
@@ -164,7 +195,10 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
 #ifdef DM_DEBUG
     static bool wireframe = false;
     
-    if(dm_input_key_just_pressed(DM_KEY_SPACE)) wireframe = !wireframe;
+    if(dm_input_key_just_pressed(DM_KEY_SPACE)) 
+    {
+        wireframe = !wireframe;
+    }
     dm_render_command_toggle_wireframe(wireframe);
 #endif
     
@@ -187,7 +221,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     return true;
 }
 
-bool default_pass_init(float* positions, float* normals, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes, dm_ecs_id light_component_id, view_camera* camera)
+bool default_pass_init(float* positions, float* normals, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes, dm_ecs_id* exclude_ids, uint32_t num_excludes, view_camera* camera)
 {
     // get vertices in workable format
     default_vertex* vertices = dm_alloc(sizeof(default_vertex) * num_vertices);
@@ -219,6 +253,8 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
         { .data_size=sizeof(default_scene_uni), .name="scene_uni" },
         { .data_size=sizeof(default_lights_uni), .name="lights_uni" },
     };
+    
+    size_t test = sizeof(default_lights_uni);
     
     // pipeline desc
     dm_pipeline_desc pipeline_desc = { 0 };
@@ -257,13 +293,12 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     
     // camera handle
     d_handles.camera = camera;
-    d_handles.light_id = light_component_id;
     
     // register our render system
     dm_ecs_id render_system_component_ids[] = { DM_COMPONENT_TRANSFORM, DM_COMPONENT_MESH, DM_COMPONENT_MATERIAL };
-    dm_ecs_id render_system_exclude_ids[] = { light_component_id };
     dm_ecs_id render_system;
-    DM_ECS_REGISTER_SYSTEM_EXCLUDES(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, render_system_exclude_ids, default_render_pass, render_system);
+    DM_ECS_REGISTER_SYSTEM_EXCLUDES(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, exclude_ids, default_render_pass, render_system);
+    __dm_ecs_register_system(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, DM_ARRAY_LEN(render_system_component_ids), exclude_ids, num_excludes, default_render_pass, &render_system);
     
     return true;
 }
@@ -271,4 +306,19 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
 void default_pass_add_point_light(dm_entity entity)
 {
     d_handles.lights[LIGHT_TYPE_POINT][d_handles.num_lights[LIGHT_TYPE_POINT]++] = entity;
+}
+
+void default_pass_add_blackbody(dm_entity entity)
+{
+    d_handles.blackbodies[d_handles.num_blacbodies++] = entity;
+}
+
+void default_pass_set_light_component_id(dm_ecs_id id)
+{
+    d_handles.light_id = id;
+}
+
+void default_pass_set_blackbody_component_id(dm_ecs_id id)
+{
+    d_handles.blackbody_id = id;
 }

@@ -10,6 +10,7 @@
 #define ICOSPHERE_MESH ICOSAHEDRON_MESH + 1
 
 dm_ecs_id COMPONENT_LIGHT;
+dm_ecs_id COMPONENT_BLACKBODY;
 
 typedef struct application_data_t
 {
@@ -49,6 +50,7 @@ return_code app_run()
     
     // components
     register_light_component(&COMPONENT_LIGHT);
+    register_blackbody_component(&COMPONENT_BLACKBODY);
     
     // mesh data
     float* positions = NULL;
@@ -69,8 +71,12 @@ return_code app_run()
     dm_geometry_icosphere(4, &positions, &normals, &tex_coords, &indices, num_vertices, &num_vertices, &num_indices, &meshes[num_meshes++]);
     
     // submit data
-    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), COMPONENT_LIGHT, &app_data.camera)) return INIT_FAIL;
-    if(!light_src_pass_init(positions, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), COMPONENT_LIGHT, &app_data.camera)) return INIT_FAIL;
+    dm_ecs_id default_excludes[] = { COMPONENT_LIGHT, COMPONENT_BLACKBODY };
+    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), default_excludes, DM_ARRAY_LEN(default_excludes), &app_data.camera)) return INIT_FAIL;
+    if(!light_src_pass_init(positions, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), COMPONENT_LIGHT, COMPONENT_BLACKBODY, &app_data.camera)) return INIT_FAIL;
+    
+    default_pass_set_light_component_id(COMPONENT_LIGHT);
+    default_pass_set_blackbody_component_id(COMPONENT_BLACKBODY);
     
     dm_free(positions);
     dm_free(normals);

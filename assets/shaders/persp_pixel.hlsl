@@ -24,12 +24,17 @@ struct point_light
 	float4 diffuse;
 	float4 specular;
 
-	float constant;
-	float lnear;
-	float quadratic;
-	float padding;
+	float4 params;
 };
 
+struct blackbody
+{
+	float4 position;
+	float4 color;
+	float4 luminosity;
+};
+
+// constant buffers
 cbuffer scene_cb : register(b0)
 {
 	matrix view_proj;
@@ -40,11 +45,16 @@ cbuffer scene_cb : register(b0)
 cbuffer lights_cb : register(b1)
 {
 	point_light point_lights[MAX_LIGHTS];
+	blackbody   blackbodies[MAX_LIGHTS];
+
 	uint        num_point_lights;
+	uint        num_blackbodies;
 };
 
 SamplerState sample_state;
 Texture2D obj_texture : register(t0);
+
+#define INV_4PI 0.0795774715459f
 
 float3 calc_point_light(point_light light, float3 normal, float3 frag_pos, float3 view_dir, float3 diffuse_color, float3 specular_color, float3 texture_color)
 {
@@ -56,13 +66,32 @@ float3 calc_point_light(point_light light, float3 normal, float3 frag_pos, float
 	float spec = pow(max(dot(view_dir, reflect_dir), 0.0f), 4);
 
 	float distance    = length(light_pos - frag_pos);
-	float attenuation = 1.0f / (light.constant + light.lnear * distance + light.quadratic * distance * distance);
+	float attenuation = 1.0f / (light.params.x + light.params.y * distance + light.params.z * distance * distance);
 
 	float3 ambient  = light.ambient.xyz  * diffuse_color;
 	float3 diffuse  = light.diffuse.xyz  * diff * diffuse_color;
 	float3 specular = light.specular.xyz * spec * specular_color;
 
 	return (ambient + diffuse + specular) * texture_color * attenuation;
+}
+
+float3 calc_blackbody_light(blackbody bb, float3 normal, float3 frag_pos, float3 view_dir, float3 diffuse_color, float3 specular_color, float3 texture_color)
+{
+	float3 light_pos = bb.position.xyz;
+	float3 light_dir   = normalize(light_pos - frag_pos);
+	float3 reflect_dir = reflect(-light_dir, normal);
+
+	float diff = max(dot(normal, light_dir), 0.0f);
+	float spec = pow(max(dot(view_dir, reflect_dir), 0.0f), 4);
+
+	float distance = length(light_pos - frag_pos);
+	float flux     = bb.luminosity * INV_4PI / (distance * distance); // in W m^-2
+	flux /= 1024.0f;
+
+	float3 diffuse  = bb.color.xyz * diff * diffuse_color;
+	float3 specular = bb.color.xyz * spec * specular_color;
+
+	return (diffuse + specular) * texture_color * flux;
 }
 
 PS_OUTPUT p_main(PS_INPUT input)
@@ -77,7 +106,13 @@ PS_OUTPUT p_main(PS_INPUT input)
 	output.color = 0;
 	for(uint i=0; i<num_point_lights; i++)
 	{
-		float3 color = calc_point_light(point_lights[i], norm_normal, input.frag_pos, view_dir, texture_color.xyz, input.obj_diffuse.xyz, input.obj_specular.xyz);
+		float3 color = calc_point_light(point_lights[i], norm_normal, input.frag_pos, view_dir, input.obj_diffuse.xyz, input.obj_specular.xyz, texture_color.xyz);
+		output.color += float4(color, 1);
+	}
+
+	for(uint j=0; j<num_blackbodies; j++)
+	{
+		float3 color = calc_blackbody_light(blackbodies[j], norm_normal, input.frag_pos, view_dir, input.obj_diffuse.xyz, input.obj_specular.xyz, texture_color.xyz);
 		output.color += float4(color, 1);
 	}
 	
