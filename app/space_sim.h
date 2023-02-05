@@ -48,7 +48,7 @@ dm_ecs_id create_star(dm_vec3 pos, float radius, dm_vec3 velocity, float mass, d
 #if 0
     add_point_light_component(star, dm_vec4_set(0.01f,0.01f,0.01f,1), WHITE, WHITE, dm_vec3_set(0,0,0), 1, 1e-7f, 1e-14f, COMPONENT_LIGHT);
 #else
-    add_blackbody_component(star, 6000.0f, COMPONENT_BLACKBODY);
+    add_blackbody_component(star, 5800.0f, COMPONENT_BLACKBODY);
 #endif
     
     dm_physics_add_impulse(star, velocity);
