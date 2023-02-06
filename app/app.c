@@ -41,7 +41,7 @@ return_code app_run()
 {
     // init camera
     float d = 6.0f;
-    init_camera(dm_vec3_set(d,d,d), dm_vec3_set(-1,-1,-1), 0.01f, 1e13f, dm_deg_to_rad(75.0f), 0.3f, 5.0f, DM_SCREEN_WIDTH, DM_SCREEN_HEIGHT, &app_data.camera);
+    init_camera(dm_vec3_set(d,d,d), dm_vec3_set(-1,-1,-1), 0.01f, 1e15f, dm_deg_to_rad(75.0f), 0.3f, 5.0f, DM_SCREEN_WIDTH, DM_SCREEN_HEIGHT, &app_data.camera);
     
     // link camera view_proj to debug draw pass
     dm_debug_render_set_view_proj(&app_data.camera.view_proj);

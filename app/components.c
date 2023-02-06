@@ -116,21 +116,23 @@ dm_vec4 compute_blackbody_color(float temperature)
     else
     {
         red = temperature - 60.0f;
-        red = 329.698727446f * dm_powf(red, -0.1332047592f);
-        
         green = temperature - 60.0f;
+        
+        red   = 329.698727446f * dm_powf(red, -0.1332047592f);
         green = 288.1221695283f * dm_powf(green, -0.0755148492f);
+        
+        blue = 255.0f;
     }
-    if(red > 255) red = 255.0f;
-    if(green > 255) green = 255.0f;
     
-    if(temperature >= 66) blue = 255.0f;
-    else if(temperature > 19)
+    if(temperature > 19)
     {
         blue = temperature - 10.0f;
         blue = 138.5177312231f * dm_logf(blue) - 305.0447927307f;
     }
-    if(blue > 255) blue = 255.0f;
+    
+    red   = DM_CLAMP(red, 0, 255);
+    green = DM_CLAMP(green, 0, 255);
+    blue  = DM_CLAMP(blue, 0, 255);
     
     dm_vec4 color = dm_vec4_set(red,green,blue,255);
     return dm_vec4_scale(color, 1.0f / 255.0f);
