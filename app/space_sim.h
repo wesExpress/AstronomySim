@@ -282,8 +282,9 @@ return_code app_update(view_camera* camera)
     // camera is 1.7m off ground
     pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
     
-    dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(player_up, 1.7f));
-    fps_camera(dm_get_delta_time(), camera_pos, player_up, camera);
+    //dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(player_up, 1.7f));
+    
+    fps_camera(dm_get_delta_time(), pos, player_up, camera);
     
     return SUCCESS;
 }
@@ -317,7 +318,7 @@ return_code app_render(view_camera* camera)
     
     dm_vec3 test = dm_vec3_sub_vec3(pos, camera->pos);
     
-    if(dm_fabs(test.x) > 1e-5f && dm_fabs(test.y) > 1e-5f && dm_fabs(test.z) > 1e-5f)
+    if(dm_fabs(test.x) > 1e-5f || dm_fabs(test.y) > 1e-5f || dm_fabs(test.z) > 1e-5f)
     {
         DM_LOG_ERROR("BAD CAMERA POS");
     }
