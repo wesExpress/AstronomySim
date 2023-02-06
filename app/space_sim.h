@@ -279,6 +279,12 @@ return_code app_update(view_camera* camera)
     
     dm_physics_add_impulse(PLAYER, impulse);
     
+    // camera is 1.7m off ground
+    pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
+    
+    dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(player_up, 1.7f));
+    fps_camera(dm_get_delta_time(), camera_pos, player_up, camera);
+    
     return SUCCESS;
 }
 
@@ -288,7 +294,7 @@ return_code app_render(view_camera* camera)
     float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
     float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
     
-    dm_vec3 pos = { pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER] };
+    dm_vec3 pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
     
 #if 1
     static bool debug_draw = false;
@@ -305,12 +311,16 @@ return_code app_render(view_camera* camera)
         dm_debug_render_force_vector(PLAYER);
         dm_debug_render_relative_velocity_vector(PLAYER, space_data.satellites[0]);
     }
+    
+    dm_imgui_text_fmt(10,350, 1,0,1,1, "X:%0.2f, Y:%0.2f, Z:%0.2f", pos.x,pos.y,pos.z);
 #endif
     
-    // camera is 1.7m off ground
-    dm_vec3 player_up = dm_ecs_entity_get_transform_up(PLAYER);
-    dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(player_up, 1.7f));
-    fps_camera(dm_get_delta_time(), camera_pos, player_up, camera);
+    dm_vec3 test = dm_vec3_sub_vec3(pos, camera->pos);
+    
+    if(dm_fabs(test.x) > 1e-5f && dm_fabs(test.y) > 1e-5f && dm_fabs(test.z) > 1e-5f)
+    {
+        DM_LOG_ERROR("BAD CAMERA POS");
+    }
     
     return SUCCESS;
 }

@@ -84,9 +84,9 @@ float3 calc_blackbody_light(blackbody bb, float3 normal, float3 frag_pos, float3
 	float diff = max(dot(normal, light_dir), 0.0f);
 	float spec = pow(max(dot(view_dir, reflect_dir), 0.0f), 4);
 
-	float distance = length(light_pos - frag_pos);
+	float distance = length(light_pos - frag_pos) * 100.0f;
 	float flux     = bb.luminosity * INV_4PI / (distance * distance); // in W m^-2
-	flux /= 1024.0f;
+	//flux /= 1024.0f;
 
 	float3 diffuse  = bb.color.xyz * diff * diffuse_color;
 	float3 specular = bb.color.xyz * spec * specular_color;

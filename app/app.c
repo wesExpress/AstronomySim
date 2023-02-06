@@ -104,17 +104,17 @@ return_code app_run()
             dm_timer_start(&frame_timer);
         }
         
-        //////////////////////////////////////
-        APP_FUNC_CHECK(app_update(&app_data.camera));
-        //////////////////////////////////////
+        if(dm_input_key_just_pressed(DM_KEY_P)) dm_physics_toggle_pause();
         
         // update
         if(!dm_begin_update()) break;
         
-        if(dm_input_key_just_pressed(DM_KEY_P)) dm_physics_toggle_pause();
+        //////////////////////////////////////
+        APP_FUNC_CHECK(app_update(&app_data.camera));
+        //////////////////////////////////////
         
         // resize camera
-        uint32_t width = DM_SCREEN_WIDTH;
+        uint32_t width  = DM_SCREEN_WIDTH;
         uint32_t height = DM_SCREEN_HEIGHT;
         
         resize_camera(width, height, &app_data.camera);
@@ -123,22 +123,20 @@ return_code app_run()
         dm_timer render_timer = { 0 };
         dm_timer_start(&render_timer);
         
+        if(!dm_renderer_begin_frame()) return RENDER_FAIL;
         
         //////////////////////////////////////
         APP_FUNC_CHECK(app_render(&app_data.camera));
         //////////////////////////////////////
         
-        if(!dm_renderer_begin_frame()) return RENDER_FAIL;
+        // wrap up frame
+        if(!dm_renderer_end_frame()) return RENDER_FAIL;
         
         render_time = dm_timer_elapsed_ms(&render_timer);
-        
         // fps
         dm_imgui_text_fmt(10, 25, 1, 1, 1, 1, "FPS: %u", fps);
         // frame render time display
         dm_imgui_text_fmt(10, 50, 1, 1, 1, 1, "Render took: %0.2lf ms", render_time);
-        
-        // wrap up frame
-        if(!dm_renderer_end_frame()) return RENDER_FAIL;
         
         // DarkMatter end update
         if(!dm_end_update()) return RENDER_FAIL;
