@@ -11,7 +11,7 @@
 
 // data
 #define MAX_ENTITIES   500
-#define MAX_STARS      50
+#define MAX_STARS      100
 #define MAX_SATELLITES 300
 
 typedef struct space_sim_data_t
@@ -190,7 +190,7 @@ dm_ecs_id create_player(dm_entity host, float mass, dm_vec4 color)
 return_code app_init()
 {
     // gravity system
-    gravity_system_init();
+    //gravity_system_init();
     
     // entities
     const float star_pos_range = 1e8f;
@@ -297,7 +297,7 @@ return_code app_render(view_camera* camera)
     
     dm_vec3 pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
     
-#if 1
+#if 0
     static bool debug_draw = false;
     
     if(dm_input_key_just_pressed(DM_KEY_TAB)) debug_draw = !debug_draw;
@@ -312,9 +312,9 @@ return_code app_render(view_camera* camera)
         dm_debug_render_force_vector(PLAYER);
         dm_debug_render_relative_velocity_vector(PLAYER, space_data.satellites[0]);
     }
+#endif
     
     dm_imgui_text_fmt(10,350, 1,0,1,1, "X:%0.2f, Y:%0.2f, Z:%0.2f", pos.x,pos.y,pos.z);
-#endif
     
     dm_vec3 test = dm_vec3_sub_vec3(pos, camera->pos);
     
