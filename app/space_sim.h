@@ -263,8 +263,8 @@ return_code app_update(view_camera* camera)
     float d = dm_vec3_len(pos);
     float v = dm_vec3_len(vel);  
     
-    if(d >= 1e4f) space_sim_update_positions(pos);
-    if(v >= 2e2f) space_sim_update_velocities(vel);
+    space_sim_update_positions(pos);
+    //space_sim_update_velocities(vel);
     
     dm_vec3 player_up = dm_ecs_entity_get_transform_up(PLAYER);
     
@@ -300,6 +300,7 @@ return_code app_update(view_camera* camera)
     // update camera
     pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
     float speed = 2.0f * dm_get_delta_time();
+    //speed *= 1e5f;
     
     dm_vec3 impulse = { 0 };
     if(dm_input_is_key_pressed(DM_KEY_W)) dm_vec3_add_vec3_inpl(impulse, camera->forward, &impulse);
