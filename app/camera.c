@@ -137,7 +137,6 @@ void fps_camera(float delta_time, dm_vec3 pos, dm_vec3 up, view_camera* camera)
     camera->pos = pos;
     
     // rotation
-    bool rotated = false;
     if(look_delta.x || look_delta.y)
     {
         float delta_pitch = look_delta.y;
@@ -149,8 +148,6 @@ void fps_camera(float delta_time, dm_vec3 pos, dm_vec3 up, view_camera* camera)
         dm_quat_norm_inpl(&rot);
         
         dm_vec3_rotate_inpl(rot, &camera->forward);
-        
-        rotated = true;
     }
     
     update_camera_view(camera);
