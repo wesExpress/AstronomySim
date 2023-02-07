@@ -40,7 +40,7 @@ typedef struct default_blackbody_t
     dm_vec4 luminosity;
 } default_blackbody;
 
-#define MAX_LIGHTS 100
+#define MAX_LIGHTS 500
 typedef struct default_lights_uni_t
 {
     default_point_light point_lights[MAX_LIGHTS];
@@ -192,7 +192,8 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     
     dm_render_command_bind_texture(d_handles.default_texture, 0);
     
-#ifdef DM_DEBUG
+    //#ifdef DM_DEBUG
+#if 1
     static bool wireframe = false;
     
     if(dm_input_key_just_pressed(DM_KEY_SPACE)) wireframe = !wireframe;
