@@ -112,7 +112,7 @@ dm_ecs_id create_satellite(dm_entity host, float radius, float orbit, float mass
     
 #ifdef USE_GRAVITY
     dm_physics_add_impulse(satellite, dm_vec3_add_vec3(host_v, dm_vec3_scale(v, vc)));
-    dm_physics_add_angular_velocity(satellite, dm_vec3_set(0,0.01f,0));
+    //dm_physics_add_angular_velocity(satellite, dm_vec3_set(0,0.01f,0));
 #endif
     
     space_data.satellites[space_data.num_satellites++] = satellite;
