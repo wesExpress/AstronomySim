@@ -112,7 +112,7 @@ dm_ecs_id create_satellite(dm_entity host, float radius, float orbit, float mass
     
 #ifdef USE_GRAVITY
     dm_physics_add_impulse(satellite, dm_vec3_add_vec3(host_v, dm_vec3_scale(v, vc)));
-    //dm_physics_add_angular_velocity(satellite, dm_vec3_set(0,0.01f,0));
+    dm_physics_add_angular_velocity(satellite, dm_vec3_set(0,0.01f,0));
 #endif
     
     space_data.satellites[space_data.num_satellites++] = satellite;
@@ -264,7 +264,6 @@ return_code app_update(view_camera* camera)
     float v = dm_vec3_len(vel);  
     
     space_sim_update_positions(pos);
-    //space_sim_update_velocities(vel);
     
     dm_vec3 player_up = dm_ecs_entity_get_transform_up(PLAYER);
     
@@ -316,7 +315,7 @@ return_code app_update(view_camera* camera)
     
     // camera is 1.7m off ground
     pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
-    pos = dm_vec3_add_vec3(pos, dm_vec3_scale(player_up, 1.7f));
+    //pos = dm_vec3_add_vec3(pos, dm_vec3_scale(player_up, 1.7f));
     
     fps_camera(dm_get_delta_time(), pos, player_up, camera);
     
@@ -329,33 +328,7 @@ return_code app_render(view_camera* camera)
     float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
     float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
     
-    dm_vec3 pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
-    
-#if 0
-    static bool debug_draw = false;
-    
-    if(dm_input_key_just_pressed(DM_KEY_TAB)) debug_draw = !debug_draw;
-    
-    if(debug_draw)
-    {
-        dm_debug_render_transform(space_data.satellites[0]);
-        dm_debug_render_force_vector(space_data.satellites[0]);
-        dm_debug_render_velocity_vector(space_data.satellites[0]);
-        
-        dm_debug_render_transform(PLAYER);
-        dm_debug_render_force_vector(PLAYER);
-        dm_debug_render_relative_velocity_vector(PLAYER, space_data.satellites[0]);
-    }
-#endif
-    
-    dm_imgui_text_fmt(10,350, 1,0,1,1, "X:%0.2f, Y:%0.2f, Z:%0.2f", pos.x,pos.y,pos.z);
-    
-    dm_vec3 test = dm_vec3_sub_vec3(pos, camera->pos);
-    
-    if(dm_fabs(test.x) > 1e-5f || dm_fabs(test.y) > 1e-5f || dm_fabs(test.z) > 1e-5f)
-    {
-        DM_LOG_ERROR("BAD CAMERA POS");
-    }
+    dm_imgui_text_fmt(10,350, 1,0,1,1, "X:%0.2f, Y:%0.2f, Z:%0.2f", pos_x[PLAYER],pos_y[PLAYER],pos_z[PLAYER]);
     
     return SUCCESS;
 }
