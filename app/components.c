@@ -1,9 +1,16 @@
 #include "components.h"
-#include "../systems/default_pass.h"
 #include "../DarkMatter/dm.h"
 
+typedef struct component_manager_t
+{
+    dm_ecs_id COMPONENT_LIGHT;
+    dm_ecs_id COMPONENT_BLACKBODY;
+} component_manager;
+
+static component_manager manager = { 0 };
+
 // generic lighters
-void register_light_component(dm_ecs_id* id)
+void register_light_component()
 {
     size_t light_sizes[] = {
         sizeof(float), sizeof(float), sizeof(float),
@@ -14,10 +21,10 @@ void register_light_component(dm_ecs_id* id)
         sizeof(light_type),
     };
     
-    DM_ECS_REGISTER_COMPONENT(component_light_caster, light_sizes, *id);
+    DM_ECS_REGISTER_COMPONENT(component_light_caster, light_sizes, manager.COMPONENT_LIGHT);
 }
 
-void add_direction_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, dm_vec3 direction, dm_ecs_id id)
+void add_direction_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, dm_vec3 direction)
 {
     component_light_caster l = {
         .ambient_r=ambient.x, .ambient_g=ambient.y, .ambient_b=ambient.z,
@@ -28,10 +35,10 @@ void add_direction_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 di
         .type=LIGHT_TYPE_DIRECTIONAL
     };
     
-    dm_ecs_entity_add_component(entity, id, &l);
+    dm_ecs_entity_add_component(entity, manager.COMPONENT_LIGHT, &l);
 }
 
-void add_point_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, float constant, float linear, float quadratic, dm_ecs_id id)
+void add_point_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, float constant, float linear, float quadratic)
 {
     component_light_caster l = {
         .ambient_r=ambient.x, .ambient_g=ambient.y, .ambient_b=ambient.z,
@@ -42,12 +49,12 @@ void add_point_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffus
         .type=LIGHT_TYPE_POINT
     };
     
-    dm_ecs_entity_add_component(entity, id, &l);
+    dm_ecs_entity_add_component(entity, manager.COMPONENT_LIGHT, &l);
     
     default_pass_add_point_light(entity);
 }
 
-void add_spotlight_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, dm_vec3 direction, float cutoff, dm_ecs_id id)
+void add_spotlight_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, dm_vec3 direction, float cutoff)
 {
     component_light_caster l = {
         .ambient_r=ambient.x, .ambient_g=ambient.y, .ambient_b=ambient.z,
@@ -59,46 +66,21 @@ void add_spotlight_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 di
         .type=LIGHT_TYPE_SPOTLIGHT
     };
     
-    dm_ecs_entity_add_component(entity, id, &l);
+    dm_ecs_entity_add_component(entity, manager.COMPONENT_LIGHT, &l);
+}
+
+dm_ecs_id get_light_id()
+{
+    return manager.COMPONENT_LIGHT;
+}
+
+void* get_light_member(component_light_member member)
+{
+    return dm_ecs_get_component_member(manager.COMPONENT_LIGHT, member);
 }
 
 // blackbody
 #define STEPHAN_BOLTZMAN 5.67e-8f // W m^-2 K^-4
-void register_blackbody_component(dm_ecs_id* id)
-{
-    size_t blackbody_sizes[] = {
-        sizeof(float), sizeof(float),
-        sizeof(float), sizeof(float), sizeof(float), sizeof(float)
-    };
-    
-    DM_ECS_REGISTER_COMPONENT(component_blackbody, blackbody_sizes, *id);
-}
-
-void add_blackbody_component(dm_entity entity, float temperature, dm_ecs_id id)
-{
-    float* scale_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_X);
-    float* scale_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Y);
-    float* scale_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Z);
-    
-    float radius = DM_MAX(scale_x[entity], DM_MAX(scale_y[entity], scale_z[entity]));
-    
-    float luminosity = 4.0f * DM_MATH_PI * radius * radius * STEPHAN_BOLTZMAN * temperature * temperature * temperature * temperature;
-    dm_vec4 color = compute_blackbody_color(temperature);
-    
-    component_blackbody b = {
-        .temperature=temperature,
-        .luminosity=luminosity,
-        .color=color
-    };
-    
-    dm_ecs_entity_add_component(entity, id, &b);
-    
-    // change material diffuse color
-    dm_vec4* diffuses = dm_ecs_get_component_member(DM_COMPONENT_MATERIAL, DM_MATERIAL_MEM_DIFFUSE);
-    diffuses[entity] = color;
-    
-    default_pass_add_blackbody(entity);
-}
 
 // https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html
 dm_vec4 compute_blackbody_color(float temperature)
@@ -136,4 +118,97 @@ dm_vec4 compute_blackbody_color(float temperature)
     
     dm_vec4 color = dm_vec4_set(red,green,blue,255);
     return dm_vec4_scale(color, 1.0f / 255.0f);
+}
+
+float compute_blackbody_luminosity(float temperature, float radius)
+{
+    return DM_MATH_4PI * radius * radius * STEPHAN_BOLTZMAN * temperature * temperature * temperature * temperature;
+}
+
+float compute_blackbody_brightness(float luminosity, float distance_sq)
+{
+    return luminosity * DM_MATH_INV_4PI / distance_sq;
+}
+
+bool update_blackbodies(dm_entity* entities, uint32_t entity_count)
+{
+    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    float* scale_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_X);
+    
+    float* temperature = get_blackbody_member(BLACKBODY_MEM_TEMPERATURE);
+    float* luminosity  = get_blackbody_member(BLACKBODY_MEM_LUMINOSITY);
+    float* brightness  = get_blackbody_member(BLACKBODY_MEM_BRIGHTNESS);
+    float* color_r     = get_blackbody_member(BLACKBODY_MEM_COLOR_R);
+    float* color_g     = get_blackbody_member(BLACKBODY_MEM_COLOR_G);
+    float* color_b     = get_blackbody_member(BLACKBODY_MEM_COLOR_B);
+    float* color_a     = get_blackbody_member(BLACKBODY_MEM_COLOR_A);
+    
+    for(uint32_t i=0; i<entity_count; i++)
+    {
+        dm_entity entity = entities[i];
+        
+        float d_sq = dm_vec3_len2(dm_vec3_set(pos_x[entity], pos_y[entity], pos_z[entity]));
+        dm_vec4 color = compute_blackbody_color(temperature[entity]);
+        
+        color_r[entity] = color.x;
+        color_g[entity] = color.y;
+        color_b[entity] = color.z;
+        color_a[entity] = color.w;
+        
+        float l = compute_blackbody_luminosity(temperature[entity], scale_x[entity]);
+        luminosity[entity] = l;
+        
+        float b = compute_blackbody_brightness(luminosity[entity], d_sq);
+        brightness[entity] = b;
+    }
+    
+    return true;
+}
+
+void register_blackbody_component()
+{
+    size_t blackbody_sizes[] = {
+        sizeof(float), sizeof(float), sizeof(float),
+        sizeof(float), sizeof(float), sizeof(float), sizeof(float)
+    };
+    
+    DM_ECS_REGISTER_COMPONENT(component_blackbody, blackbody_sizes, manager.COMPONENT_BLACKBODY);
+}
+
+void add_blackbody_component(dm_entity entity, float temperature)
+{
+    float* scale_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_X);
+    float* scale_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Y);
+    float* scale_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Z);
+    
+    float radius = DM_MAX(scale_x[entity], DM_MAX(scale_y[entity], scale_z[entity]));
+    
+    float luminosity = compute_blackbody_luminosity(temperature, radius);
+    dm_vec4 color = compute_blackbody_color(temperature);
+    
+    component_blackbody b = {
+        .temperature=temperature,
+        .luminosity=luminosity,
+        .color_r=color.x, .color_g=color.y, .color_b=color.z, .color_a=color.w
+    };
+    
+    dm_ecs_entity_add_component(entity, manager.COMPONENT_BLACKBODY, &b);
+    
+    // change material diffuse color
+    dm_vec4* diffuses = dm_ecs_get_component_member(DM_COMPONENT_MATERIAL, DM_MATERIAL_MEM_DIFFUSE);
+    diffuses[entity] = color;
+    
+    default_pass_add_blackbody(entity);
+}
+
+void* get_blackbody_member(component_blackbody_member member)
+{
+    return dm_ecs_get_component_member(manager.COMPONENT_BLACKBODY, member);
+}
+
+dm_ecs_id get_blackbody_id()
+{
+    return manager.COMPONENT_BLACKBODY;
 }

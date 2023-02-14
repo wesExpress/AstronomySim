@@ -1,16 +1,11 @@
 #include "app.h"
 #include "camera.h"
-#include "../systems/default_pass.h"
-#include "../systems/gravity.h"
-#include "../systems/light_src_pass.h"
+#include "components.h"
 
 // wrappers
 #define BOX_MESH 0
 #define ICOSAHEDRON_MESH BOX_MESH + 1
 #define ICOSPHERE_MESH ICOSAHEDRON_MESH + 1
-
-dm_ecs_id COMPONENT_LIGHT;
-dm_ecs_id COMPONENT_BLACKBODY;
 
 typedef struct application_data_t
 {
@@ -18,6 +13,11 @@ typedef struct application_data_t
 } application_data;
 
 static application_data app_data = { 0 };
+
+#include "../systems/default_pass.h"
+#include "../systems/gravity.h"
+#include "../systems/light_src_pass.h"
+#include "../systems/blackbody_pass.h"
 
 //#define STRESS_TEST
 #ifndef STRESS_TEST
@@ -49,8 +49,8 @@ return_code app_run()
     dm_debug_render_set_far_plane(&app_data.camera.far_plane);
     
     // components
-    register_light_component(&COMPONENT_LIGHT);
-    register_blackbody_component(&COMPONENT_BLACKBODY);
+    register_light_component();
+    register_blackbody_component();
     
     // mesh data
     float* positions = NULL;
@@ -70,13 +70,10 @@ return_code app_run()
     // icosphere mesh
     dm_geometry_icosphere(4, &positions, &normals, &tex_coords, &indices, num_vertices, &num_vertices, &num_indices, &meshes[num_meshes++]);
     
-    // submit data
-    dm_ecs_id default_excludes[] = { COMPONENT_LIGHT, COMPONENT_BLACKBODY };
-    if(!default_pass_init(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), default_excludes, DM_ARRAY_LEN(default_excludes), &app_data.camera)) return INIT_FAIL;
-    if(!light_src_pass_init(positions, tex_coords, num_vertices, indices, num_indices, meshes, DM_ARRAY_LEN(meshes), COMPONENT_LIGHT, COMPONENT_BLACKBODY, &app_data.camera)) return INIT_FAIL;
-    
-    default_pass_set_light_component_id(COMPONENT_LIGHT);
-    default_pass_set_blackbody_component_id(COMPONENT_BLACKBODY);
+    // create render passes
+    if(!DEFAULT_PASS_INIT(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes)) return INIT_FAIL;
+    if(!LIGHT_SRC_PASS_INIT(positions, tex_coords, num_vertices, indices, num_indices, meshes)) return INIT_FAIL;
+    if(!BLACKBODY_PASS_INIT(positions, tex_coords, num_vertices, indices, num_indices, meshes)) return INIT_FAIL;
     
     dm_free(positions);
     dm_free(normals);

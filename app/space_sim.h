@@ -158,7 +158,7 @@ dm_ecs_id create_star(dm_vec3 pos, dm_vec3 velocity)
     dm_ecs_entity_add_physics_at_rest(star, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(star, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(star, dm_vec4_set(0,0,0,1), dm_vec4_set(0,0,0,1));
-    add_blackbody_component(star, temperature, COMPONENT_BLACKBODY);
+    add_blackbody_component(star, temperature);
     
 #ifdef USE_GRAVITY
     dm_physics_add_impulse(star, velocity);
@@ -219,6 +219,8 @@ return_code app_init()
 #ifdef USE_GRAVITY
     gravity_system_init();
 #endif
+    
+    dm_physics_toggle_pause();
     
     // entities
     const float star_pos_range = 5e8f;
