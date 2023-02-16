@@ -14,6 +14,7 @@ typedef struct application_data_t
 
 static application_data app_data = { 0 };
 
+#define RESOLUTION_DISTANCE 1e15f
 #include "../systems/default_pass.h"
 #include "../systems/gravity.h"
 #include "../systems/light_src_pass.h"
@@ -71,9 +72,9 @@ return_code app_run()
     dm_geometry_icosphere(4, &positions, &normals, &tex_coords, &indices, num_vertices, &num_vertices, &num_indices, &meshes[num_meshes++]);
     
     // create render passes
-    if(!DEFAULT_PASS_INIT(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes)) return INIT_FAIL;
-    if(!LIGHT_SRC_PASS_INIT(positions, tex_coords, num_vertices, indices, num_indices, meshes)) return INIT_FAIL;
-    if(!BLACKBODY_PASS_INIT(positions, tex_coords, num_vertices, indices, num_indices, meshes)) return INIT_FAIL;
+    APP_FUNC_CHECK(DEFAULT_PASS_INIT(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes));
+    APP_FUNC_CHECK(LIGHT_SRC_PASS_INIT(positions, tex_coords, num_vertices, indices, num_indices, meshes));
+    APP_FUNC_CHECK(BLACKBODY_PASS_INIT(positions, tex_coords, num_vertices, indices, num_indices, meshes));
     
     dm_free(positions);
     dm_free(normals);

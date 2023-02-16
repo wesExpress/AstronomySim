@@ -98,7 +98,10 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     {
         dm_entity entity = entities[i];
         
-        dm_vec3 pos   = dm_vec3_set(pos_x[entity], pos_y[entity], pos_z[entity]);
+        // early out if too far away to resolve
+        dm_vec3 pos = dm_vec3_set(pos_x[entity], pos_y[entity], pos_z[entity]);
+        if(dm_vec3_len2(pos) > RESOLUTION_DISTANCE) continue;
+        
         dm_vec3 scale = dm_vec3_set(scale_x[entity], scale_y[entity], scale_z[entity]);
         dm_quat rot   = dm_quat_set(rot_i[entity], rot_j[entity], rot_k[entity], rot_r[entity]);
         dm_vec4 diffuse = diffuses[entity];
@@ -218,7 +221,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     return true;
 }
 
-bool __default_pass_init(float* positions, float* normals, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes)
+return_code __default_pass_init(float* positions, float* normals, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes)
 {
     // get vertices in workable format
     default_vertex* vertices = dm_alloc(sizeof(default_vertex) * num_vertices);
@@ -268,20 +271,20 @@ bool __default_pass_init(float* positions, float* normals, float* tex_coords, ui
     pipeline_desc.blend_dest_f = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
     
     // resources
-    if(!DM_CREATE_STATIC_INDEX_BUFFER(indices, uint32_t, num_indices, d_handles.ib)) return false;
-    if(!DM_CREATE_STATIC_VERTEX_BUFFER(vertices, default_vertex, num_vertices, d_handles.vb)) return false;
-    if(!DM_CREATE_DYNAMIC_VERTEX_BUFFER(NULL, default_instance, DM_MAX_INSTS, d_handles.instb)) return false;
+    if(!DM_CREATE_STATIC_INDEX_BUFFER(indices, uint32_t, num_indices, d_handles.ib)) return RESOURCE_CREATION_FAIL;
+    if(!DM_CREATE_STATIC_VERTEX_BUFFER(vertices, default_vertex, num_vertices, d_handles.vb)) return RESOURCE_CREATION_FAIL;
+    if(!DM_CREATE_DYNAMIC_VERTEX_BUFFER(NULL, default_instance, DM_MAX_INSTS, d_handles.instb)) return RESOURCE_CREATION_FAIL;
     
     dm_free(vertices);
     
 #ifdef DM_OPENGL
     dm_render_handle vb_buffers[] = { d_handles.vb, d_handles.instb };
-    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, d_handles.pass)) return false;
+    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, d_handles.pass)) return RESOURCE_CREATION_FAIL;
 #else
-    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, attrib_descs, pipeline_desc, d_handles.pass)) return false;
+    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, attrib_descs, pipeline_desc, d_handles.pass)) return RESOURCE_CREATION_FAIL;
 #endif
     
-    if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, true, "default_texture", &d_handles.default_texture)) return false;
+    if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, true, "default_texture", &d_handles.default_texture)) return RESOURCE_CREATION_FAIL;
     
     // mesh handles
     dm_memcpy(d_handles.meshes, mesh_handles, sizeof(dm_render_handle) * num_meshes);
@@ -292,9 +295,8 @@ bool __default_pass_init(float* positions, float* normals, float* tex_coords, ui
     dm_ecs_id render_system_exclude_ids[] = { get_light_id(), get_blackbody_id() };
     dm_ecs_id render_system;
     DM_ECS_REGISTER_SYSTEM_EXCLUDES(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, render_system_exclude_ids, default_render_pass, render_system);
-    //__dm_ecs_register_system(DM_ECS_SYSTEM_TIMING_RENDER, render_system_component_ids, DM_ARRAY_LEN(render_system_component_ids), exclude_ids, num_excludes, default_render_pass, &render_system);
     
-    return true;
+    return SUCCESS;
 }
 
 #define DEFAULT_PASS_INIT(POSITIONS, NORMALS, TEX_COORDS, NUM_VERTICES, INDICES, NUM_INDICES, MESHES) __default_pass_init(POSITIONS, NORMALS, TEX_COORDS, NUM_VERTICES, INDICES, NUM_INDICES, MESHES, DM_ARRAY_LEN(MESHES))

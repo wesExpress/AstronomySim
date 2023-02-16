@@ -131,7 +131,7 @@ bool light_src_pass(dm_entity* entities, uint32_t entity_count)
 }
 
 
-bool __light_src_pass_init(float* positions, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes)
+return_code __light_src_pass_init(float* positions, float* tex_coords, uint32_t num_vertices, uint32_t* indices, uint32_t num_indices, dm_render_handle* mesh_handles, uint32_t num_meshes)
 {
     light_src_vertex* vertices = dm_alloc(sizeof(light_src_vertex) * num_vertices);
     for(uint32_t i=0; i<num_vertices; i++)
@@ -171,17 +171,17 @@ bool __light_src_pass_init(float* positions, float* tex_coords, uint32_t num_ver
     pipeline_desc.blend_dest_f = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
     
     // resources
-    if(!DM_CREATE_STATIC_INDEX_BUFFER(indices, uint32_t, num_indices, light_handles.ib)) return false;
-    if(!DM_CREATE_STATIC_VERTEX_BUFFER(vertices, light_src_vertex, num_vertices, light_handles.vb)) return false;
-    if(!DM_CREATE_DYNAMIC_VERTEX_BUFFER(NULL, light_src_instance, DM_MAX_INSTS, light_handles.instb)) return false;
+    if(!DM_CREATE_STATIC_INDEX_BUFFER(indices, uint32_t, num_indices, light_handles.ib)) return RESOURCE_CREATION_FAIL;
+    if(!DM_CREATE_STATIC_VERTEX_BUFFER(vertices, light_src_vertex, num_vertices, light_handles.vb)) return RESOURCE_CREATION_FAIL;
+    if(!DM_CREATE_DYNAMIC_VERTEX_BUFFER(NULL, light_src_instance, DM_MAX_INSTS, light_handles.instb)) return RESOURCE_CREATION_FAIL;
     
     dm_free(vertices);
     
 #ifdef DM_OPENGL
     dm_render_handle vb_buffers[] = { light_handles.vb, light_handles.instb };
-    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/light_src_vertex.glsl", "assets/shaders/light_src_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, light_handles.pass)) return false;
+    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/light_src_vertex.glsl", "assets/shaders/light_src_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, light_handles.pass)) return RESOURCE_CREATION_FAIL;
 #else
-    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/light_src_vertex.fxc", "assets/shaders/light_src_pixel.fxc", unis, attrib_descs, pipeline_desc, light_handles.pass)) return false;
+    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/light_src_vertex.fxc", "assets/shaders/light_src_pixel.fxc", unis, attrib_descs, pipeline_desc, light_handles.pass)) return RESOURCE_CREATION_FAIL;
 #endif
     
     // mesh handles
@@ -194,7 +194,7 @@ bool __light_src_pass_init(float* positions, float* tex_coords, uint32_t num_ver
     dm_ecs_id render_system;
     DM_ECS_REGISTER_SYSTEM_EXCLUDES(DM_ECS_SYSTEM_TIMING_RENDER, light_src_system_component_ids, light_src_system_exclude_ids, light_src_pass, render_system);
     
-    return true;
+    return SUCCESS;
 }
 
 #define LIGHT_SRC_PASS_INIT(POSITIONS, TEX_COORDS, NUM_VERTICES, INDICES, NUM_INDICES, MESHES) __light_src_pass_init(POSITIONS, TEX_COORDS, NUM_VERTICES, INDICES, NUM_INDICES, MESHES, DM_ARRAY_LEN(MESHES))
