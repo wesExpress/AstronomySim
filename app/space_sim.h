@@ -12,7 +12,8 @@
 #define STELLAR_RADIUS 6.957e4f  // m
 
 // data
-#define MAX_ENTITIES   4086
+#define MAX_ENTITIES   8192
+
 #ifdef DM_DEBUG
 #define MAX_STARS      100
 #else
@@ -174,7 +175,7 @@ dm_ecs_id create_star(dm_vec3 pos, dm_vec3 velocity)
     else if(satellite_num > 0.33f) num = 2;
     else num = 1;
     
-    for(uint32_t i=0; i<num; i++)
+    for(uint32_t i=0; i<3; i++)
     {
         float orbit = dm_random_float_range(radius * 100.0f, radius * 250.0f);
         create_satellite(star, 1e4f, orbit, 1e19f, dm_vec4_set(0.25f,0.75f,0.25f,1));

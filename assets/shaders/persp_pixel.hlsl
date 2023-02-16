@@ -88,7 +88,7 @@ float3 calc_blackbody_light(blackbody bb, float3 normal, float3 frag_pos, float3
 	float3 diffuse  = bb.color.xyz * diff * diffuse_color;
 	float3 specular = bb.color.xyz * spec * specular_color;
 
-	return (diffuse + specular) * texture_color * bb.brightness / 1024.0f;
+	return (diffuse + specular) * texture_color * bb.brightness / 2048.0f;
 }
 
 PS_OUTPUT p_main(PS_INPUT input)
