@@ -67,7 +67,7 @@ return_code app_init()
     // light
     dm_entity entity = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(entity, dm_vec3_set(0,4,0), dm_vec3_set(0,0,0), dm_quat_set(0,0,0,1));
-    add_point_light_component(entity, dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec3_set(0,0,0), 1.0f, 0.009f, 0.009f, COMPONENT_LIGHT);
+    add_point_light_component(entity, dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec3_set(0,0,0), 1.0f, 0.00009f, 0.00007f);
     
     physics_data.entities[physics_data.num_entities++] = entity;
     
@@ -76,7 +76,7 @@ return_code app_init()
     float pos_y0 = 0.0f;
     float pos_z0 = 0.0f;
     float radius = 1.0f;
-    float mass0 = 1e12f;
+    float mass0 = 1e15f;
     entity = dm_ecs_create_entity();
     dm_ecs_entity_add_transform(entity, pos_x0,pos_y0,pos_z0, radius,radius,radius, 0,0,0,1);
     dm_ecs_entity_add_collision_sphere(entity, radius);
@@ -85,14 +85,14 @@ return_code app_init()
     dm_ecs_entity_add_material(entity, gray, gray);
     
     dm_physics_add_angular_velocity(entity, dm_vec3_set(0,1,0));
-    dm_physics_add_impulse(entity, dm_vec3_set(-2,0,0));
+    dm_physics_add_impulse(entity, dm_vec3_set(-1,0,0));
     
     physics_data.entities[physics_data.num_entities++] = entity;
     
     float pos_x1 = 0.0f;
     float pos_y1 = 0.0f;
     float pos_z1 = 10.0f;
-    float mass1 = 1e12f;
+    float mass1 = 1e15f;
     dm_entity entity3 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform(entity3, pos_x1,pos_y1,pos_z1, radius,radius,radius, 0,0,0,1);
     dm_ecs_entity_add_collision_sphere(entity3, radius);
@@ -101,7 +101,7 @@ return_code app_init()
     dm_ecs_entity_add_material(entity3, gray,gray);
     
     dm_physics_add_angular_velocity(entity3, dm_vec3_set(0,1,0));
-    dm_physics_add_impulse(entity3, dm_vec3_set(2,0,0));
+    dm_physics_add_impulse(entity3, dm_vec3_set(1,0,0));
     
     physics_data.entities[physics_data.num_entities++] = entity3;
     
@@ -186,11 +186,11 @@ return_code app_update(view_camera* camera)
         dm_entity entity = physics_data.entities[i];
         
         dm_vec3 p = dm_vec3_set(pos_x[entity] - host_x, pos_y[entity] - host_y, pos_z[entity] - host_z);
-        p = dm_mat3_mul_vec3(r, p);
+        //p = dm_mat3_mul_vec3(r, p);
         
-        pos_x[entity] = p.x - ref_x + host_x;
-        pos_y[entity] = p.y - ref_y + host_y;
-        pos_z[entity] = p.z - ref_z + host_z;
+        //pos_x[entity] = p.x - ref_x + host_x;
+        //pos_y[entity] = p.y - ref_y + host_y;
+        //pos_z[entity] = p.z - ref_z + host_z;
     }
     
     return SUCCESS;

@@ -16,6 +16,9 @@ GRAVITY SYSTEM
 bool gravity_system_func(dm_entity* entities, uint32_t entity_count)
 {
     dm_imgui_text_fmt(10,250, 1,0,1,1, "Number of bodies: %u", entity_count);
+    
+    if(dm_physics_is_paused()) return true;
+    
 #ifdef SIMD_GRAVITY
     simd_gravity(entities, entity_count);
 #else // naive approach
