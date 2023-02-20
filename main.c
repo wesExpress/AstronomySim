@@ -1,6 +1,6 @@
 #define DM_IMPL
 //#define DM_PHYSICS_MORE_MASS
-#define DM_PHYSICS_SMALLER_DT
+//#define DM_PHYSICS_SMALLER_DT
 #include "DarkMatter/dm.h"
 
 #include "app/app.h"
