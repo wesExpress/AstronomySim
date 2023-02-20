@@ -22,13 +22,16 @@ static application_data app_data = { 0 };
 
 //#define STRESS_TEST
 #ifndef STRESS_TEST
-#define PHYSICS_TEST
+//#define PHYSICS_TEST
+#define BASIC
 #endif
 
 #ifdef STRESS_TEST
 #include "stress_test.h"
 #elif defined(PHYSICS_TEST)
 #include "physics_test.h"
+#elif defined(BASIC)
+#include "basic_scene.h"
 #else
 #include "space_sim.h"
 #endif

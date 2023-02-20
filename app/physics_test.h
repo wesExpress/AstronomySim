@@ -76,7 +76,7 @@ return_code app_init()
     float pos_y0 = 0.0f;
     float pos_z0 = 0.0f;
     float radius = 1.0f;
-    float mass0 = 1e15f;
+    float mass0 = 1e13f;
     entity = dm_ecs_create_entity();
     dm_ecs_entity_add_transform(entity, pos_x0,pos_y0,pos_z0, radius,radius,radius, 0,0,0,1);
     dm_ecs_entity_add_collision_sphere(entity, radius);
@@ -92,7 +92,7 @@ return_code app_init()
     float pos_x1 = 0.0f;
     float pos_y1 = 0.0f;
     float pos_z1 = 10.0f;
-    float mass1 = 1e15f;
+    float mass1 = 1e13f;
     dm_entity entity3 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform(entity3, pos_x1,pos_y1,pos_z1, radius,radius,radius, 0,0,0,1);
     dm_ecs_entity_add_collision_sphere(entity3, radius);
