@@ -16,13 +16,15 @@ static application_data app_data = { 0 };
 
 #define RESOLUTION_DISTANCE 1e15f
 #include "../systems/default_pass.h"
-#include "../systems/gravity.h"
 #include "../systems/light_src_pass.h"
 #include "../systems/blackbody_pass.h"
 
+#include "../systems/gravity.h"
+#include "../systems/floating_origin.h"
+
 //#define STRESS_TEST
 #ifndef STRESS_TEST
-//#define PHYSICS_TEST
+#define PHYSICS_TEST
 //#define BASIC
 #endif
 
@@ -75,9 +77,9 @@ return_code app_run()
     dm_geometry_icosphere(4, &positions, &normals, &tex_coords, &indices, num_vertices, &num_vertices, &num_indices, &meshes[num_meshes++]);
     
     // create render passes
-    APP_FUNC_CHECK(DEFAULT_PASS_INIT(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes));
-    APP_FUNC_CHECK(LIGHT_SRC_PASS_INIT(positions, tex_coords, num_vertices, indices, num_indices, meshes));
     APP_FUNC_CHECK(BLACKBODY_PASS_INIT(positions, tex_coords, num_vertices, indices, num_indices, meshes));
+    APP_FUNC_CHECK(LIGHT_SRC_PASS_INIT(positions, tex_coords, num_vertices, indices, num_indices, meshes));
+    APP_FUNC_CHECK(DEFAULT_PASS_INIT(positions, normals, tex_coords, num_vertices, indices, num_indices, meshes));
     
     dm_free(positions);
     dm_free(normals);

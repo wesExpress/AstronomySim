@@ -7,8 +7,6 @@ typedef struct physics_test_data_t
 {
     dm_entity entities[NUM_OBJECTS];
     uint32_t  num_entities;
-    
-    dm_entity ref_entity;
 } physics_test_data;
 
 static physics_test_data physics_data = { 0 };
@@ -59,7 +57,7 @@ float get_circular_velocity(dm_entity host, float x, float y, float z)
 
 return_code app_init()
 {
-    // gravity system
+    // systems
     gravity_system_init();
     
     dm_physics_toggle_pause();
@@ -70,6 +68,8 @@ return_code app_init()
     add_point_light_component(entity, dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec3_set(0,0,0), 1.0f, 0.00009f, 0.00007f);
     
     physics_data.entities[physics_data.num_entities++] = entity;
+    
+    float offset_v = 50.0f;
     
     // massive object
     float pos_x0 = 0.0f;
@@ -85,7 +85,7 @@ return_code app_init()
     dm_ecs_entity_add_material(entity, gray, gray);
     
     dm_physics_add_angular_velocity(entity, dm_vec3_set(0,1,0));
-    dm_physics_add_impulse(entity, dm_vec3_set(-1,0,0));
+    dm_physics_add_impulse(entity, dm_vec3_set(-offset_v,0,0));
     
     physics_data.entities[physics_data.num_entities++] = entity;
     
@@ -101,7 +101,7 @@ return_code app_init()
     dm_ecs_entity_add_material(entity3, gray,gray);
     
     dm_physics_add_angular_velocity(entity3, dm_vec3_set(0,1,0));
-    dm_physics_add_impulse(entity3, dm_vec3_set(1,0,0));
+    dm_physics_add_impulse(entity3, dm_vec3_set(offset_v,0,0));
     
     physics_data.entities[physics_data.num_entities++] = entity3;
     
@@ -119,9 +119,10 @@ return_code app_init()
     dm_ecs_entity_add_material(entity2, gray, gray);
     
     physics_data.entities[physics_data.num_entities++] = entity2;
-    physics_data.ref_entity = entity2;
     
-    float vc = get_circular_velocity(entity, pos_x2,pos_y2,pos_z2) - 2.0f;
+    floating_origin_system_init(entity2);
+    
+    float vc = get_circular_velocity(entity, pos_x2,pos_y2,pos_z2) - offset_v * 4.5;
     //dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
     
     pos_z2 = 13.0f;
@@ -134,7 +135,7 @@ return_code app_init()
     
     physics_data.entities[physics_data.num_entities++] = entity2;
     
-    vc = get_circular_velocity(entity3, pos_x2,pos_y2,pos_z2) + 2.0f;
+    vc = get_circular_velocity(entity3, pos_x2,pos_y2,pos_z2) + offset_v * 3.0f;
     dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
     
     return SUCCESS;
@@ -167,9 +168,9 @@ return_code app_update(view_camera* camera)
     float* w_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_W_Z);
     
     // rotate everyone around orbiting bodies with angular rate of host omega?
-    float ref_x = pos_x[physics_data.ref_entity];
-    float ref_y = pos_y[physics_data.ref_entity];
-    float ref_z = pos_z[physics_data.ref_entity];
+    //float ref_x = pos_x[physics_data.ref_entity];
+    //float ref_y = pos_y[physics_data.ref_entity];
+    //float ref_z = pos_z[physics_data.ref_entity];
     float host_x = pos_x[host];
     float host_y = pos_y[host];
     float host_z = pos_z[host];
@@ -181,17 +182,16 @@ return_code app_update(view_camera* camera)
     delta_rot = dm_quat_scale(delta_rot, 0.5f);
     dm_mat3 r = dm_mat3_rotate_from_quat(delta_rot);
     
+#if 0
     for(uint32_t i=0; i<physics_data.num_entities; i++)
     {
         dm_entity entity = physics_data.entities[i];
         
-        dm_vec3 p = dm_vec3_set(pos_x[entity] - host_x, pos_y[entity] - host_y, pos_z[entity] - host_z);
-        //p = dm_mat3_mul_vec3(r, p);
-        
-        //pos_x[entity] = p.x - ref_x + host_x;
-        //pos_y[entity] = p.y - ref_y + host_y;
-        //pos_z[entity] = p.z - ref_z + host_z;
+        pos_x[entity] -= pos_x[physics_data.ref_entity];
+        pos_y[entity] -= pos_y[physics_data.ref_entity];
+        pos_z[entity] -= pos_z[physics_data.ref_entity];
     }
+#endif
     
     return SUCCESS;
 }
