@@ -318,21 +318,17 @@ return_code app_update(view_camera* camera)
     
     // camera is 1.7m off ground
     pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
-    //pos = dm_vec3_add_vec3(pos, dm_vec3_scale(player_up, 1.7f));
+    pos = dm_vec3_add_vec3(pos, dm_vec3_scale(space_data.align_axis, 1.7f));
     
-    //fps_camera(pos, player_up, camera);
-    track_camera(pos, player_up, 10.0f, camera);
+    fps_camera(pos, space_data.align_axis, camera);
+    //track_camera(pos, space_data.align_axis, 10.0f, camera);
     
     return SUCCESS;
 }
 
 return_code app_render(view_camera* camera)
 {
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
-    
-    dm_imgui_text_fmt(10,350, 1,0,1,1, "X:%0.2f, Y:%0.2f, Z:%0.2f", pos_x[PLAYER],pos_y[PLAYER],pos_z[PLAYER]);
+    dm_debug_render_transform(PLAYER);
     
     return SUCCESS;
 }

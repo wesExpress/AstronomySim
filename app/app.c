@@ -115,7 +115,7 @@ return_code app_run()
         //////////////////////////////////////
         
         // DarkMatter end update
-        if(!dm_end_update()) return RENDER_FAIL;
+        if(!dm_end_update()) return UPDATE_FAIL;
         
         // resize camera
         uint32_t width  = DM_SCREEN_WIDTH;
