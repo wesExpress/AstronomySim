@@ -100,7 +100,7 @@ void resize_camera(uint32_t width, uint32_t height, view_camera* camera)
     update_camera_proj(camera);
 }
 
-void track_camera(dm_vec3 pos, float distance, view_camera* camera)
+void track_camera(dm_vec3 pos, dm_vec3 up, float distance, view_camera* camera)
 {
     int delta_x, delta_y;
     dm_input_get_mouse_delta(&delta_x, &delta_y);
@@ -116,6 +116,7 @@ void track_camera(dm_vec3 pos, float distance, view_camera* camera)
     camera->pos.z = pos.z + distance * dm_sind(dy) * dm_sind(dx);
     
     camera->forward = dm_vec3_sub_vec3(pos, camera->pos);
+    camera->up = up;
     
     update_camera_view(camera);
 }
@@ -126,7 +127,7 @@ void set_camera_pos(dm_vec3 pos, view_camera* camera)
     update_camera_view(camera);
 }
 
-void fps_camera(float delta_time, dm_vec3 pos, dm_vec3 up, view_camera* camera)
+void fps_camera(dm_vec3 pos, dm_vec3 up, view_camera* camera)
 {
     int delta_x, delta_y;
     dm_input_get_mouse_delta(&delta_x, &delta_y);

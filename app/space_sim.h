@@ -320,7 +320,8 @@ return_code app_update(view_camera* camera)
     pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
     //pos = dm_vec3_add_vec3(pos, dm_vec3_scale(player_up, 1.7f));
     
-    fps_camera(dm_get_delta_time(), pos, player_up, camera);
+    //fps_camera(pos, player_up, camera);
+    track_camera(pos, player_up, 10.0f, camera);
     
     return SUCCESS;
 }

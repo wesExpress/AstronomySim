@@ -107,12 +107,15 @@ return_code app_run()
         
         if(dm_input_key_just_pressed(DM_KEY_P)) dm_physics_toggle_pause();
         
-        // update
+        // DarkMatter begin update update
         if(!dm_begin_update()) break;
         
         //////////////////////////////////////
         APP_FUNC_CHECK(app_update(&app_data.camera));
         //////////////////////////////////////
+        
+        // DarkMatter end update
+        if(!dm_end_update()) return RENDER_FAIL;
         
         // resize camera
         uint32_t width  = DM_SCREEN_WIDTH;
@@ -138,9 +141,6 @@ return_code app_run()
         dm_imgui_text_fmt(10, 25, 1,1,1,1, "FPS: %u", fps);
         // frame render time display
         dm_imgui_text_fmt(10, 50, 1,1,1,1, "Render took: %0.2lf ms", render_time);
-        
-        // DarkMatter end update
-        if(!dm_end_update()) return RENDER_FAIL;
         
         frame_counter++;
     }
