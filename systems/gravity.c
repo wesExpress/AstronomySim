@@ -58,8 +58,8 @@ void calculate_gravitational_force(dm_entity entity_a, dm_entity entity_b)
     dm_vec3 pos_b = dm_vec3_set(pos_x[entity_b], pos_y[entity_b], pos_z[entity_b]);
     
     dm_vec3 separation = dm_vec3_sub_vec3(pos_b, pos_a);
-    float distance = dm_vec3_len(separation);
-    float gravity = G * mass_a * mass_b / (distance * distance);
+    float distance2 = dm_vec3_len2(separation);
+    float gravity = (G * mass_a * mass_b / distance2) * dm_get_delta_time();
     
     dm_vec3 local_force = dm_vec3_scale(dm_vec3_norm(separation), gravity);
     

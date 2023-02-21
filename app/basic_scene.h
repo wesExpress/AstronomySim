@@ -7,9 +7,13 @@
 static dm_entity entities[NUM_ENTITIES] = { 0 };
 static uint32_t  entity_count = 0;
 
+#define NBODY
+
 return_code app_init()
 {
+#ifdef NBODY
     gravity_system_init();
+#endif
     
     //dm_physics_toggle_pause();
     
@@ -30,7 +34,7 @@ return_code app_init()
     float half_s = size * 0.5f;
     
     entities[++entity_count] = dm_ecs_create_entity();
-#if 0
+#if 1
     dm_ecs_entity_add_transform(entities[entity_count], 0,5,0, size,size,size, 1,0.25f,1,1);
     dm_ecs_entity_add_collision_box(entities[entity_count], dm_vec3_set(-half_s, -half_s, -half_s), dm_vec3_set(half_s, half_s, half_s));
     dm_ecs_entity_add_mesh(entities[entity_count], BOX_MESH);
@@ -49,7 +53,9 @@ return_code app_update(view_camera* camera)
 {
     update_camera(dm_get_delta_time(), camera);
     
-    //dm_physics_apply_earth_gravity(entities[entity_count]);
+#ifndef NBODY
+    dm_physics_apply_earth_gravity(entities[entity_count]);
+#endif
     
     return SUCCESS;
 }
