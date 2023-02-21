@@ -121,6 +121,7 @@ return_code app_init()
     physics_data.entities[physics_data.num_entities++] = entity2;
     
     floating_origin_system_init(entity2);
+    floating_origin_enable_rot(entity);
     
     float vc = get_circular_velocity(entity, pos_x2,pos_y2,pos_z2) - offset_v * 4.5;
     //dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
@@ -153,45 +154,8 @@ return_code app_update(view_camera* camera)
     }
 #endif
     
-    dm_entity host = physics_data.entities[1];
-    
-    // continuous floating origin around one of orbiting bodies
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
-    float* rot_i = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_I);
-    float* rot_j = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_J);
-    float* rot_k = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_K);
-    float* rot_r = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_R);
-    float* w_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_W_X);
-    float* w_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_W_Y);
-    float* w_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_W_Z);
-    
-    // rotate everyone around orbiting bodies with angular rate of host omega?
-    //float ref_x = pos_x[physics_data.ref_entity];
-    //float ref_y = pos_y[physics_data.ref_entity];
-    //float ref_z = pos_z[physics_data.ref_entity];
-    float host_x = pos_x[host];
-    float host_y = pos_y[host];
-    float host_z = pos_z[host];
-    
-    dm_vec3 w = dm_vec3_set(w_x[host], w_y[host], w_z[host]);
-    w = dm_vec3_negate(w);
-    dm_quat rot = dm_quat_set(rot_i[host], rot_j[host], rot_k[host], rot_r[host]);
-    dm_quat delta_rot = dm_vec3_mul_quat(dm_vec3_scale(w, dm_get_delta_time()), rot);
-    delta_rot = dm_quat_scale(delta_rot, 0.5f);
-    dm_mat3 r = dm_mat3_rotate_from_quat(delta_rot);
-    
-#if 0
-    for(uint32_t i=0; i<physics_data.num_entities; i++)
-    {
-        dm_entity entity = physics_data.entities[i];
-        
-        pos_x[entity] -= pos_x[physics_data.ref_entity];
-        pos_y[entity] -= pos_y[physics_data.ref_entity];
-        pos_z[entity] -= pos_z[physics_data.ref_entity];
-    }
-#endif
+    if(dm_ecs_entity_is_colliding(physics_data.entities[3])) floating_origin_enable_rot(physics_data.entities[1]);
+    else floating_origin_disable_rot();
     
     return SUCCESS;
 }

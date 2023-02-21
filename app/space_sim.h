@@ -199,14 +199,20 @@ dm_ecs_id create_player(dm_entity host, float mass, dm_vec4 color)
     
     dm_ecs_id player = dm_ecs_create_entity();
     
+#if 1
     dm_ecs_entity_add_transform_v(player, pos, dm_vec3_set(1,1,1), dm_quat_set(0,0,0,1));
     dm_ecs_entity_add_collision_sphere(player, 1);
-    dm_ecs_entity_add_physics_at_rest(player, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_mesh(player, ICOSPHERE_MESH);
+#else
+    dm_ecs_entity_add_transform_v(player, pos, dm_vec3_set(1,1,1), dm_quat_set(0,0,0,1));
+    dm_ecs_entity_add_collision_box(player, dm_vec3_set(-0.5f,-0.5f,-0.5f), dm_vec3_set(0.5f,0.5f,0.5f));
+    dm_ecs_entity_add_mesh(player, BOX_MESH);
+#endif
+    dm_ecs_entity_add_physics_at_rest(player, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_material(player, color, color);
     
 #ifdef USE_GRAVITY
-    dm_physics_add_impulse(player, host_v);
+    //dm_physics_add_impulse(player, host_v);
 #endif
     
     space_data.entities[space_data.num_entities++] = player;
@@ -221,7 +227,7 @@ return_code app_init()
     gravity_system_init();
 #endif
     
-    dm_physics_toggle_pause();
+    //dm_physics_toggle_pause();
     
     // entities
     const float star_pos_range = 5e8f;
@@ -243,6 +249,8 @@ return_code app_init()
     }
     
     PLAYER = create_player(space_data.satellites[0], 10.0f, dm_vec4_set(1,0,0,1));
+    
+    floating_origin_system_init(PLAYER);
     
     return SUCCESS;
 }
@@ -266,7 +274,7 @@ return_code app_update(view_camera* camera)
     float d = dm_vec3_len(pos);
     float v = dm_vec3_len(vel);  
     
-    space_sim_update_positions(pos);
+    //space_sim_update_positions(pos);
     
     dm_vec3 player_up = dm_ecs_entity_get_transform_up(PLAYER);
     
