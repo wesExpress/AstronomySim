@@ -178,7 +178,7 @@ dm_ecs_id create_star(dm_vec3 pos, dm_vec3 velocity)
     for(uint32_t i=0; i<3; i++)
     {
         float orbit = dm_random_float_range(radius * 100.0f, radius * 250.0f);
-        create_satellite(star, 1e4f, orbit, 1e19f, dm_vec4_set(0.25f,0.75f,0.25f,1));
+        create_satellite(star, 1e4f, orbit, 1e21f, dm_vec4_set(0.25f,0.75f,0.25f,1));
     }
     
     return star;
