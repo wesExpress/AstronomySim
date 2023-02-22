@@ -2,7 +2,7 @@
 
 #define G            6.673e-11f
 
-//#define USE_GRAVITY
+#define USE_GRAVITY
 
 #define NUM_OBJECTS 100
 typedef struct physics_test_data_t
@@ -69,7 +69,7 @@ return_code app_init()
     // light
     dm_entity entity = dm_ecs_create_entity();
     dm_ecs_entity_add_transform_v(entity, dm_vec3_set(10,4,0), dm_vec3_set(0,0,0), dm_quat_set(0,0,0,1));
-    add_point_light_component(entity, dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec3_set(0,0,0), 1.0f, 0.09f, 0.007f);
+    add_point_light_component(entity, dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec3_set(0,0,0), 1.0f, 0.009f, 0.0007f);
     
     physics_data.entities[physics_data.num_entities++] = entity;
     
@@ -97,7 +97,7 @@ return_code app_init()
     
     float pos_x1 = 0.0f;
     float pos_y1 = 0.0f;
-    float pos_z1 = 10.0f;
+    float pos_z1 = 15.0f;
     float mass1 = 1e13f;
     dm_entity entity3 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform(entity3, pos_x1,pos_y1,pos_z1, radius,radius,radius, 0,0,0,1);
@@ -116,7 +116,7 @@ return_code app_init()
     // orbiting object(s)
     float pos_x2 = 0;
     float pos_y2 = 0;
-    float pos_z2 = 2;
+    float pos_z2 = 1.4f;
     radius = 0.25f;
     float mass2  = 10.0f;
     dm_entity entity2 = dm_ecs_create_entity();
@@ -136,7 +136,7 @@ return_code app_init()
     dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
 #endif
     
-    pos_z2 = 13.0f;
+    pos_z2 = 18.0f;
     entity2 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform(entity2, pos_x2,pos_y2,pos_z2, radius,radius,radius, 0,0,0,1);
     dm_ecs_entity_add_collision_sphere(entity2, radius);

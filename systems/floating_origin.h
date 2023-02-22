@@ -36,6 +36,12 @@ bool floating_origin_func(dm_entity* entities, uint32_t entity_count)
         float* w_x   = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_W_X);
         float* w_y   = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_W_Y);
         float* w_z   = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_W_Z);
+        float* force_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
+        float* force_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
+        float* force_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
+        float* torque_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_TORQUE_X);
+        float* torque_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_TORQUE_Y);
+        float* torque_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_TORQUE_Z);
         
         const float rot_ref_x = pos_x[origin_data.rot_ref];
         const float rot_ref_y = pos_y[origin_data.rot_ref];
@@ -43,11 +49,13 @@ bool floating_origin_func(dm_entity* entities, uint32_t entity_count)
         
         dm_vec3 w = dm_vec3_set(w_x[origin_data.rot_ref], w_y[origin_data.rot_ref], w_z[origin_data.rot_ref]);
         w = dm_vec3_negate(w);
+        dm_quat rot = dm_quat_set(rot_i[origin_data.rot_ref], rot_j[origin_data.rot_ref], rot_k[origin_data.rot_ref], rot_r[origin_data.rot_ref]);
+        dm_quat delta_rot = dm_vec3_mul_quat(w, rot);
+        delta_rot = dm_quat_scale(delta_rot, 0.5f * dm_get_delta_time());
         
         dm_vec3 axis = dm_vec3_norm(w);
-        float theta = dm_vec3_len(w) * dm_get_delta_time();
-        
-        dm_mat4 test = dm_mat_rotation_make(theta, axis);
+        float   theta = dm_vec3_len(w) * dm_get_delta_time();
+        dm_quat rotation = dm_quat_from_axis_angle(axis, theta);
         
         for(uint32_t i=0; i<entity_count; i++)
         {
@@ -56,21 +64,42 @@ bool floating_origin_func(dm_entity* entities, uint32_t entity_count)
             if(entity == origin_data.pos_ref || entity == origin_data.rot_ref) continue;
             
             dm_vec3 p = dm_vec3_set(pos_x[entity] - rot_ref_x, pos_y[entity] - rot_ref_y, pos_z[entity] - rot_ref_z);
-            //p = dm_mat3_mul_vec3(r, p);
+            p = dm_vec3_rotate(p, rotation);
             
-            dm_vec4 p2 = dm_vec4_set_from_vec3(p);
-            p2.w = 1.0f;
-            p2 = dm_mat4_mul_vec4(test, p2);
+            pos_x[entity] = p.x + rot_ref_x - ref_x;
+            pos_y[entity] = p.y + rot_ref_y - ref_y;
+            pos_z[entity] = p.z + rot_ref_z - ref_z;
             
-            pos_x[entity] = p2.x + rot_ref_x - ref_x;
-            pos_y[entity] = p2.y + rot_ref_y - ref_y;
-            pos_z[entity] = p2.z + rot_ref_z - ref_z;
+            if(!dm_ecs_entity_has_component(entity, DM_COMPONENT_PHYSICS)) continue;
+            
+            dm_vec3 f = dm_vec3_set(force_x[entity], force_y[entity], force_z[entity]);
+            dm_vec3 t = dm_vec3_set(torque_x[entity], torque_y[entity], torque_z[entity]);
+            dm_vec3 v = dm_vec3_set(vel_x[entity], vel_y[entity], vel_z[entity]);
+            dm_vec3 w = dm_vec3_set(w_x[entity], w_y[entity], w_z[entity]);
+            
+            f = dm_vec3_rotate(f, rotation);
+            t = dm_vec3_rotate(t, rotation);
+            v = dm_vec3_rotate(v, rotation);
+            w = dm_vec3_rotate(w, rotation);
+            
+            force_x[entity] = f.x;
+            force_y[entity] = f.y;
+            force_z[entity] = f.z;
+            
+            torque_x[entity] = t.x;
+            torque_y[entity] = t.y;
+            torque_z[entity] = t.z;
+            
+            vel_x[entity] = v.x;
+            vel_y[entity] = v.y;
+            vel_z[entity] = v.z;
+            
+            w_x[entity] = w.x;
+            w_y[entity] = w.y;
+            w_z[entity] = w.z;
         }
         
         // rotation reference entity
-        dm_quat rot = dm_quat_set(rot_i[origin_data.rot_ref], rot_j[origin_data.rot_ref], rot_k[origin_data.rot_ref], rot_r[origin_data.rot_ref]);
-        dm_quat delta_rot = dm_vec3_mul_quat(w, rot);
-        delta_rot = dm_quat_scale(delta_rot, 0.5f * dm_get_delta_time());
         dm_quat new_rot = dm_quat_add_quat(rot, delta_rot);
         new_rot = dm_quat_norm(new_rot);
         

@@ -1,6 +1,6 @@
 #include "components.h"
 
-//#define USE_GRAVITY
+#define USE_GRAVITY
 
 // constants
 #define G            6.673e-11f
@@ -51,38 +51,6 @@ dm_ecs_id MOON_1, MOON_2;
 dm_ecs_id PLAYER;
 
 #define WHITE    (dm_vec4){1,1,1,1}
-
-void space_sim_update_positions(dm_vec3 p)
-{
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
-    
-    for(uint32_t i=0; i<space_data.num_entities; i++)
-    {
-        dm_entity entity = space_data.entities[i];
-        
-        pos_x[space_data.entities[i]] -= p.x;
-        pos_y[space_data.entities[i]] -= p.y;
-        pos_z[space_data.entities[i]] -= p.z;
-    }
-}
-
-void space_sim_update_velocities(dm_vec3 vel)
-{
-    float* vel_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_X);
-    float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Y);
-    float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Z);
-    
-    for(uint32_t i=0; i<space_data.num_entities; i++)
-    {
-        dm_entity entity = space_data.entities[i];
-        
-        vel_x[space_data.entities[i]] -= vel.x;
-        vel_y[space_data.entities[i]] -= vel.y;
-        vel_z[space_data.entities[i]] -= vel.z;
-    }
-}
 
 dm_ecs_id create_satellite(dm_entity host, float radius, float orbit, float mass, dm_vec4 color)
 {
@@ -254,8 +222,8 @@ return_code app_init()
     }
     
     PLAYER = create_player(space_data.satellites[0], 10.0f, dm_vec4_set(1,0,0,1));
-    
     floating_origin_system_init(PLAYER);
+    floating_origin_enable_rot(space_data.satellites[0]);
     
     return SUCCESS;
 }
@@ -273,13 +241,14 @@ return_code app_update(view_camera* camera)
     float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_Y);
     float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_Z);
     
+    if(dm_input_key_just_pressed(DM_KEY_R)) floating_origin_enable_rot(space_data.satellites[0]);
+    else if(dm_input_key_just_pressed(DM_KEY_T)) floating_origin_disable_rot();
+    
     dm_vec3 pos = { pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER] };
     dm_quat rot = dm_quat_set(rot_i[PLAYER], rot_j[PLAYER], rot_k[PLAYER], rot_r[PLAYER]);
     dm_vec3 vel = { vel_x[PLAYER], vel_y[PLAYER], vel_z[PLAYER] };
     float d = dm_vec3_len(pos);
     float v = dm_vec3_len(vel);  
-    
-    //space_sim_update_positions(pos);
     
     dm_vec3 player_up = dm_ecs_entity_get_transform_up(PLAYER);
     
