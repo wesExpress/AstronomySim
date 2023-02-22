@@ -1,6 +1,6 @@
 #include "components.h"
 
-#define USE_GRAVITY
+//#define USE_GRAVITY
 
 // constants
 #define G            6.673e-11f
@@ -14,12 +14,17 @@
 // data
 #define MAX_ENTITIES   8192
 
+#ifdef USE_GRAVITY
 #ifdef DM_DEBUG
 #define MAX_STARS      100
 #else
 #define MAX_STARS      500
 #endif
 #define MAX_SATELLITES 3 * MAX_STARS
+#else
+#define MAX_STARS 500
+#define MAX_SATELLITES 3 * MAX_STARS
+#endif
 
 typedef struct space_sim_data_t
 {
@@ -113,8 +118,8 @@ dm_ecs_id create_satellite(dm_entity host, float radius, float orbit, float mass
     
 #ifdef USE_GRAVITY
     dm_physics_add_impulse(satellite, dm_vec3_add_vec3(host_v, dm_vec3_scale(v, vc)));
-    dm_physics_add_angular_velocity(satellite, dm_vec3_set(0,0.01f,0));
 #endif
+    dm_physics_add_angular_velocity(satellite, dm_vec3_set(0,0.01f,0));
     
     space_data.satellites[space_data.num_satellites++] = satellite;
     space_data.entities[space_data.num_entities++] = satellite;
@@ -309,7 +314,7 @@ return_code app_update(view_camera* camera)
     
     // update camera
     pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
-    float speed = 2.0f * dm_get_delta_time();
+    float speed = 200.0f * dm_get_delta_time();
     //speed *= 1e5f;
     
     dm_vec3 impulse = { 0 };

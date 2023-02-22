@@ -2,6 +2,8 @@
 
 #define G            6.673e-11f
 
+//#define USE_GRAVITY
+
 #define NUM_OBJECTS 100
 typedef struct physics_test_data_t
 {
@@ -58,14 +60,16 @@ float get_circular_velocity(dm_entity host, float x, float y, float z)
 return_code app_init()
 {
     // systems
+#ifdef USE_GRAVITY
     gravity_system_init();
+#endif
     
-    dm_physics_toggle_pause();
+    //dm_physics_toggle_pause();
     
     // light
     dm_entity entity = dm_ecs_create_entity();
-    dm_ecs_entity_add_transform_v(entity, dm_vec3_set(0,4,0), dm_vec3_set(0,0,0), dm_quat_set(0,0,0,1));
-    add_point_light_component(entity, dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec3_set(0,0,0), 1.0f, 0.00009f, 0.00007f);
+    dm_ecs_entity_add_transform_v(entity, dm_vec3_set(10,4,0), dm_vec3_set(0,0,0), dm_quat_set(0,0,0,1));
+    add_point_light_component(entity, dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec3_set(0,0,0), 1.0f, 0.09f, 0.007f);
     
     physics_data.entities[physics_data.num_entities++] = entity;
     
@@ -84,8 +88,10 @@ return_code app_init()
     dm_ecs_entity_add_mesh(entity, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(entity, gray, gray);
     
-    dm_physics_add_angular_velocity(entity, dm_vec3_set(0,1,0));
+    dm_physics_add_angular_velocity(entity, dm_vec3_set(0,0.1f,0));
+#ifdef USE_GRAVITY
     dm_physics_add_impulse(entity, dm_vec3_set(-offset_v,0,0));
+#endif
     
     physics_data.entities[physics_data.num_entities++] = entity;
     
@@ -101,7 +107,9 @@ return_code app_init()
     dm_ecs_entity_add_material(entity3, gray,gray);
     
     dm_physics_add_angular_velocity(entity3, dm_vec3_set(0,1,0));
+#ifdef USE_GRAVITY
     dm_physics_add_impulse(entity3, dm_vec3_set(offset_v,0,0));
+#endif
     
     physics_data.entities[physics_data.num_entities++] = entity3;
     
@@ -121,10 +129,12 @@ return_code app_init()
     physics_data.entities[physics_data.num_entities++] = entity2;
     
     floating_origin_system_init(entity2);
-    floating_origin_enable_rot(entity);
+    floating_origin_enable_rot(physics_data.entities[1]);
     
+#ifdef USE_GRAVITY
     float vc = get_circular_velocity(entity, pos_x2,pos_y2,pos_z2) - offset_v * 4.5;
-    //dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
+    dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
+#endif
     
     pos_z2 = 13.0f;
     entity2 = dm_ecs_create_entity();
@@ -136,8 +146,10 @@ return_code app_init()
     
     physics_data.entities[physics_data.num_entities++] = entity2;
     
+#ifdef USE_GRAVITY
     vc = get_circular_velocity(entity3, pos_x2,pos_y2,pos_z2) + offset_v * 3.0f;
     dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
+#endif
     
     return SUCCESS;
 }
@@ -154,8 +166,8 @@ return_code app_update(view_camera* camera)
     }
 #endif
     
-    if(dm_ecs_entity_is_colliding(physics_data.entities[3])) floating_origin_enable_rot(physics_data.entities[1]);
-    else floating_origin_disable_rot();
+    //if(dm_ecs_entity_is_colliding(physics_data.entities[3])) floating_origin_enable_rot(physics_data.entities[1]);
+    //else floating_origin_disable_rot();
     
     return SUCCESS;
 }
