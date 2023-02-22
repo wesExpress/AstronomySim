@@ -1,6 +1,6 @@
 #include "components.h"
 
-#define USE_GRAVITY
+//#define USE_GRAVITY
 
 // constants
 #define G            6.673e-11f
