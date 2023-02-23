@@ -99,8 +99,13 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
         dm_entity entity = entities[i];
         
         // early out if too far away to resolve
+        // take max scale as dimension
         dm_vec3 pos = dm_vec3_set(pos_x[entity], pos_y[entity], pos_z[entity]);
-        if(dm_vec3_len2(pos) > RESOLUTION_DISTANCE) continue;
+        float r = DM_MAX(scale_x[entity], DM_MAX(scale_y[entity], scale_z[entity]));
+        float theta = dm_atan(dm_vec3_len(pos), r);
+        
+        // angular resolution of 'eye'
+        if(theta < 0.0003f) continue;
         
         dm_vec3 scale = dm_vec3_set(scale_x[entity], scale_y[entity], scale_z[entity]);
         dm_quat rot   = dm_quat_set(rot_i[entity], rot_j[entity], rot_k[entity], rot_r[entity]);
