@@ -73,7 +73,7 @@ return_code app_init()
     
     physics_data.entities[physics_data.num_entities++] = entity;
     
-    float offset_v = 50.0f;
+    float offset_v = 25.0f;
     
     // massive object
     float pos_x0 = 0.0f;
@@ -88,7 +88,7 @@ return_code app_init()
     dm_ecs_entity_add_mesh(entity, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(entity, gray, gray);
     
-    dm_physics_add_angular_velocity(entity, dm_vec3_set(0,0.1f,0));
+    //dm_physics_add_angular_velocity(entity, dm_vec3_set(0.1f,0.1f,0));
 #ifdef USE_GRAVITY
     dm_physics_add_impulse(entity, dm_vec3_set(-offset_v,0,0));
 #endif
@@ -116,7 +116,7 @@ return_code app_init()
     // orbiting object(s)
     float pos_x2 = 0;
     float pos_y2 = 0;
-    float pos_z2 = 1.4f;
+    float pos_z2 = 2.0f;
     radius = 0.25f;
     float mass2  = 10.0f;
     dm_entity entity2 = dm_ecs_create_entity();
@@ -129,10 +129,10 @@ return_code app_init()
     physics_data.entities[physics_data.num_entities++] = entity2;
     
     floating_origin_system_init(entity2);
-    floating_origin_enable_rot(physics_data.entities[1]);
+    //floating_origin_enable_rot(physics_data.entities[1]);
     
 #ifdef USE_GRAVITY
-    float vc = get_circular_velocity(entity, pos_x2,pos_y2,pos_z2) - offset_v * 4.5;
+    float vc = get_circular_velocity(entity, pos_x2,pos_y2,pos_z2) - offset_v;
     dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
 #endif
     
@@ -147,7 +147,7 @@ return_code app_init()
     physics_data.entities[physics_data.num_entities++] = entity2;
     
 #ifdef USE_GRAVITY
-    vc = get_circular_velocity(entity3, pos_x2,pos_y2,pos_z2) + offset_v * 3.0f;
+    vc = get_circular_velocity(entity3, pos_x2,pos_y2,pos_z2) + offset_v;
     dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
 #endif
     
@@ -183,6 +183,9 @@ return_code app_render()
     }
 #endif
     
+    dm_debug_render_entity_separation(physics_data.entities[3], physics_data.entities[1], 1,1,1,1);
+    dm_debug_render_force_vector(physics_data.entities[3], true);
+    dm_debug_render_velocity_vector(physics_data.entities[3], false);
+    
     return SUCCESS;
 }
-

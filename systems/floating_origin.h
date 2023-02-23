@@ -61,14 +61,35 @@ bool floating_origin_func(dm_entity* entities, uint32_t entity_count)
         {
             dm_entity entity = entities[i];
             
-            if(entity == origin_data.pos_ref || entity == origin_data.rot_ref) continue;
-            
-            dm_vec3 p = dm_vec3_set(pos_x[entity] - rot_ref_x, pos_y[entity] - rot_ref_y, pos_z[entity] - rot_ref_z);
-            p = dm_vec3_rotate(p, rotation);
-            
-            pos_x[entity] = p.x + rot_ref_x - ref_x;
-            pos_y[entity] = p.y + rot_ref_y - ref_y;
-            pos_z[entity] = p.z + rot_ref_z - ref_z;
+            if(entity == origin_data.pos_ref)
+            {
+                pos_x[origin_data.pos_ref] = 0.0f;
+                pos_y[origin_data.pos_ref] = 0.0f;
+                pos_z[origin_data.pos_ref] = 0.0f;
+            }
+            else if(entity == origin_data.rot_ref)
+            {
+                dm_quat new_rot = dm_quat_add_quat(rot, delta_rot);
+                new_rot = dm_quat_norm(new_rot);
+                
+                rot_i[origin_data.rot_ref] = new_rot.i;
+                rot_j[origin_data.rot_ref] = new_rot.j;
+                rot_k[origin_data.rot_ref] = new_rot.k;
+                rot_r[origin_data.rot_ref] = new_rot.r;
+                
+                pos_x[origin_data.rot_ref] -= ref_x;
+                pos_y[origin_data.rot_ref] -= ref_y;
+                pos_z[origin_data.rot_ref] -= ref_z;
+            }
+            else
+            {
+                dm_vec3 p = dm_vec3_set(pos_x[entity] - rot_ref_x, pos_y[entity] - rot_ref_y, pos_z[entity] - rot_ref_z);
+                p = dm_vec3_rotate(p, rotation);
+                
+                pos_x[entity] = p.x + rot_ref_x - ref_x;
+                pos_y[entity] = p.y + rot_ref_y - ref_y;
+                pos_z[entity] = p.z + rot_ref_z - ref_z;
+            }
             
             if(!dm_ecs_entity_has_component(entity, DM_COMPONENT_PHYSICS)) continue;
             
@@ -98,24 +119,6 @@ bool floating_origin_func(dm_entity* entities, uint32_t entity_count)
             w_y[entity] = w.y;
             w_z[entity] = w.z;
         }
-        
-        // rotation reference entity
-        dm_quat new_rot = dm_quat_add_quat(rot, delta_rot);
-        new_rot = dm_quat_norm(new_rot);
-        
-        rot_i[origin_data.rot_ref] = new_rot.i;
-        rot_j[origin_data.rot_ref] = new_rot.j;
-        rot_k[origin_data.rot_ref] = new_rot.k;
-        rot_r[origin_data.rot_ref] = new_rot.r;
-        
-        pos_x[origin_data.rot_ref] -= ref_x;
-        pos_y[origin_data.rot_ref] -= ref_y;
-        pos_z[origin_data.rot_ref] -= ref_z;
-        
-        // reference entity
-        pos_x[origin_data.pos_ref] = 0.0f;
-        pos_y[origin_data.pos_ref] = 0.0f;
-        pos_z[origin_data.pos_ref] = 0.0f;
         
         return true;
     }
