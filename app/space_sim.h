@@ -185,7 +185,7 @@ dm_ecs_id create_player(dm_entity host, float mass, dm_vec4 color)
     dm_ecs_entity_add_material(player, color, color);
     
 #ifdef USE_GRAVITY
-    //dm_physics_add_impulse(player, host_v);
+    dm_physics_add_impulse(player, host_v);
 #endif
     
     space_data.entities[space_data.num_entities++] = player;
@@ -311,6 +311,12 @@ return_code app_update(view_camera* camera)
 return_code app_render(view_camera* camera)
 {
     dm_debug_render_transform(PLAYER);
+    
+    float* vel_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_X);
+    float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Y);
+    float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Z);
+    
+    dm_imgui_text_fmt(10,500, 1,1,1,1, "vel=> X:%0.2f, Y:%0.2f, Z:%0.2f", vel_x[PLAYER], vel_y[PLAYER], vel_z[PLAYER]);
     
     return SUCCESS;
 }
