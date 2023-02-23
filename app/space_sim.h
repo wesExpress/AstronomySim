@@ -228,6 +228,40 @@ return_code app_init()
     return SUCCESS;
 }
 
+#ifndef USE_GRAVITY
+void player_gravity()
+{
+    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    
+    float* force_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
+    float* force_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
+    float* force_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
+    float* mass = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_MASS);
+    
+    dm_vec3 player_p = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
+    
+    for(uint32_t i=0; i<space_data.num_entities; i++)
+    {
+        dm_entity entity = space_data.entities[i];
+        if(entity == PLAYER) continue;
+        
+        dm_vec3 p = dm_vec3_set(pos_x[entity], pos_y[entity], pos_z[entity]);
+        
+        dm_vec3 sep = dm_vec3_sub_vec3(p, player_p);
+        float distance2 = dm_vec3_len2(sep);
+        float gravity = (G * mass[PLAYER] * mass[entity] / distance2) * dm_get_delta_time();
+        
+        dm_vec3 force = dm_vec3_scale(dm_vec3_norm(sep), gravity);
+        
+        force_x[PLAYER] += force.x;
+        force_y[PLAYER] += force.y;
+        force_z[PLAYER] += force.z;
+    }
+}
+#endif
+
 return_code app_update(view_camera* camera)
 {
     float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
@@ -243,6 +277,10 @@ return_code app_update(view_camera* camera)
     
     if(dm_input_key_just_pressed(DM_KEY_R)) floating_origin_enable_rot(space_data.satellites[0]);
     else if(dm_input_key_just_pressed(DM_KEY_T)) floating_origin_disable_rot();
+    
+#ifndef USE_GRAVITY
+    player_gravity();
+#endif
     
     dm_vec3 pos = { pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER] };
     dm_quat rot = dm_quat_set(rot_i[PLAYER], rot_j[PLAYER], rot_k[PLAYER], rot_r[PLAYER]);
