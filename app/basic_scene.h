@@ -8,7 +8,7 @@ static dm_entity entities[NUM_ENTITIES] = { 0 };
 static uint32_t  entity_count = 0;
 
 //#define NBODY
-//#define OBJ_SPHERE
+#define OBJ_SPHERE
 
 return_code app_init()
 {

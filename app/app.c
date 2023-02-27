@@ -24,8 +24,8 @@ static application_data app_data = { 0 };
 
 //#define STRESS_TEST
 #ifndef STRESS_TEST
-#define PHYSICS_TEST
-//#define BASIC
+//#define PHYSICS_TEST
+#define BASIC
 #endif
 
 #ifdef STRESS_TEST
@@ -139,6 +139,7 @@ return_code app_run()
         if(!dm_renderer_end_frame()) return RENDER_FAIL;
         
         render_time = dm_timer_elapsed_ms(&render_timer);
+        
         // fps
         dm_imgui_text_fmt(10, 25, 1,1,1,1, "FPS: %u", fps);
         // frame render time display
