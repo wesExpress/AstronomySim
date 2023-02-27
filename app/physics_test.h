@@ -90,11 +90,11 @@ return_code app_init()
     
     //dm_physics_add_angular_velocity(entity, dm_vec3_set(0.1f,0.1f,0));
 #ifdef USE_GRAVITY
-    dm_physics_add_impulse(entity, dm_vec3_set(-offset_v,0,0));
+    //dm_physics_add_impulse(entity, dm_vec3_set(-offset_v,0,0));
 #endif
     
     physics_data.entities[physics_data.num_entities++] = entity;
-    
+    /*
     float pos_x1 = 0.0f;
     float pos_y1 = 0.0f;
     float pos_z1 = 15.0f;
@@ -110,9 +110,9 @@ return_code app_init()
 #ifdef USE_GRAVITY
     dm_physics_add_impulse(entity3, dm_vec3_set(offset_v,0,0));
 #endif
-    
+
     physics_data.entities[physics_data.num_entities++] = entity3;
-    
+    */
     // orbiting object(s)
     float pos_x2 = 0;
     float pos_y2 = 0;
@@ -128,14 +128,14 @@ return_code app_init()
     
     physics_data.entities[physics_data.num_entities++] = entity2;
     
-    floating_origin_system_init(entity2);
+    //floating_origin_system_init(entity2);
     //floating_origin_enable_rot(physics_data.entities[1]);
     
 #ifdef USE_GRAVITY
     float vc = get_circular_velocity(entity, pos_x2,pos_y2,pos_z2) - offset_v;
-    dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
+    //dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
 #endif
-    
+    /*
     pos_z2 = 18.0f;
     entity2 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform(entity2, pos_x2,pos_y2,pos_z2, radius,radius,radius, 0,0,0,1);
@@ -150,7 +150,7 @@ return_code app_init()
     vc = get_circular_velocity(entity3, pos_x2,pos_y2,pos_z2) + offset_v;
     dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
 #endif
-    
+    */
     return SUCCESS;
 }
 
@@ -183,9 +183,8 @@ return_code app_render()
     }
 #endif
     
-    dm_debug_render_entity_separation(physics_data.entities[3], physics_data.entities[1], 1,1,1,1);
-    dm_debug_render_force_vector(physics_data.entities[3], true);
-    dm_debug_render_velocity_vector(physics_data.entities[3], false);
+    dm_debug_render_force_vector(physics_data.entities[2], true);
+    dm_debug_render_velocity_vector(physics_data.entities[2], false);
     
     return SUCCESS;
 }
