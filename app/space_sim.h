@@ -352,5 +352,8 @@ return_code app_render(view_camera* camera)
     
     dm_imgui_text_fmt(10,500, 1,1,1,1, "vel=> X:%0.2f, Y:%0.2f, Z:%0.2f", vel_x[PLAYER], vel_y[PLAYER], vel_z[PLAYER]);
     
+    dm_debug_render_aabb(PLAYER);
+    dm_debug_render_aabb(space_data.satellites[0]);
+    
     return SUCCESS;
 }

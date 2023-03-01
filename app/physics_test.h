@@ -178,17 +178,17 @@ return_code app_update(view_camera* camera)
 
 return_code app_render()
 {
-#if 0
+#if 1
     for(uint32_t i=1; i<physics_data.num_entities; i++)
     {
         dm_debug_render_transform(physics_data.entities[i]);
         dm_debug_render_aabb(physics_data.entities[i]);
-        dm_debug_render_velocity_vector(physics_data.entities[i]);
+        dm_debug_render_velocity_vector(physics_data.entities[i], false);
     }
 #endif
     
-    dm_debug_render_force_vector(physics_data.entities[2], true);
-    dm_debug_render_velocity_vector(physics_data.entities[2], false);
+    //dm_debug_render_force_vector(physics_data.entities[2], true);
+    //dm_debug_render_velocity_vector(physics_data.entities[2], false);
     
     return SUCCESS;
 }
