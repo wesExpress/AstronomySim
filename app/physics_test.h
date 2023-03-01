@@ -80,7 +80,7 @@ return_code app_init()
     float pos_y0 = 0.0f;
     float pos_z0 = 0.0f;
     float radius = 1.0f;
-    float mass0 = 1e13f;
+    float mass0 = 1e12f;
     entity = dm_ecs_create_entity();
     dm_ecs_entity_add_transform(entity, pos_x0,pos_y0,pos_z0, radius,radius,radius, 0,0,0,1);
     dm_ecs_entity_add_collision_sphere(entity, radius);
@@ -88,7 +88,7 @@ return_code app_init()
     dm_ecs_entity_add_mesh(entity, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(entity, gray, gray);
     
-    dm_physics_add_angular_velocity(entity, dm_vec3_set(0,0.1f,0));
+    dm_physics_add_angular_velocity(entity, dm_vec3_set(0,1,0));
 #ifdef USE_GRAVITY
     //dm_physics_add_impulse(entity, dm_vec3_set(-offset_v,0,0));
 #endif
@@ -116,7 +116,7 @@ return_code app_init()
     // orbiting object(s)
     float pos_x2 = 0;
     float pos_y2 = 0;
-    float pos_z2 = 2.0f;
+    float pos_z2 = 5.0f;
     radius = 0.25f;
     float mass2  = 10.0f;
     dm_entity entity2 = dm_ecs_create_entity();
@@ -128,8 +128,11 @@ return_code app_init()
     
     physics_data.entities[physics_data.num_entities++] = entity2;
     
-    floating_origin_system_init(entity2);
-    floating_origin_enable_rot(physics_data.entities[1]);
+    float vc = get_circular_velocity(entity, 0,0,5);
+    //dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
+    
+    //floating_origin_system_init(entity2);
+    //floating_origin_enable_rot(physics_data.entities[1]);
     
 #ifdef USE_GRAVITY
     //float vc = get_circular_velocity(entity, pos_x2,pos_y2,pos_z2) - offset_v;

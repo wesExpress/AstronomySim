@@ -2,7 +2,7 @@
 #include <float.h>
 #include <string.h>
 
-#define G ((float)6.673e-11)
+#define G 6.673e-11f
 
 #ifdef DM_SIMD_256
 #define N 8
@@ -59,7 +59,7 @@ void calculate_gravitational_force(dm_entity entity_a, dm_entity entity_b)
     
     dm_vec3 separation = dm_vec3_sub_vec3(pos_b, pos_a);
     float distance2 = dm_vec3_len2(separation);
-    float gravity = (G * mass_a * mass_b / distance2) * dm_get_delta_time();
+    float gravity = (G * mass_a * mass_b / distance2);
     
     dm_vec3 local_force = dm_vec3_scale(dm_vec3_norm(separation), gravity);
     

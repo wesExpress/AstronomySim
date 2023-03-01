@@ -144,7 +144,7 @@ dm_ecs_id floating_origin_system_init(dm_entity ref_entity)
 {
     dm_ecs_id component_ids[] = { DM_COMPONENT_TRANSFORM };
     dm_ecs_id system;
-    DM_ECS_REGISTER_SYSTEM(DM_ECS_SYSTEM_TIMING_END, component_ids, floating_origin_func, system);
+    DM_ECS_REGISTER_SYSTEM(DM_ECS_SYSTEM_TIMING_BEGIN, component_ids, floating_origin_func, system);
     
     origin_data.pos_ref = ref_entity;
     origin_data.has_pos_ref = true;

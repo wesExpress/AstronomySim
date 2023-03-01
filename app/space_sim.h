@@ -321,7 +321,7 @@ return_code app_update(view_camera* camera)
     
     // update camera
     pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
-    float speed = 200.0f * dm_get_delta_time();
+    float speed = 20.0f;
     //speed *= 1e5f;
     
     dm_vec3 impulse = { 0 };
@@ -338,7 +338,7 @@ return_code app_update(view_camera* camera)
     
     // camera is 1.7m off ground
     pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
-    //pos = dm_vec3_add_vec3(pos, dm_vec3_scale(space_data.align_axis, 1.7f));
+    pos = dm_vec3_add_vec3(pos, dm_vec3_scale(space_data.align_axis, 1.7f));
     
     fps_camera(pos, space_data.align_axis, camera);
     //track_camera(pos, space_data.align_axis, 10.0f, camera);
