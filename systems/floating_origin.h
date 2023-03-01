@@ -97,6 +97,8 @@ bool floating_origin_func(dm_entity* entities, uint32_t entity_count)
             w_x[entity] = w.x;
             w_y[entity] = w.y;
             w_z[entity] = w.z;
+            
+            dm_ecs_entity_update_world_aabb(entity);
         }
         
         // rotation reference entity
@@ -112,10 +114,14 @@ bool floating_origin_func(dm_entity* entities, uint32_t entity_count)
         pos_y[origin_data.rot_ref] -= ref_y;
         pos_z[origin_data.rot_ref] -= ref_z;
         
+        dm_ecs_entity_update_world_aabb(origin_data.rot_ref);
+        
         // reference entity
         pos_x[origin_data.pos_ref] = 0.0f;
         pos_y[origin_data.pos_ref] = 0.0f;
         pos_z[origin_data.pos_ref] = 0.0f;
+        
+        dm_ecs_entity_update_world_aabb(origin_data.pos_ref);
         
         return true;
     }
@@ -130,12 +136,16 @@ bool floating_origin_func(dm_entity* entities, uint32_t entity_count)
         pos_x[entity] -= ref_x;
         pos_y[entity] -= ref_y;
         pos_z[entity] -= ref_z;
+        
+        dm_ecs_entity_update_world_aabb(entity);
     }
     
     // reference entity
     pos_x[origin_data.pos_ref] = 0.0f;
     pos_y[origin_data.pos_ref] = 0.0f;
     pos_z[origin_data.pos_ref] = 0.0f;
+    
+    dm_ecs_entity_update_world_aabb(origin_data.pos_ref);
     
     return true;
 }

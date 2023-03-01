@@ -151,7 +151,7 @@ dm_ecs_id create_star(dm_vec3 pos, dm_vec3 velocity)
     for(uint32_t i=0; i<3; i++)
     {
         float orbit = dm_random_float_range(radius * 100.0f, radius * 250.0f);
-        create_satellite(star, 1e4f, orbit, 1e21f, dm_vec4_set(0.25f,0.75f,0.25f,1));
+        create_satellite(star, 1e4f, orbit, 1e16f, dm_vec4_set(0.25f,0.75f,0.25f,1));
     }
     
     return star;
@@ -200,7 +200,7 @@ return_code app_init()
     gravity_system_init();
 #endif
     
-    //dm_physics_toggle_pause();
+    dm_physics_toggle_pause();
     
     // entities
     const float star_pos_range = 5e8f;
@@ -223,7 +223,7 @@ return_code app_init()
     
     PLAYER = create_player(space_data.satellites[0], 10.0f, dm_vec4_set(1,0,0,1));
     floating_origin_system_init(PLAYER);
-    floating_origin_enable_rot(space_data.satellites[0]);
+    //floating_origin_enable_rot(space_data.satellites[0]);
     
     return SUCCESS;
 }
@@ -251,7 +251,7 @@ void player_gravity()
         
         dm_vec3 sep = dm_vec3_sub_vec3(p, player_p);
         float distance2 = dm_vec3_len2(sep);
-        float gravity = (G * mass[PLAYER] * mass[entity] / distance2) * dm_get_delta_time();
+        float gravity = (G * mass[PLAYER] * mass[entity] / distance2);
         
         dm_vec3 force = dm_vec3_scale(dm_vec3_norm(sep), gravity);
         
@@ -277,10 +277,6 @@ return_code app_update(view_camera* camera)
     
     if(dm_input_key_just_pressed(DM_KEY_R)) floating_origin_enable_rot(space_data.satellites[0]);
     else if(dm_input_key_just_pressed(DM_KEY_T)) floating_origin_disable_rot();
-    
-#ifndef USE_GRAVITY
-    player_gravity();
-#endif
     
     dm_vec3 pos = { pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER] };
     dm_quat rot = dm_quat_set(rot_i[PLAYER], rot_j[PLAYER], rot_k[PLAYER], rot_r[PLAYER]);
@@ -321,7 +317,7 @@ return_code app_update(view_camera* camera)
     
     // update camera
     pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
-    float speed = 20.0f;
+    float speed = 2.0f;
     //speed *= 1e5f;
     
     dm_vec3 impulse = { 0 };
