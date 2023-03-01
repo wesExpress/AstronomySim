@@ -2,7 +2,7 @@
 //#define DM_PHYSICS_MORE_MASS
 //#define DM_PHYSICS_SMALLEST_DT
 //#define DM_PHYSICS_SMALLER_DT
-#define DM_PHYSICS_NO_SLOP
+//#define DM_PHYSICS_NO_SLOP
 #define DM_PHYSICS_NO_PERSISTENT_MANIFOLDS
 #include "DarkMatter/dm.h"
 

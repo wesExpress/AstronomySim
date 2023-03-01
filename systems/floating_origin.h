@@ -51,10 +51,10 @@ bool floating_origin_func(dm_entity* entities, uint32_t entity_count)
         w = dm_vec3_negate(w);
         dm_quat rot = dm_quat_set(rot_i[origin_data.rot_ref], rot_j[origin_data.rot_ref], rot_k[origin_data.rot_ref], rot_r[origin_data.rot_ref]);
         dm_quat delta_rot = dm_vec3_mul_quat(w, rot);
-        delta_rot = dm_quat_scale(delta_rot, 0.5f * dm_get_delta_time());
+        delta_rot = dm_quat_scale(delta_rot, 0.5f * dm_physics_get_simulation_time_step());
         
         dm_vec3 axis = dm_vec3_norm(w);
-        float   theta = dm_vec3_len(w) * dm_get_delta_time();
+        float   theta = dm_vec3_len(w) * dm_physics_get_simulation_time_step();
         dm_quat rotation = dm_quat_from_axis_angle(axis, theta);
         
         for(uint32_t i=0; i<entity_count; i++)

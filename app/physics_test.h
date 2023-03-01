@@ -88,7 +88,7 @@ return_code app_init()
     dm_ecs_entity_add_mesh(entity, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(entity, gray, gray);
     
-    //dm_physics_add_angular_velocity(entity, dm_vec3_set(0.1f,0.1f,0));
+    dm_physics_add_angular_velocity(entity, dm_vec3_set(0,0.1f,0));
 #ifdef USE_GRAVITY
     //dm_physics_add_impulse(entity, dm_vec3_set(-offset_v,0,0));
 #endif
@@ -128,12 +128,13 @@ return_code app_init()
     
     physics_data.entities[physics_data.num_entities++] = entity2;
     
-    //floating_origin_system_init(entity2);
-    //floating_origin_enable_rot(physics_data.entities[1]);
+    floating_origin_system_init(entity2);
+    floating_origin_enable_rot(physics_data.entities[1]);
     
 #ifdef USE_GRAVITY
-    float vc = get_circular_velocity(entity, pos_x2,pos_y2,pos_z2) - offset_v;
+    //float vc = get_circular_velocity(entity, pos_x2,pos_y2,pos_z2) - offset_v;
     //dm_physics_add_impulse(entity2, dm_vec3_set(vc,0,0));
+    //dm_physics_add_impulse(entity2, dm_vec3_set(0.1f,0,0));
 #endif
     /*
     pos_z2 = 18.0f;
@@ -156,7 +157,7 @@ return_code app_init()
 
 return_code app_update(view_camera* camera)
 {
-    update_camera(dm_get_delta_time(), camera);
+    update_camera(camera);
     
 #if 0 
     if(dm_input_mousebutton_just_pressed(DM_MOUSEBUTTON_L))

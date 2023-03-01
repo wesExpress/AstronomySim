@@ -1,6 +1,6 @@
 #include "components.h"
 
-//#define USE_GRAVITY
+#define USE_GRAVITY
 
 // constants
 #define G            6.673e-11f
@@ -338,7 +338,7 @@ return_code app_update(view_camera* camera)
     
     // camera is 1.7m off ground
     pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
-    pos = dm_vec3_add_vec3(pos, dm_vec3_scale(space_data.align_axis, 1.7f));
+    //pos = dm_vec3_add_vec3(pos, dm_vec3_scale(space_data.align_axis, 1.7f));
     
     fps_camera(pos, space_data.align_axis, camera);
     //track_camera(pos, space_data.align_axis, 10.0f, camera);

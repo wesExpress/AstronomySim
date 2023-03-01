@@ -34,13 +34,13 @@ void init_camera(dm_vec3 pos, dm_vec3 forward, float near_plane, float far_plane
     camera->view_proj = dm_mat4_mul_mat4(camera->view, camera->proj);
 }
 
-void update_camera(float delta_time, view_camera* camera)
+void update_camera(view_camera* camera)
 {
     if(!dm_input_is_key_pressed(DM_KEY_LSHIFT)) return;
     
     camera->up = dm_vec3_unit_y;
     
-    float speed = delta_time * camera->move_speed;
+    float speed =  camera->move_speed * dm_physics_get_simulation_time_step();
     int delta_x, delta_y;
     dm_input_get_mouse_delta(&delta_x, &delta_y);
     dm_vec2 look_delta = dm_vec2_set((float)delta_x * camera->look_sens, (float)delta_y * camera->look_sens);
