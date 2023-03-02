@@ -118,7 +118,7 @@ return_code app_init()
     float pos_y2 = 0;
     float pos_z2 = 5.0f;
     radius = 0.25f;
-    float mass2  = 10.0f;
+    float mass2  = 1e6f;
     dm_entity entity2 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform(entity2, pos_x2,pos_y2,pos_z2, radius,radius,radius, 0,0,0,1);
     dm_ecs_entity_add_collision_sphere(entity2, radius);
@@ -186,6 +186,33 @@ return_code app_render()
         dm_debug_render_velocity_vector(physics_data.entities[i], false);
     }
 #endif
+    
+    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    
+    float* mass = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_MASS);
+    float* vel_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_X);
+    float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Y);
+    float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Z);
+    
+    dm_entity entity = physics_data.entities[2];
+    dm_entity host   = physics_data.entities[1];
+    float v_mag = dm_sqrtf(vel_x[entity] * vel_x[entity] + vel_y[entity] * vel_y[entity] + vel_z[entity] * vel_z[entity]);
+    
+    dm_imgui_text_fmt(10,600, 1,1,1,1, "V mag: %0.2f m/s", v_mag);
+    
+    float dx = pos_x[host] - pos_x[entity];
+    float dy = pos_y[host] - pos_y[entity];
+    float dz = pos_z[host] - pos_z[entity];
+    float d  = dm_sqrtf(dx * dx + dy * dy + dz * dz);
+    
+    float KE = 0.5f * mass[entity] * v_mag * v_mag;
+    float PE = -6.67e-11f * mass[entity] * mass[host] / d;
+    
+    dm_imgui_text_fmt(10,625, 1,1,1,1, "KE: %0.2f N", KE);
+    dm_imgui_text_fmt(10,650, 1,1,1,1, "PE: %0.2f N", PE);
+    dm_imgui_text_fmt(10,675, 1,1,1,1, "TE: %0.2f N", KE+PE);
     
     //dm_debug_render_force_vector(physics_data.entities[2], true);
     //dm_debug_render_velocity_vector(physics_data.entities[2], false);
