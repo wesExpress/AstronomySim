@@ -88,7 +88,7 @@ return_code app_init()
     dm_ecs_entity_add_mesh(entity, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(entity, gray, gray);
     
-    //dm_physics_add_angular_velocity(entity, dm_vec3_set(0,1,0));
+    dm_physics_add_angular_velocity(entity, dm_vec3_set(0,0.01f,0));
 #ifdef USE_GRAVITY
     //dm_physics_add_impulse(entity, dm_vec3_set(-offset_v,0,0));
 #endif
@@ -174,7 +174,7 @@ return_code app_update(view_camera* camera)
     {
         dm_vec3 d = dm_ecs_entity_get_separation_entity(physics_data.entities[2], physics_data.entities[1]);
         dm_vec3 dir = dm_vec3_norm(dm_vec3_cross(dm_vec3_unit_y, d));
-        dm_physics_add_impulse(physics_data.entities[2], dm_vec3_scale(dir, 0.5f));
+        dm_physics_add_impulse(physics_data.entities[2], dm_vec3_scale(dir, 0.01f));
     }
     
     return SUCCESS;
