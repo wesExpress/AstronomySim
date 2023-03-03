@@ -88,7 +88,7 @@ return_code app_init()
     dm_ecs_entity_add_mesh(entity, ICOSPHERE_MESH);
     dm_ecs_entity_add_material(entity, gray, gray);
     
-    dm_physics_add_angular_velocity(entity, dm_vec3_set(0,1,0));
+    //dm_physics_add_angular_velocity(entity, dm_vec3_set(0,1,0));
 #ifdef USE_GRAVITY
     //dm_physics_add_impulse(entity, dm_vec3_set(-offset_v,0,0));
 #endif
@@ -118,7 +118,7 @@ return_code app_init()
     float pos_y2 = 0;
     float pos_z2 = 5.0f;
     radius = 0.25f;
-    float mass2  = 1e6f;
+    float mass2  = 1.0f;
     dm_entity entity2 = dm_ecs_create_entity();
     dm_ecs_entity_add_transform(entity2, pos_x2,pos_y2,pos_z2, radius,radius,radius, 0,0,0,1);
     dm_ecs_entity_add_collision_sphere(entity2, radius);
@@ -170,8 +170,12 @@ return_code app_update(view_camera* camera)
     }
 #endif
     
-    //if(dm_ecs_entity_is_colliding(physics_data.entities[3])) floating_origin_enable_rot(physics_data.entities[1]);
-    //else floating_origin_disable_rot();
+    if(dm_input_key_just_pressed(DM_KEY_L))
+    {
+        dm_vec3 d = dm_ecs_entity_get_separation_entity(physics_data.entities[2], physics_data.entities[1]);
+        dm_vec3 dir = dm_vec3_norm(dm_vec3_cross(dm_vec3_unit_y, d));
+        dm_physics_add_impulse(physics_data.entities[2], dm_vec3_scale(dir, 0.5f));
+    }
     
     return SUCCESS;
 }
@@ -182,7 +186,7 @@ return_code app_render()
     for(uint32_t i=1; i<physics_data.num_entities; i++)
     {
         dm_debug_render_transform(physics_data.entities[i]);
-        dm_debug_render_aabb(physics_data.entities[i]);
+        //dm_debug_render_aabb(physics_data.entities[i]);
         dm_debug_render_velocity_vector(physics_data.entities[i], false);
     }
 #endif
