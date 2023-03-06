@@ -126,9 +126,6 @@ void set_camera_pos(dm_vec3 pos, view_camera* camera)
 
 void fps_camera(float delta_time, dm_vec3 pos, dm_vec3 up, view_camera* camera)
 {
-    //if(!dm_input_is_key_pressed(DM_KEY_LSHIFT)) return;
-    
-    float speed = delta_time * camera->move_speed;
     int delta_x, delta_y;
     dm_input_get_mouse_delta(&delta_x, &delta_y);
     dm_vec2 look_delta = dm_vec2_set((float)delta_x * camera->look_sens, (float)delta_y * camera->look_sens);

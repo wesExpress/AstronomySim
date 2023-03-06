@@ -137,9 +137,7 @@ return_code space_sim_update(view_camera* camera)
     
     if(d > 10000.0f) space_sim_update_positions(pos);
     
-    dm_vec3 rocket_right   = dm_ecs_entity_get_transform_right(ROCKET);
     dm_vec3 rocket_up      = dm_ecs_entity_get_transform_up(ROCKET);
-    dm_vec3 rocket_forward = dm_ecs_entity_get_transform_forward(ROCKET);
     
     // align with nearest gravitation object
     //if(dm_input_key_just_pressed(DM_KEY_E)) space_data.align_with_grav = !space_data.align_with_grav;
@@ -177,7 +175,7 @@ return_code space_sim_update(view_camera* camera)
     pos = dm_vec3_set(pos_x[ROCKET], pos_y[ROCKET], pos_z[ROCKET]);
     //track_camera(pos, distance, camera);
     dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(rocket_up, 2));
-    fps_camera(dm_get_delta_time(), pos, rocket_up, camera);
+    fps_camera(dm_get_delta_time(), camera_pos, rocket_up, camera);
     
     float speed = 2.0f * dm_get_delta_time();
     

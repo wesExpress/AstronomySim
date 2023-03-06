@@ -174,13 +174,11 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
         DM_MAKE_VERTEX_ATTRIB("OBJ_DIFFUSE", default_instance, diffuse_color, DM_VERTEX_ATTRIB_CLASS_INSTANCE, DM_VERTEX_DATA_T_FLOAT, 4, 0, false),
         DM_MAKE_VERTEX_ATTRIB("OBJ_SPECULAR", default_instance, diffuse_color, DM_VERTEX_ATTRIB_CLASS_INSTANCE, DM_VERTEX_DATA_T_FLOAT, 4, 0, false),
     };
-    uint32_t num_attribs = DM_ARRAY_LEN(attrib_descs);
     
     // uniforms
     dm_uniform unis[] = {
         { .data_size=sizeof(default_scene_uni), .name="scene_uni" }
     };
-    uint32_t num_unis = DM_ARRAY_LEN(unis);
     
     // pipeline desc
     dm_pipeline_desc pipeline_desc = { 0 };
@@ -197,10 +195,10 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     pipeline_desc.blend_dest_f = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
     
     // resources
-    if(!dm_renderer_create_static_index_buffer(indices, sizeof(uint32_t) * num_indices, &handles.ib)) return false;
+    if(!DM_CREATE_STATIC_INDEX_BUFFER(indices, uint32_t, num_indices, handles.ib)) return false;
     
-    if(!dm_renderer_create_static_vertex_buffer(vertices, sizeof(default_vertex) * num_vertices, sizeof(default_vertex), &handles.vb)) return false;
-    if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(default_instance) * DM_MAX_INSTS, sizeof(default_instance), &handles.instb)) return false;
+    if(!DM_CREATE_STATIC_VERTEX_BUFFER(vertices, default_vertex, num_vertices, handles.vb)) return false;
+    if(!DM_CREATE_DYNAMIC_VERTEX_BUFFER(NULL, default_instance, DM_MAX_INSTS, handles.instb)) return false;
     
     dm_free(vertices);
     
@@ -209,7 +207,15 @@ bool default_pass_init(float* positions, float* normals, float* tex_coords, uint
     dm_render_handle vb_buffers[] = { handles.vb, handles.instb };
     if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, 2, unis, num_unis, attrib_descs, num_attribs, pipeline_desc, &handles.pass)) return false;
 #else
-    if(!dm_renderer_create_renderpass("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, num_unis, attrib_descs, num_attribs, pipeline_desc, &handles.pass)) return false;
+#ifdef DM_DIRECTX
+    const char* vertex_src = "assets/shaders/persp_vertex.fxc";
+    const char* pixel_src = "assets/shaders/persp_pixel.fxc";
+#elif defined(DM_METAL)
+    const char* vertex_src = "assets/shaders/persp.metallib";
+    const char* pixel_src = "assets/shaders/persp.metallib";
+#endif
+    
+    if(!DM_RENDERER_CREATE_RENDERPASS(vertex_src, pixel_src, unis, attrib_descs, pipeline_desc, handles.pass)) return false;
 #endif
     
     if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, true, "default_texture", &handles.default_texture)) return false;

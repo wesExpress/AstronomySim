@@ -37,3 +37,27 @@ linker_flags="-g -framework Cocoa -lobjc -framework QuartzCore -framework CoreFo
 
 echo "Building $output..."
 clang $c_files $external_files $objc_files $compiler_flags -o $output $defines $include_flags $linker_flags
+
+cd ..
+# shaders
+mkdir -p build/assets/shaders/
+
+xcrun -sdk macosx metal $SRC_DIR/DarkMatter/assets/shaders/debug_render.metal -c -o $SRC_DIR/DarkMatter/assets/shaders/debug_render.air
+xcrun -sdk macosx metallib $SRC_DIR/DarkMatter/assets/shaders/debug_render.air -o $SRC_DIR/build/assets/shaders/debug_render.metallib
+
+xcrun -sdk macosx metal $SRC_DIR/DarkMatter/assets/shaders/imgui.metal -c -o $SRC_DIR/DarkMatter/assets/shaders/imgui.air
+xcrun -sdk macosx metallib $SRC_DIR/DarkMatter/assets/shaders/imgui.air -o $SRC_DIR/build/assets/shaders/imgui.metallib
+
+xcrun -sdk macosx metal $SRC_DIR/assets/shaders/persp.metal -c -o $SRC_DIR/assets/shaders/persp.air
+xcrun -sdk macosx metallib $SRC_DIR/assets/shaders/persp.air -o $SRC_DIR/build/assets/shaders/persp.metallib
+
+# other assets
+mkdir -p build/assets/textures
+echo "Copying over textures..."
+cp -r $SRC_DIR/DarkMatter/assets/textures build/assets/
+#cp -r $SRC_DIR/assets/textures build/assets/
+
+mkdir -p build/assets/fonts
+echo "Copying over fonts..."
+cp -r $SRC_DIR/DarkMatter/assets/fonts build/assets/
+#cp -r $SRC_DIR/assets/textures build/assets/

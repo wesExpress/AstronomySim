@@ -52,6 +52,10 @@ void add_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_
             l.linear = wild_card.y;
             l.linear = wild_card.z;
         } break;
+        
+        default:
+        DM_LOG_ERROR("Unknown light type");
+        return;
     }
     
     dm_ecs_entity_add_component(entity, COMPONENT_LIGHT, &l);
