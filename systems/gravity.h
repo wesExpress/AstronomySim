@@ -3,7 +3,7 @@
 
 #include "../DarkMatter/dm.h"
 
-#if 1
+#if 0
 #define SIMD_GRAVITY
 #endif
 

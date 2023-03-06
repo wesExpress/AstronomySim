@@ -11,8 +11,10 @@ SRC_DIR=$PWD
 mkdir -p build
 cd build
 
-#c_files=$(find $SRC_DIR/ -type f -name "*.c")
-c_files="$SRC_DIR/app/main.c $SRC_DIR/app/app.c $SRC_DIR/app/camera.c $SRC_DIR/app/default_pass.c $SRC_DIR/app/gravity.c $SRC_DIR/lib/glad/src/glad.c $SRC_DIR/lib/mt19937/src/mt19937.c $SRC_DIR/lib/mt19937/src/mt19937_64.c"
+c_files="$SRC_DIR/main.c"
+c_files="$c_files $(find $SRC_DIR/app -type f -name "*.c")"
+c_files="$c_files $(find $SRC_DIR/systems -type f -name "*.c")"
+external_files=$(find $SRC_DIR/DarkMatter/lib -type f -name "*.c")
 
 compiler_flags="-g -fPIC -MD -std=gnu99 -fdiagnostics-absolute-paths -fdeclspec -fPIC -Wall -Wno-missing-braces"
 defines="-DDM_OPENGL"
@@ -31,9 +33,16 @@ else
 	compiler_flags="-O3 $compiler_flags"
 fi
 
-include_flags="-I$SRC_DIR/ -I$SRC_DIR/lib/ -I$SRC_DIR/lib/mt19937/include -I$SRC_DIR/lib/glad/include"
+include_flags="-I$SRC_DIR/ -I$SRC_DIR/DarkMatter/ -I$SRC_DIR/DarkMatter/lib/ -I$SRC_DIR/DarkMatter/lib/mt19937/include -I$SRC_DIR/DarkMatter/lib/glad/include"
 
 linker_flags="-g -lX11 -lX11-xcb -lxcb -lxkbcommon -lGL -L/usr/X11R6/lib -lm -ldl"
 
 echo "Building $output..."
-clang $c_files $compiler_flags -o $output $defines $include_flags $linker_flags
+clang $c_files $compiler_flags $external_files -o $output $defines $include_flags $linker_flags
+
+cd ..
+
+# move assets
+mkdir -p build/assets
+cp -r assets/ build
+cp -r DarkMatter/assets/ build

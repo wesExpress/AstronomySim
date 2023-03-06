@@ -3,6 +3,7 @@
 
 #include "../DarkMatter/dm.h"
 
+// generic lighting
 typedef enum light_type
 {
     LIGHT_TYPE_DIRECTIONAL,
@@ -43,7 +44,7 @@ typedef struct component_light_caster_t
 
 typedef enum component_light_member_t
 {
-    LIGHT_MEM_AMBIENT_X, LIGHT_MEM_AMBIENT_Y, LIGHT_MEM_AMBIENT_Z,
+    LIGHT_MEM_AMBIENT_R, LIGHT_MEM_AMBIENT_G, LIGHT_MEM_AMBIENT_B,
     LIGHT_MEM_DIFFUSE_R, LIGHT_MEM_DIFFUSE_G, LIGHT_MEM_DIFFUSE_B,
     LIGHT_MEM_SPECULAR_R, LIGHT_MEM_SPECULAR_G, LIGHT_MEM_SPECULAR_B,
     LIGHT_MEM_POS_X, LIGHT_MEM_POS_Y, LIGHT_MEM_POS_Z,
@@ -52,7 +53,31 @@ typedef enum component_light_member_t
     LIGHT_MEM_UNKNOWN
 } component_light_member;
 
-dm_ecs_id register_light_component();
-void add_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, dm_vec4 wild_card, light_type type);
+void register_light_component();
+void add_direction_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, dm_vec3 direction);
+void add_point_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, float constant, float linear, float quadratic);
+void add_spotlight_light_component(dm_entity entity, dm_vec4 ambient, dm_vec4 diffuse, dm_vec4 specular, dm_vec3 pos, dm_vec3 direction, float cutoff);
+dm_ecs_id get_light_id();
+void* get_light_member(component_light_member member);
+
+// special blackbody lighting
+typedef struct component_blackbody_t
+{
+    float temperature, luminosity, brightness;
+    float color_r, color_g, color_b, color_a;
+} component_blackbody;
+
+typedef enum component_blackbody_member_t
+{
+    BLACKBODY_MEM_TEMPERATURE, BLACKBODY_MEM_LUMINOSITY, BLACKBODY_MEM_BRIGHTNESS,
+    BLACKBODY_MEM_COLOR_R, BLACKBODY_MEM_COLOR_G, BLACKBODY_MEM_COLOR_B, BLACKBODY_MEM_COLOR_A,
+    BLACKBODY_MEM_UNKNOWN
+} component_blackbody_member;
+
+void register_blackbody_component();
+void add_blackbody_component(dm_entity entity, float temperature);
+dm_ecs_id get_blackbody_id();
+void* get_blackbody_member(component_blackbody_member member);
+bool update_blackbodies(dm_entity* entities, uint32_t entity_count);
 
 #endif //COMPONENTS_H

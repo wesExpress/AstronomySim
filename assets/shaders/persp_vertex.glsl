@@ -18,16 +18,14 @@ struct ps_input
 	vec3 frag_pos;
 	vec4 obj_diffuse;
 	vec4 obj_specular;
+	float logz;
 };
 
 layout (std140) uniform scene_uni
 {
 	mat4  view_proj;
-	vec4  light_color;
-	vec4  ambient_color;
-	vec3  light_pos;
-	float padding;
 	vec3  view_pos;
+	float fcoef_inv;
 };
 
 out ps_input vs_output;
@@ -43,6 +41,8 @@ void main()
 
 	vs_output.obj_diffuse = obj_diffuse;
 	vs_output.obj_specular = obj_specular;
+
+	vs_output.logz = 1.0f + vs_output.position.w;
 
 	gl_Position = vs_output.position;
 }

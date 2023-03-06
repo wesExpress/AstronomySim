@@ -1,16 +1,42 @@
 #include "components.h"
 
+#define USE_GRAVITY
+
 // constants
-#define G          6.673e-11f
-#define EARTH_G    9.8f
-#define E_G_OVER_G 1.47e11f   // kg / m^2
+#define G            6.673e-11f
+#define EARTH_G      9.8f
+#define E_G_OVER_G   1.47e11f   // kg / m^2
+
+// units are fractions of their real values, otherwise everything breaks
+#define STELLAR_MASS   1.65e23f  // g
+#define STELLAR_RADIUS 6.957e4f  // m
 
 // data
-#define NUM_OBJECTS 4
+#define MAX_ENTITIES   8192
+
+#ifdef USE_GRAVITY
+#ifdef DM_DEBUG
+#define MAX_STARS      100
+#else
+#define MAX_STARS      500
+#endif
+#define MAX_SATELLITES 3 * MAX_STARS
+#else
+#define MAX_STARS 500
+#define MAX_SATELLITES 3 * MAX_STARS
+#endif
 
 typedef struct space_sim_data_t
 {
-    dm_entity entities[NUM_OBJECTS];
+    dm_entity entities[MAX_ENTITIES];
+    uint32_t  num_entities;
+    
+    dm_entity stars[MAX_STARS];
+    uint32_t  num_stars;
+    
+    dm_entity satellites[MAX_SATELLITES];
+    uint32_t  num_satellites;
+    
     bool align_with_grav;
     dm_entity nearest_grav_body;
     dm_vec3   align_axis;
@@ -18,110 +44,225 @@ typedef struct space_sim_data_t
 
 space_sim_data space_data = { 0 };
 
-// entity wrappers
-#define STAR     space_data.entities[0]
-#define PLANET_1 space_data.entities[1]
-#define PLANET_2 space_data.entities[2]
-#define ROCKET   space_data.entities[3]
+// entities
+dm_ecs_id STAR;
+dm_ecs_id PLANET_1, PLANET_2;
+dm_ecs_id MOON_1, MOON_2;
+dm_ecs_id PLAYER;
 
-return_code space_sim_init()
+#define WHITE    (dm_vec4){1,1,1,1}
+
+dm_ecs_id create_satellite(dm_entity host, float radius, float orbit, float mass, dm_vec4 color)
 {
-    const dm_vec4 white = dm_vec4_set(1,1,1,1);
-    const float gray_scale = 0.5f;
+    float* pos_x  = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y  = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z  = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    float* masses = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_MASS);
+    float* vel_x  = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_X);
+    float* vel_y  = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_Y);
+    float* vel_z  = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_Z);
     
-    float r_planet = 500.0f; // m
-    float r_star   = 1e3f;
-    const dm_vec4 c_moon = dm_vec4_set(white.x * gray_scale, white.y * gray_scale, white.z * gray_scale, 1);
+    // set up for circular orbit
+    float orbit_angle = dm_random_float() * DM_MATH_PI;
+    float x = pos_x[host] + orbit * dm_cos(orbit_angle);
+    float z = pos_z[host] + orbit * dm_sin(orbit_angle);
     
+    dm_vec3 r = dm_vec3_set(x, 0, z);
+    dm_vec3 v = dm_vec3_norm(dm_vec3_cross(r, dm_vec3_unit_y));
+    dm_vec3 host_v = dm_vec3_set(vel_x[host], vel_y[host], vel_z[host]);
+    
+    float vc = dm_sqrtf(G * masses[host] / orbit);
+    
+    //
+    dm_vec3 pos = dm_vec3_set(x, pos_y[host], z);
+    
+    dm_ecs_id satellite = dm_ecs_create_entity();
+    
+    dm_ecs_entity_add_transform_v(satellite, pos, dm_vec3_set(radius,radius,radius), dm_quat_set(0,0,0,1));
+    dm_ecs_entity_add_collision_sphere(satellite, radius);
+    dm_ecs_entity_add_physics_at_rest(satellite, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
+    dm_ecs_entity_add_mesh(satellite, ICOSPHERE_MESH);
+    dm_ecs_entity_add_material(satellite, color, color);
+    
+#ifdef USE_GRAVITY
+    dm_physics_add_impulse(satellite, dm_vec3_add_vec3(host_v, dm_vec3_scale(v, vc)));
+#endif
+    dm_physics_add_angular_velocity(satellite, dm_vec3_set(0,0.01f,0));
+    
+    space_data.satellites[space_data.num_satellites++] = satellite;
+    space_data.entities[space_data.num_entities++] = satellite;
+    
+    return satellite;
+}
+
+// generate a random star: first calculates a random temp, then derives mass and radius from that
+dm_ecs_id create_star(dm_vec3 pos, dm_vec3 velocity)
+{
+    dm_ecs_id star = dm_ecs_create_entity();
+    
+    float temperature, mass, radius;
+    
+    // determine color
+    float type = dm_random_float();
+    
+    // giants (8000K - 10000K), (2, 4) solar radii, 
+    if(type > 0.9f) 
+    {
+        temperature = dm_random_float_range(8000,10000);
+        radius      = dm_random_float_range(2,4) * STELLAR_RADIUS;
+        mass        = dm_random_float_range(2,10) * STELLAR_MASS;
+    }
+    // main sequence stars (5000 - 8000K), 1 solar radii
+    else if(type > 0.4f) 
+    {
+        temperature = dm_random_float_range(5000,7999);
+        radius = dm_random_float_range(1,2) * STELLAR_RADIUS;
+        mass = dm_random_float_range(1,2) * STELLAR_MASS;
+    }
+    // dwarfs (3000-5000), 0.5 solar radii
+    else 
+    {
+        temperature = dm_random_float_range(3000,4999);
+        radius = dm_random_float_range(0.25f,1) * STELLAR_RADIUS;
+        mass = dm_random_float_range(0.25f,1) * STELLAR_MASS;
+    }
+    
+    dm_ecs_entity_add_transform_v(star, pos, dm_vec3_set(radius,radius,radius), dm_quat_set(0,0,0,1));
+    dm_ecs_entity_add_collision_sphere(star, radius);
+    dm_ecs_entity_add_physics_at_rest(star, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
+    dm_ecs_entity_add_mesh(star, ICOSPHERE_MESH);
+    dm_ecs_entity_add_material(star, dm_vec4_set(0,0,0,1), dm_vec4_set(0,0,0,1));
+    add_blackbody_component(star, temperature);
+    
+#ifdef USE_GRAVITY
+    dm_physics_add_impulse(star, velocity);
+#endif
+    
+    space_data.stars[space_data.num_stars++] = star;
+    space_data.entities[space_data.num_entities++] = star;
+    
+    // make between 1-3 planets
+    float satellite_num = dm_random_float();
+    uint32_t num = 0;
+    if(satellite_num > 0.66f) num = 3;
+    else if(satellite_num > 0.33f) num = 2;
+    else num = 1;
+    
+    for(uint32_t i=0; i<3; i++)
+    {
+        float orbit = dm_random_float_range(radius * 100.0f, radius * 250.0f);
+        create_satellite(star, 1e4f, orbit, 1e16f, dm_vec4_set(0.25f,0.75f,0.25f,1));
+    }
+    
+    return star;
+}
+
+dm_ecs_id create_player(dm_entity host, float mass, dm_vec4 color)
+{
+    float* pos_x  = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y  = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z  = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    float* radii  = dm_ecs_get_component_member(DM_COMPONENT_COLLISION, DM_COLLISION_MEM_UNION_0);
+    float* vel_x  = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_X);
+    float* vel_y  = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_Y);
+    float* vel_z  = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_Z);
+    
+    dm_vec3 pos = dm_vec3_set(pos_x[host] + radii[host] + 10.0f, pos_y[host], pos_z[host]);
+    dm_vec3 host_v = dm_vec3_set(vel_x[host], vel_y[host], vel_z[host]);
+    
+    dm_ecs_id player = dm_ecs_create_entity();
+    
+#if 1
+    dm_ecs_entity_add_transform_v(player, pos, dm_vec3_set(1,1,1), dm_quat_set(0,0,0,1));
+    dm_ecs_entity_add_collision_sphere(player, 1);
+    dm_ecs_entity_add_mesh(player, ICOSPHERE_MESH);
+#else
+    dm_ecs_entity_add_transform_v(player, pos, dm_vec3_set(1,1,1), dm_quat_set(0,0,0,1));
+    dm_ecs_entity_add_collision_box(player, dm_vec3_set(-0.5f,-0.5f,-0.5f), dm_vec3_set(0.5f,0.5f,0.5f));
+    dm_ecs_entity_add_mesh(player, BOX_MESH);
+#endif
+    dm_ecs_entity_add_physics_at_rest(player, mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
+    dm_ecs_entity_add_material(player, color, color);
+    
+#ifdef USE_GRAVITY
+    dm_physics_add_impulse(player, host_v);
+#endif
+    
+    space_data.entities[space_data.num_entities++] = player;
+    
+    return player;
+}
+
+return_code app_init()
+{
     // gravity system
+#ifdef USE_GRAVITY
     gravity_system_init();
+#endif
+    
+    dm_physics_toggle_pause();
     
     // entities
-    // star, planet, moon, and box for flying around
+    const float star_pos_range = 5e8f;
+    const float star_vel_range = 1e2f;
+    const float planet_mass    = 1e16f;
+    const float planet_radius  = 1e3f;
+    const float moon_mass      = 1e13f;
+    const float moon_radius    = 1e2f;
+    const dm_vec4 planet_color = { 0.25f,0.75f,0.25f,1 };
+    const dm_vec4 moon_color   = { 0.75f,0.75f,0.75f,1 };
     
-    // star
-    dm_vec3 scale = { r_star,r_star,r_star };
-    dm_vec3 pos   = { 0 };
-    dm_quat rot   = { 0,0,0,1 };
-    const float star_mass = 1e20f;
-    const dm_vec4 star_color = { 1,1,0,1 };
+    for(uint32_t i=0; i<MAX_STARS; i++)
+    {
+        dm_vec3 star_pos = dm_vec3_set(dm_random_float_range(-star_pos_range,star_pos_range), dm_random_float_range(-star_pos_range,star_pos_range), dm_random_float_range(-star_pos_range,star_pos_range));
+        
+        dm_vec3 star_vel = dm_vec3_set(dm_random_float_range(-star_vel_range,star_vel_range), dm_random_float_range(-star_vel_range,star_vel_range), dm_random_float_range(-star_vel_range,star_vel_range));
+        
+        create_star(star_pos, star_vel);
+    }
     
-    STAR = dm_ecs_create_entity();
-    dm_ecs_entity_add_transform_v(STAR, pos, scale, rot);
-    dm_ecs_entity_add_collision_sphere(STAR, r_star);
-    dm_ecs_entity_add_physics_at_rest(STAR, star_mass, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
-    dm_ecs_entity_add_mesh(STAR, ICOSPHERE_MESH);
-    dm_ecs_entity_add_material(STAR, dm_vec4_set(1,1,0,1), dm_vec4_set(1,1,0,1));
-    add_light_component(STAR, star_color, star_color, star_color, dm_vec3_set(0,0,0), dm_vec4_set(1, 0.09f, 0.032f, 0), LIGHT_TYPE_POINT);
-    
-    dm_physics_add_angular_momentum(STAR, dm_vec3_set(0,1e28f,0));
-    
-    // planet 1
-    const float planet_orbit = r_star * 100.0f;
-    float m_planet = r_planet * r_planet * E_G_OVER_G;
-    float vc = dm_sqrtf(G * star_mass / planet_orbit);
-    pos = dm_vec3_set(0,0,planet_orbit);
-    scale = dm_vec3_set(r_planet,r_planet,r_planet);
-    
-    PLANET_1 = dm_ecs_create_entity();
-    dm_ecs_entity_add_transform_v(PLANET_1, pos, scale, rot);
-    dm_ecs_entity_add_collision_sphere(PLANET_1, r_planet);
-    // TODO would really be nice to have planet spinning, but doesn't seem to work with continuous collision
-    dm_ecs_entity_add_physics(PLANET_1, dm_vec3_set(vc,0,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
-    dm_ecs_entity_add_mesh(PLANET_1, ICOSPHERE_MESH);
-    dm_ecs_entity_add_material(PLANET_1, c_moon, c_moon);
-    
-    // player
-    scale = dm_vec3_set(1,1,1);
-    pos = dm_vec3_set(0,0,planet_orbit + r_planet + 100.0f);
-    
-    ROCKET = dm_ecs_create_entity();
-    dm_ecs_entity_add_transform_v(ROCKET, pos, scale, rot);
-#if 0
-    dm_ecs_entity_add_collision_sphere(ROCKET, 1);
-    dm_ecs_entity_add_mesh(ROCKET, ICOSPHERE_MESH);
-#else
-    dm_ecs_entity_add_collision_capsule(ROCKET, 0.5f, 2);
-    dm_ecs_entity_add_mesh(ROCKET, BOX_MESH);
-#endif
-    dm_ecs_entity_add_physics(ROCKET, dm_vec3_set(vc,0,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), 10.0f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
-    dm_ecs_entity_add_material(ROCKET, dm_vec4_set(1,0,0,1), dm_vec4_set(1,0,0,1));
-    
-    dm_physics_add_impulse(ROCKET, dm_vec3_set(0,0,0));
-    
-    // moon
-    const float moon_orbit = r_planet * 3.0f;
-    const float moon_s = 0.1f;
-    scale = dm_vec3_set(r_planet,r_planet,r_planet);
-    scale = dm_vec3_scale(scale, moon_s);
-    pos   = dm_vec3_set(0,0,planet_orbit + moon_orbit);
-    vc += dm_sqrtf(G * m_planet / moon_orbit);
-    
-    PLANET_2 = dm_ecs_create_entity();
-    dm_ecs_entity_add_transform_v(PLANET_2, pos, scale, rot);
-    dm_ecs_entity_add_collision_sphere(PLANET_2, r_planet * moon_s);
-    dm_ecs_entity_add_physics(PLANET_2, dm_vec3_set(vc,0,0), dm_vec3_set(0,1e18f,0), dm_vec3_set(0,0,0), dm_vec3_set(0,0,0), m_planet * 0.1f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
-    dm_ecs_entity_add_mesh(PLANET_2, ICOSPHERE_MESH);
-    dm_ecs_entity_add_material(PLANET_2, c_moon, c_moon);
+    PLAYER = create_player(space_data.satellites[0], 10.0f, dm_vec4_set(1,0,0,1));
+    floating_origin_system_init(PLAYER);
+    //floating_origin_enable_rot(space_data.satellites[0]);
     
     return SUCCESS;
 }
 
-void space_sim_update_positions(dm_vec3 p)
+#ifndef USE_GRAVITY
+void player_gravity()
 {
     float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
     float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
     float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
     
-    for(uint32_t i=0; i<NUM_OBJECTS; i++)
+    float* force_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
+    float* force_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
+    float* force_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
+    float* mass = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_MASS);
+    
+    dm_vec3 player_p = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
+    
+    for(uint32_t i=0; i<space_data.num_entities; i++)
     {
-        pos_x[space_data.entities[i]] -= p.x;
-        pos_y[space_data.entities[i]] -= p.y;
-        pos_z[space_data.entities[i]] -= p.z;
+        dm_entity entity = space_data.entities[i];
+        if(entity == PLAYER) continue;
+        
+        dm_vec3 p = dm_vec3_set(pos_x[entity], pos_y[entity], pos_z[entity]);
+        
+        dm_vec3 sep = dm_vec3_sub_vec3(p, player_p);
+        float distance2 = dm_vec3_len2(sep);
+        float gravity = (G * mass[PLAYER] * mass[entity] / distance2);
+        
+        dm_vec3 force = dm_vec3_scale(dm_vec3_norm(sep), gravity);
+        
+        force_x[PLAYER] += force.x;
+        force_y[PLAYER] += force.y;
+        force_z[PLAYER] += force.z;
     }
 }
+#endif
 
-return_code space_sim_update(view_camera* camera)
+return_code app_update(view_camera* camera)
 {
     float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
     float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
@@ -130,24 +271,27 @@ return_code space_sim_update(view_camera* camera)
     float* rot_j = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_J);
     float* rot_k = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_K);
     float* rot_r = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_R);
+    float* vel_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_X);
+    float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_Y);
+    float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_VEL_Z);
     
-    dm_vec3 pos = { pos_x[ROCKET],pos_y[ROCKET],pos_z[ROCKET] };
-    dm_quat rot = dm_quat_set(rot_i[ROCKET], rot_j[ROCKET], rot_k[ROCKET], rot_r[ROCKET]);
-    float   d   = dm_vec3_len(pos);
+    if(dm_input_key_just_pressed(DM_KEY_R)) floating_origin_enable_rot(space_data.satellites[0]);
+    else if(dm_input_key_just_pressed(DM_KEY_T)) floating_origin_disable_rot();
     
-    if(d > 10000.0f) space_sim_update_positions(pos);
+    dm_vec3 pos = { pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER] };
+    dm_quat rot = dm_quat_set(rot_i[PLAYER], rot_j[PLAYER], rot_k[PLAYER], rot_r[PLAYER]);
+    dm_vec3 vel = { vel_x[PLAYER], vel_y[PLAYER], vel_z[PLAYER] };
+    float d = dm_vec3_len(pos);
+    float v = dm_vec3_len(vel);  
     
-    dm_vec3 rocket_up      = dm_ecs_entity_get_transform_up(ROCKET);
+    dm_vec3 player_up = dm_ecs_entity_get_transform_up(PLAYER);
     
     // align with nearest gravitation object
-    //if(dm_input_key_just_pressed(DM_KEY_E)) space_data.align_with_grav = !space_data.align_with_grav;
-    
-    //if(space_data.align_with_grav)
     {
         float closest_d = FLT_MAX;
-        for(uint32_t i=0; i<NUM_OBJECTS; i++)
+        for(uint32_t i=0; i<PLAYER; i++)
         {
-            if(space_data.entities[i] == ROCKET) continue;
+            if(space_data.entities[i] == PLAYER) continue;
             
             dm_vec3 pos_g = dm_vec3_set(pos_x[space_data.entities[i]], pos_y[space_data.entities[i]], pos_z[space_data.entities[i]]);
             dm_vec3 sep = dm_vec3_sub_vec3(pos, pos_g);
@@ -161,23 +305,20 @@ return_code space_sim_update(view_camera* camera)
             }
         }
         
-        dm_quat new_rot = dm_quat_from_to_direction(rocket_up, space_data.align_axis);
+        dm_quat new_rot = dm_quat_from_to_direction(player_up, space_data.align_axis);
         new_rot = dm_quat_mul_quat(new_rot, rot);
         new_rot = dm_quat_norm(new_rot);
         
-        rot_i[ROCKET] = new_rot.i;
-        rot_j[ROCKET] = new_rot.j;
-        rot_k[ROCKET] = new_rot.k;
-        rot_r[ROCKET] = new_rot.r;
+        rot_i[PLAYER] = new_rot.i;
+        rot_j[PLAYER] = new_rot.j;
+        rot_k[PLAYER] = new_rot.k;
+        rot_r[PLAYER] = new_rot.r;
     }
     
     // update camera
-    pos = dm_vec3_set(pos_x[ROCKET], pos_y[ROCKET], pos_z[ROCKET]);
-    //track_camera(pos, distance, camera);
-    dm_vec3 camera_pos = dm_vec3_add_vec3(pos, dm_vec3_scale(rocket_up, 2));
-    fps_camera(dm_get_delta_time(), camera_pos, rocket_up, camera);
-    
-    float speed = 2.0f * dm_get_delta_time();
+    pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
+    float speed = 2.0f;
+    //speed *= 1e5f;
     
     dm_vec3 impulse = { 0 };
     if(dm_input_is_key_pressed(DM_KEY_W)) dm_vec3_add_vec3_inpl(impulse, camera->forward, &impulse);
@@ -189,48 +330,30 @@ return_code space_sim_update(view_camera* camera)
     dm_vec3_norm_inpl(&impulse);
     dm_vec3_scale_inpl(speed, &impulse);
     
-    dm_physics_add_impulse(ROCKET, impulse);
+    dm_physics_add_impulse(PLAYER, impulse);
     
-    // update light pos
-    pos = dm_vec3_set(pos_x[STAR], pos_y[STAR], pos_z[STAR]);
-    default_pass_set_light_pos(pos);
+    // camera is 1.7m off ground
+    pos = dm_vec3_set(pos_x[PLAYER], pos_y[PLAYER], pos_z[PLAYER]);
+    pos = dm_vec3_add_vec3(pos, dm_vec3_scale(space_data.align_axis, 1.7f));
+    
+    fps_camera(pos, space_data.align_axis, camera);
+    //track_camera(pos, space_data.align_axis, 10.0f, camera);
     
     return SUCCESS;
 }
 
-return_code space_sim_render()
+return_code app_render(view_camera* camera)
 {
-#if 0 
-    static bool debug_draw = false;
+    dm_debug_render_transform(PLAYER);
     
-    if(dm_input_key_just_pressed(DM_KEY_TAB)) debug_draw = !debug_draw;
+    float* vel_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_X);
+    float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Y);
+    float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Z);
     
-    if(debug_draw)
-    {
-        float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-        float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-        float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
-        
-        /*
-        dm_debug_render_transform(PLANET_1);
-        dm_debug_render_force_vector(PLANET_1);
-        dm_debug_render_velocity_vector(PLANET_1);
-        
-        dm_debug_render_transform(PLANET_2);
-        dm_debug_render_force_vector(PLANET_2);
-        dm_debug_render_velocity_vector(PLANET_2);
-        */
-        
-        dm_debug_render_transform(ROCKET);
-        dm_debug_render_force_vector(ROCKET);
-        dm_debug_render_relative_velocity_vector(ROCKET, PLANET_1);
-        
-        /*
-        dm_vec3 p = dm_vec3_set(pos_x[ROCKET], pos_y[ROCKET], pos_z[ROCKET]);
-        dm_debug_render_arrow_v(p, dm_vec3_add_vec3(p, space_data.align_axis), 1.0f, dm_vec4_set(1,1,0,1));
-*/
-    }
-#endif
+    dm_imgui_text_fmt(10,500, 1,1,1,1, "vel=> X:%0.2f, Y:%0.2f, Z:%0.2f", vel_x[PLAYER], vel_y[PLAYER], vel_z[PLAYER]);
+    
+    dm_debug_render_aabb(PLAYER);
+    dm_debug_render_aabb(space_data.satellites[0]);
     
     return SUCCESS;
 }
