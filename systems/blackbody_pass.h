@@ -282,7 +282,9 @@ return_code __blackbody_pass_init(float* positions, float* tex_coords, uint32_t 
     if(!DM_CREATE_STATIC_VERTEX_BUFFER(vertices, blackbody_vertex, num_vertices, bb_handles.vb)) return RESOURCE_CREATION_FAIL;
     if(!DM_CREATE_DYNAMIC_VERTEX_BUFFER(NULL, blackbody_instance, DM_MAX_INSTS, bb_handles.instb)) return RESOURCE_CREATION_FAIL;
     
+#if 0
     if(!dm_renderer_create_framebuffer(true,true,true, DM_SCREEN_WIDTH, DM_SCREEN_HEIGHT, &bb_handles.point_fb)) return RESOURCE_CREATION_FAIL;
+#endif
     
     dm_free(vertices);
     
@@ -290,7 +292,15 @@ return_code __blackbody_pass_init(float* positions, float* tex_coords, uint32_t 
     dm_render_handle vb_buffers[] = { bb_handles.vb, bb_handles.instb };
     if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/blackbody_vertex.glsl", "assets/shaders/blackbody_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, bb_handles.pass)) return RESOURCE_CREATION_FAIL;
 #else
-    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/blackbody_vertex.fxc", "assets/shaders/blackbody_pixel.fxc", unis, attrib_descs, pipeline_desc, bb_handles.pass)) return RESOURCE_CREATION_FAIL;
+#ifdef DM_DIRECTX
+    const char* vertex_src = "assets/shaders/blackbody_vertex.fxc";
+    const char* pixel_src = "assets/shaders/blackbody_pixel.fxc";
+#elif defined(DM_METAL)
+    const char* vertex_src = "assets/shaders/blackbody.metallib";
+    const char* pixel_src = "assets/shaders/blackbody.metallib";
+#endif
+    
+    if(!DM_RENDERER_CREATE_RENDERPASS(vertex_src, pixel_src, unis, attrib_descs, pipeline_desc, bb_handles.pass)) return RESOURCE_CREATION_FAIL;
 #endif
     
     // mesh handles
@@ -306,7 +316,15 @@ return_code __blackbody_pass_init(float* positions, float* tex_coords, uint32_t 
         DM_MAKE_VERTEX_ATTRIB("BRIGHTNESS", airy_disc_vertex, brightness, DM_VERTEX_ATTRIB_CLASS_VERTEX, DM_VERTEX_DATA_T_FLOAT, 1, 0, false),
     };
     
-    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/airy_point_vertex.fxc", "assets/shaders/airy_point_pixel.fxc", unis, airy_point_attribs, pipeline_desc, bb_handles.point_pass)) return RESOURCE_CREATION_FAIL;
+#ifdef DM_DIRECTX
+    const char* airy_vertex = "assets/shaders/airy_point_vertex.fxc";
+    const char* airy_pixel = "assets/shaders/airy_point_pixel.fxc";
+#elif defined(DM_METAL)
+    const char* airy_vertex = "assets/shaders/airy_point.metallib";
+    const char* airy_pixel = "assets/shaders/airy_point.metallib";
+#endif
+    
+    if(!DM_RENDERER_CREATE_RENDERPASS(airy_vertex, airy_pixel, unis, airy_point_attribs, pipeline_desc, bb_handles.point_pass)) return RESOURCE_CREATION_FAIL;
     
     // blur pass
     float blur_vertices[] = {
@@ -320,6 +338,7 @@ return_code __blackbody_pass_init(float* positions, float* tex_coords, uint32_t 
     };
     if(!__dm_renderer_create_static_vertex_buffer(blur_vertices, sizeof(blur_vertices), sizeof(float) * 4, &bb_handles.blur_vb)) return RESOURCE_CREATION_FAIL;
     
+#ifndef DM_METAL
     dm_uniform blur_uni[] = {
         { .data_size=sizeof(airy_blur_uni), .name="scene_uni" }
     };
@@ -330,7 +349,7 @@ return_code __blackbody_pass_init(float* positions, float* tex_coords, uint32_t 
     };
     
     if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/airy_blur_vertex.fxc", "assets/shaders/airy_blur_pixel.fxc", blur_uni, airy_blur_attribs, pipeline_desc, bb_handles.blur_pass)) return RESOURCE_CREATION_FAIL;
-    
+#endif
     // register render system
     dm_ecs_id blackbody_system_component_ids[] = { DM_COMPONENT_TRANSFORM, DM_COMPONENT_MESH, get_blackbody_id() };
     dm_ecs_id blackbody_system_exclude_ids[] = { get_light_id() };

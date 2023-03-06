@@ -28,6 +28,9 @@ static application_data app_data = { 0 };
 #define BASIC
 #endif
 
+#ifdef DM_METAL
+#include "metal_testing.h"
+#else
 #ifdef STRESS_TEST
 #include "stress_test.h"
 #elif defined(PHYSICS_TEST)
@@ -36,6 +39,7 @@ static application_data app_data = { 0 };
 #include "basic_scene.h"
 #else
 #include "space_sim.h"
+#endif
 #endif
 
 #define APP_FUNC_CHECK(FUNC) {\

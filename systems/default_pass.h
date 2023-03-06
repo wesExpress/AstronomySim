@@ -284,7 +284,15 @@ return_code __default_pass_init(float* positions, float* normals, float* tex_coo
     dm_render_handle vb_buffers[] = { d_handles.vb, d_handles.instb };
     if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.glsl", "assets/shaders/persp_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, d_handles.pass)) return RESOURCE_CREATION_FAIL;
 #else
-    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/persp_vertex.fxc", "assets/shaders/persp_pixel.fxc", unis, attrib_descs, pipeline_desc, d_handles.pass)) return RESOURCE_CREATION_FAIL;
+#ifdef DM_DIRECTX
+    const char* vertex_src = "assets/shaders/persp_vertex.fxc";
+    const char* pixel_src = "assets/shaders/persp_pixel.fxc";
+#elif defined(DM_METAL)
+    const char* vertex_src = "assets/shaders/persp.metallib";
+    const char* pixel_src = "assets/shaders/persp.metallib";
+#endif
+    
+    if(!DM_RENDERER_CREATE_RENDERPASS(vertex_src, pixel_src, unis, attrib_descs, pipeline_desc, d_handles.pass)) return RESOURCE_CREATION_FAIL;
 #endif
     
     if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, true, "default_texture", &d_handles.default_texture)) return RESOURCE_CREATION_FAIL;

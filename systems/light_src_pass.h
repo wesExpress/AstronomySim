@@ -181,7 +181,15 @@ return_code __light_src_pass_init(float* positions, float* tex_coords, uint32_t 
     dm_render_handle vb_buffers[] = { light_handles.vb, light_handles.instb };
     if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/light_src_vertex.glsl", "assets/shaders/light_src_pixel.glsl", vb_buffers, unis, attrib_descs, pipeline_desc, light_handles.pass)) return RESOURCE_CREATION_FAIL;
 #else
-    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/light_src_vertex.fxc", "assets/shaders/light_src_pixel.fxc", unis, attrib_descs, pipeline_desc, light_handles.pass)) return RESOURCE_CREATION_FAIL;
+#ifdef DM_DIRECTX
+    const char* vertex_src = "assets/shaders/light_src_vertex.fxc";
+    const char* pixel_src = "assets/shaders/light_src_pixel.fxc";
+#elif defined(DM_METAL)
+    const char* vertex_src = "assets/shaders/light_src.metallib";
+    const char* pixel_src = "assets/shaders/light_src.metallib";
+#endif
+    
+    if(!DM_RENDERER_CREATE_RENDERPASS(vertex_src, pixel_src, unis, attrib_descs, pipeline_desc, light_handles.pass)) return RESOURCE_CREATION_FAIL;
 #endif
     
     // mesh handles
