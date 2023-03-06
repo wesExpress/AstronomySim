@@ -7,8 +7,13 @@
 
 #include "app/app.h"
 
+#ifdef DM_PLATFORM_APPLE
+#define DEFAULT_SCREEN_WIDTH  1280
+#define DEFAULT_SCREEN_HEIGHT  720
+#else
 #define DEFAULT_SCREEN_WIDTH  1980
 #define DEFAULT_SCREEN_HEIGHT 1080
+#endif
 
 /******************
 SIMPLE ENTRY POINT
