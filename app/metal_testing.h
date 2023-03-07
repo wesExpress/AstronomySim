@@ -15,7 +15,7 @@ return_code app_update(view_camera* camera)
 
 return_code app_render()
 {
-    dm_imgui_text(10,100, 1,1,1,1, "Hello world");
+    //dm_imgui_text(10,100, 1,1,1,1, "Hello world");
     return SUCCESS;
 }
 

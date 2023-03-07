@@ -145,9 +145,9 @@ return_code app_run()
         render_time = dm_timer_elapsed_ms(&render_timer);
         
         // fps
-        dm_imgui_text_fmt(10, 25, 1,1,1,1, "FPS: %u", fps);
+        //dm_imgui_text_fmt(10, 25, 1,1,1,1, "FPS: %u", fps);
         // frame render time display
-        dm_imgui_text_fmt(10, 50, 1,1,1,1, "Render took: %0.2lf ms", render_time);
+        //dm_imgui_text_fmt(10, 50, 1,1,1,1, "Render took: %0.2lf ms", render_time);
         
         frame_counter++;
     }

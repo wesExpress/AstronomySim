@@ -33,7 +33,7 @@ fi
 
 include_flags="-I$SRC_DIR -I$SRC_DIR/DarkMatter/lib/mt19937/include -I$SRC_DIR/DarkMatter -I$SRC_DIR/DarkMatter/lib"
 
-linker_flags="-g -framework Cocoa -lobjc -framework QuartzCore -framework CoreFoundation -framework Cocoa -framework Metal"
+linker_flags="-g -framework Cocoa -lobjc -framework QuartzCore -framework CoreFoundation -framework Metal"
 
 echo "Building $output..."
 clang $c_files $external_files $objc_files $compiler_flags -o $output $defines $include_flags $linker_flags
