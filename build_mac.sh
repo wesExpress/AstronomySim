@@ -42,22 +42,22 @@ cd ..
 # shaders
 mkdir -p build/assets/shaders/
 
-xcrun -sdk macosx metal $SRC_DIR/DarkMatter/assets/shaders/debug_render.metal -c -o $SRC_DIR/build/assets/shaders/debug_render.air
+xcrun -sdk macosx metal -gline-tables-only -MO $SRC_DIR/DarkMatter/assets/shaders/debug_render.metal -c -o $SRC_DIR/build/assets/shaders/debug_render.air
 xcrun -sdk macosx metallib $SRC_DIR/build/assets/shaders/debug_render.air -o $SRC_DIR/build/assets/shaders/debug_render.metallib
 
-xcrun -sdk macosx metal $SRC_DIR/DarkMatter/assets/shaders/imgui.metal -c -o $SRC_DIR/build/assets/shaders/imgui.air
+xcrun -sdk macosx metal -gline-tables-only -MO $SRC_DIR/DarkMatter/assets/shaders/imgui.metal -c -o $SRC_DIR/build/assets/shaders/imgui.air
 xcrun -sdk macosx metallib $SRC_DIR/build/assets/shaders/imgui.air -o $SRC_DIR/build/assets/shaders/imgui.metallib
 
-xcrun -sdk macosx metal $SRC_DIR/assets/shaders/persp.metal -c -o $SRC_DIR/build/assets/shaders/persp.air
+xcrun -sdk macosx metal -gline-tables-only -MO $SRC_DIR/assets/shaders/persp.metal -c -o $SRC_DIR/build/assets/shaders/persp.air
 xcrun -sdk macosx metallib $SRC_DIR/build/assets/shaders/persp.air -o $SRC_DIR/build/assets/shaders/persp.metallib
 
-xcrun -sdk macosx metal $SRC_DIR/assets/shaders/light_src.metal -c -o $SRC_DIR/build/assets/shaders/light_src.air
+xcrun -sdk macosx metal -gline-tables-only -MO $SRC_DIR/assets/shaders/light_src.metal -c -o $SRC_DIR/build/assets/shaders/light_src.air
 xcrun -sdk macosx metallib $SRC_DIR/build/assets/shaders/light_src.air -o $SRC_DIR/build/assets/shaders/light_src.metallib
 
-xcrun -sdk macosx metal $SRC_DIR/assets/shaders/blackbody.metal -c -o $SRC_DIR/build/assets/shaders/blackbody.air
+xcrun -sdk macosx metal -gline-tables-only -MO $SRC_DIR/assets/shaders/blackbody.metal -c -o $SRC_DIR/build/assets/shaders/blackbody.air
 xcrun -sdk macosx metallib $SRC_DIR/build/assets/shaders/blackbody.air -o $SRC_DIR/build/assets/shaders/blackbody.metallib
 
-xcrun -sdk macosx metal $SRC_DIR/assets/shaders/airy_point.metal -c -o $SRC_DIR/build/assets/shaders/airy_point.air
+xcrun -sdk macosx metal -gline-tables-only -MO $SRC_DIR/assets/shaders/airy_point.metal -c -o $SRC_DIR/build/assets/shaders/airy_point.air
 xcrun -sdk macosx metallib $SRC_DIR/build/assets/shaders/airy_point.air -o $SRC_DIR/build/assets/shaders/airy_point.metallib
 
 # other assets
