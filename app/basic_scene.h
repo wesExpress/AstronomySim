@@ -37,14 +37,15 @@ return_code app_init()
     dm_ecs_entity_add_physics_at_rest(entities[entity_count], 1e12f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_material(entities[entity_count], dm_vec4_set(0.5f,0.15f,0,1), dm_vec4_set(0.5f,0,0,1));
     
-    dm_physics_add_angular_velocity(entities[entity_count], dm_vec3_set(0,1,0));
+    //dm_physics_add_angular_momentum(entities[entity_count], dm_vec3_set(0,5e10f,0));
+    dm_physics_add_angular_velocity(entities[entity_count], dm_vec3_set(0,0.1f,0));
     
     float size = 0.25f;
     float half_s = size * 0.5f;
     
     entities[++entity_count] = dm_ecs_create_entity();
 #if 1
-    dm_ecs_entity_add_transform(entities[entity_count], 0,5,0, size,size,size, 1,0.25f,1,1);
+    dm_ecs_entity_add_transform(entities[entity_count], 7,0,0, size,size,size, 1,0.25f,1,1);
     dm_ecs_entity_add_collision_box(entities[entity_count], dm_vec3_set(-half_s, -half_s, -half_s), dm_vec3_set(half_s, half_s, half_s));
     dm_ecs_entity_add_mesh(entities[entity_count], BOX_MESH);
 #else
@@ -54,6 +55,10 @@ return_code app_init()
 #endif
     dm_ecs_entity_add_physics_at_rest(entities[entity_count], 1.0f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_material(entities[entity_count], dm_vec4_set(0,0.25f,0.25f,1), dm_vec4_set(0.5f,0,0,1));
+    
+    //dm_physics_add_impulse(entities[entity_count], dm_vec3_set(0,0,-0.5f));
+    
+    floating_origin_system_init(entities[entity_count]);
     
     return SUCCESS;
 }
@@ -65,6 +70,9 @@ return_code app_update(view_camera* camera)
 #ifndef NBODY
     dm_physics_apply_earth_gravity(entities[entity_count]);
 #endif
+    
+    //if(dm_ecs_entity_is_colliding(entities[entity_count])) floating_origin_enable_rot(entities[entity_count-1]);
+    //else floating_origin_disable_rot();
     
     return SUCCESS;
 }
