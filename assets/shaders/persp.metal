@@ -78,7 +78,7 @@ struct blackbody
 	float4 position;
 	float4 color;
 	float  brightness;
-	float3 padding;
+	packed_float3 padding;
 };
 
 struct lights_uniform

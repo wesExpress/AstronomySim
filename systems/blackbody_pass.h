@@ -129,8 +129,8 @@ bool resolved_pass(dm_entity* entities, uint32_t entity_count)
     
     // submit all render commands
     dm_render_command_begin_renderpass(bb_handles.pass);
+    dm_render_command_bind_uniform(0, 0, 2, bb_handles.pass);
     dm_render_command_update_uniform(0, &uni, sizeof(uni), bb_handles.pass);
-    dm_render_command_bind_uniform(0, 0, bb_handles.pass);
     
 #ifdef DM_DEBUG
     static bool wireframe = false;
@@ -203,7 +203,7 @@ bool airy_disc_pass(dm_entity* entities, uint32_t entity_count)
     //dm_render_command_bind_framebuffer(bb_handles.point_fb);
     
     dm_render_command_begin_renderpass(bb_handles.point_pass);
-    dm_render_command_bind_uniform(0, 0, bb_handles.point_pass);
+    dm_render_command_bind_uniform(0, 0, 2, bb_handles.point_pass);
     dm_render_command_update_uniform(0, &uni, sizeof(uni), bb_handles.point_pass);
     
     dm_render_command_bind_buffer(bb_handles.point_vb, 0);
@@ -260,7 +260,7 @@ return_code __blackbody_pass_init(float* positions, float* tex_coords, uint32_t 
     };
     
     dm_uniform unis[] = {
-        { .data_size=sizeof(blackbody_scene_uni), .name="scene_uni" }
+        { .data_size=sizeof(blackbody_scene_uni), .stage=DM_UNIFORM_STAGE_BOTH, .name="scene_uni" }
     };
     
     // pipeline desc

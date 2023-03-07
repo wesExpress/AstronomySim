@@ -101,8 +101,8 @@ bool light_src_pass(dm_entity* entities, uint32_t entity_count)
     
     // submit all render commands
     dm_render_command_begin_renderpass(light_handles.pass);
+    dm_render_command_bind_uniform(0, 0, 2, light_handles.pass);
     dm_render_command_update_uniform(0, &uni, sizeof(uni), light_handles.pass);
-    dm_render_command_bind_uniform(0, 0, light_handles.pass);
     
 #ifdef DM_DEBUG
     static bool wireframe = false;
@@ -153,7 +153,7 @@ return_code __light_src_pass_init(float* positions, float* tex_coords, uint32_t 
     };
     
     dm_uniform unis[] = {
-        { .data_size=sizeof(light_src_scene_uni), .name="scene_uni" }
+        { .data_size=sizeof(light_src_scene_uni), .stage=DM_UNIFORM_STAGE_BOTH, .name="scene_uni" }
     };
     
     // pipeline desc

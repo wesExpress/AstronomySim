@@ -28,9 +28,6 @@ static application_data app_data = { 0 };
 #define BASIC
 #endif
 
-#ifdef DM_METAL
-#include "metal_testing.h"
-#else
 #ifdef STRESS_TEST
 #include "stress_test.h"
 #elif defined(PHYSICS_TEST)
@@ -39,7 +36,6 @@ static application_data app_data = { 0 };
 #include "basic_scene.h"
 #else
 #include "space_sim.h"
-#endif
 #endif
 
 #define APP_FUNC_CHECK(FUNC) {\
@@ -145,9 +141,9 @@ return_code app_run()
         render_time = dm_timer_elapsed_ms(&render_timer);
         
         // fps
-        //dm_imgui_text_fmt(10, 25, 1,1,1,1, "FPS: %u", fps);
+        dm_imgui_text_fmt(10, 25, 1,1,1,1, "FPS: %u", fps);
         // frame render time display
-        //dm_imgui_text_fmt(10, 50, 1,1,1,1, "Render took: %0.2lf ms", render_time);
+        dm_imgui_text_fmt(10, 50, 1,1,1,1, "Render took: %0.2lf ms", render_time);
         
         frame_counter++;
     }

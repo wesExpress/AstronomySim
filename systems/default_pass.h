@@ -192,10 +192,10 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     dm_render_command_begin_renderpass(d_handles.pass);
     
     dm_render_command_update_uniform(0, &scene_uni, sizeof(scene_uni), d_handles.pass);
-    dm_render_command_bind_uniform(0, 0, d_handles.pass);
+    dm_render_command_bind_uniform(0, 0, 2, d_handles.pass);
     
     dm_render_command_update_uniform(1, &light_uni, sizeof(light_uni), d_handles.pass);
-    dm_render_command_bind_uniform(1, 1, d_handles.pass);
+    dm_render_command_bind_uniform(1, 1, 0, d_handles.pass);
     
     dm_render_command_bind_texture(d_handles.default_texture, 0);
     
@@ -255,8 +255,8 @@ return_code __default_pass_init(float* positions, float* normals, float* tex_coo
     
     // uniforms
     dm_uniform unis[] = {
-        { .data_size=sizeof(default_scene_uni), .name="scene_uni" },
-        { .data_size=sizeof(default_lights_uni), .name="lights_uni" },
+        { .data_size=sizeof(default_scene_uni), .stage=DM_UNIFORM_STAGE_BOTH, .name="scene_uni" },
+        { .data_size=sizeof(default_lights_uni), .stage=DM_UNIFORM_STAGE_PIXEL, .name="lights_uni" },
     };
     
     // pipeline desc
