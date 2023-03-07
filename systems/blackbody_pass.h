@@ -214,7 +214,7 @@ bool airy_disc_pass(dm_entity* entities, uint32_t entity_count)
     
     dm_render_command_end_renderpass(bb_handles.point_pass);
     
-    dm_render_command_set_primitive_topology(DM_TOPOLOGY_TRIANGLE_LIST);
+    //dm_render_command_set_primitive_topology(DM_TOPOLOGY_TRIANGLE_LIST);
     
     /*
     // now use texture to blur each single pixel star out with airy disc, then render to a quad that fills screen

@@ -94,7 +94,7 @@ struct lights_uniform
 
 float3 calc_point_light(point_light light, float3 normal, float3 frag_pos, float3 view_dir, float3 diffuse_color, float3 specular_color, float3 texture_color)
 {
-	float3 light_pos = light.position.xyz;
+	float3 light_pos   = light.position.xyz;
 	float3 light_dir   = normalize(light_pos - frag_pos);
 	float3 reflect_dir = reflect(-light_dir, normal);
 
@@ -113,7 +113,7 @@ float3 calc_point_light(point_light light, float3 normal, float3 frag_pos, float
 
 float3 calc_blackbody_light(blackbody bb, float3 normal, float3 frag_pos, float3 view_dir, float3 diffuse_color, float3 specular_color, float3 texture_color)
 {
-	float3 light_pos = bb.position.xyz;
+	float3 light_pos   = bb.position.xyz;
 	float3 light_dir   = normalize(light_pos - frag_pos);
 	float3 reflect_dir = reflect(-light_dir, normal);
 
