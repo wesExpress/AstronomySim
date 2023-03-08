@@ -31,7 +31,8 @@ return_code app_init()
     dm_ecs_entity_add_mesh(entities[entity_count], BOX_MESH);
 #else
     dm_ecs_entity_add_transform(entities[entity_count], 0,0,0, PLANE_SCALE * 0.5f,PLANE_SCALE * 0.5f,PLANE_SCALE * 0.5f, 0,0,0,1);
-    dm_ecs_entity_add_collision_sphere(entities[entity_count], PLANE_SCALE * 0.5f);
+    //dm_ecs_entity_add_collision_sphere(entities[entity_count], PLANE_SCALE * 0.5f);
+    dm_ecs_entity_add_collision_mesh(entities[entity_count]);
     dm_ecs_entity_add_mesh(entities[entity_count], ICOSPHERE_MESH);
 #endif
     dm_ecs_entity_add_physics_at_rest(entities[entity_count], 1e12f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
@@ -71,9 +72,6 @@ return_code app_update(view_camera* camera)
     dm_physics_apply_earth_gravity(entities[entity_count]);
 #endif
     
-    //if(dm_ecs_entity_is_colliding(entities[entity_count])) floating_origin_enable_rot(entities[entity_count-1]);
-    //else floating_origin_disable_rot();
-    
     return SUCCESS;
 }
 
@@ -86,7 +84,10 @@ return_code app_render()
     
     dm_entity entity = entities[entity_count];
     
-    dm_debug_render_line(pos_x[entity],pos_y[entity],pos_z[entity], pos_x[entity],pos_y[entity]-radius[entity],pos_z[entity], 1.0f, 1,1,1,1);
+    //dm_debug_render_line(pos_x[entity],pos_y[entity],pos_z[entity], pos_x[entity],pos_y[entity]-radius[entity],pos_z[entity], 1.0f, 1,1,1,1);
+    
+    dm_debug_render_aabb(entities[1]);
+    dm_debug_render_aabb(entities[2]);
     
     return SUCCESS;
 }
