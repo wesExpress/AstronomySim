@@ -42,7 +42,7 @@ typedef struct default_blackbody_t
     float   padding[3]; 
 } default_blackbody;
 
-#define MAX_LIGHTS 500
+#define MAX_LIGHTS 10
 typedef struct default_lights_uni_t
 {
     default_point_light point_lights[MAX_LIGHTS];
