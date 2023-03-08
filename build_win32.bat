@@ -3,7 +3,7 @@ SetLocal EnableDelayedExpansion
 
 SET SRC_DIR=%cd%
 
-SET /A opengl=0
+SET /A opengl=1
 SET /A debug=1
 SET /A simd_256=1
 
@@ -48,7 +48,7 @@ cl %compiler_flags% %defines% /FC %include_flags% %c_filenames% /Fe%assembly% %l
 
 REM hlsl shaders
 IF /I "%opengl%" EQU "0" (
-	SET fxc_flags=/Fc /Od /Zi
+	SET fxc_flags=/Fd /Od /Zi
 	
 	if not exist "assets/shaders" mkdir assets\shaders
 

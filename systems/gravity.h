@@ -1,9 +1,9 @@
 #ifndef __GRAVITY_H__
 #define __GRAVITY_H__
 
-#include "../dm.h"
+#include "../DarkMatter/dm.h"
 
-#if 1
+#if 0
 #define SIMD_GRAVITY
 #endif
 

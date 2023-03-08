@@ -2,7 +2,7 @@
 
 void update_camera_view(view_camera* camera)
 {
-    camera->view = dm_mat_view_v(camera->pos, dm_vec3_add_vec3(camera->pos, camera->forward), dm_vec3_unit_y);
+    camera->view = dm_mat_view_v(camera->pos, dm_vec3_add_vec3(camera->pos, camera->forward), camera->up);
     camera->inv_view = dm_mat4_inverse(camera->view);
     
     camera->view_proj = dm_mat4_mul_mat4(camera->view, camera->proj);
@@ -34,15 +34,17 @@ void init_camera(dm_vec3 pos, dm_vec3 forward, float near_plane, float far_plane
     camera->view_proj = dm_mat4_mul_mat4(camera->view, camera->proj);
 }
 
-void update_camera(float delta_time, view_camera* camera)
+void update_camera(view_camera* camera)
 {
     if(!dm_input_is_key_pressed(DM_KEY_LSHIFT)) return;
     
-    float speed = delta_time * camera->move_speed;
+    camera->up = dm_vec3_unit_y;
+    
+    float speed =  camera->move_speed * dm_physics_get_simulation_time_step();
     int delta_x, delta_y;
     dm_input_get_mouse_delta(&delta_x, &delta_y);
     dm_vec2 look_delta = dm_vec2_set((float)delta_x * camera->look_sens, (float)delta_y * camera->look_sens);
-    dm_vec3 right = dm_vec3_cross(camera->forward, dm_vec3_unit_y);
+    camera->right = dm_vec3_cross(camera->forward, camera->up);
     
     dm_vec3 delta_pos = { 0 };
     
@@ -60,9 +62,9 @@ void update_camera(float delta_time, view_camera* camera)
         if(dm_input_is_key_pressed(DM_KEY_Q)) delta_pos.y = -1;
         else if(dm_input_is_key_pressed(DM_KEY_E)) delta_pos.y = 1;
         
-        dm_vec3 move_vec = dm_vec3_scale(right, delta_pos.x);
+        dm_vec3 move_vec = dm_vec3_scale(camera->right, delta_pos.x);
         move_vec = dm_vec3_add_vec3(move_vec, dm_vec3_scale(camera->forward, delta_pos.z));
-        move_vec = dm_vec3_add_vec3(move_vec, dm_vec3_scale(dm_vec3_unit_y, delta_pos.y));
+        move_vec = dm_vec3_add_vec3(move_vec, dm_vec3_scale(camera->up, delta_pos.y));
         move_vec = dm_vec3_norm(move_vec);
         move_vec = dm_vec3_scale(move_vec, speed);
         camera->pos = dm_vec3_add_vec3(camera->pos, move_vec);
@@ -75,8 +77,8 @@ void update_camera(float delta_time, view_camera* camera)
         float delta_pitch = look_delta.y;
         float delta_yaw = look_delta.x;
         
-        dm_quat q1 = dm_quat_from_axis_angle_deg(-delta_pitch, right);
-        dm_quat q2 = dm_quat_from_axis_angle_deg(-delta_yaw, dm_vec3_unit_y);
+        dm_quat q1 = dm_quat_from_axis_angle_deg(camera->right, -delta_pitch);
+        dm_quat q2 = dm_quat_from_axis_angle_deg(camera->up, -delta_yaw);
         dm_quat rot = dm_quat_cross(q1, q2);
         dm_quat_norm_inpl(&rot);
         
@@ -96,4 +98,58 @@ void resize_camera(uint32_t width, uint32_t height, view_camera* camera)
     camera->height = height;
     
     update_camera_proj(camera);
+}
+
+void track_camera(dm_vec3 pos, dm_vec3 up, float distance, view_camera* camera)
+{
+    int delta_x, delta_y;
+    dm_input_get_mouse_delta(&delta_x, &delta_y);
+    
+    static float dx = 0.0f;
+    static float dy = 0.0f;
+    
+    dx += (float)delta_x * camera->look_sens;
+    dy += (float)delta_y * camera->look_sens;
+    
+    camera->pos.x = pos.x + distance * dm_sind(dy) * dm_cosd(dx);
+    camera->pos.y = pos.y + distance * dm_cosd(dy);
+    camera->pos.z = pos.z + distance * dm_sind(dy) * dm_sind(dx);
+    
+    camera->forward = dm_vec3_sub_vec3(pos, camera->pos);
+    camera->up = up;
+    
+    update_camera_view(camera);
+}
+
+void set_camera_pos(dm_vec3 pos, view_camera* camera)
+{
+    camera->pos = pos;
+    update_camera_view(camera);
+}
+
+void fps_camera(dm_vec3 pos, dm_vec3 up, view_camera* camera)
+{
+    int delta_x, delta_y;
+    dm_input_get_mouse_delta(&delta_x, &delta_y);
+    dm_vec2 look_delta = dm_vec2_set((float)delta_x * camera->look_sens, (float)delta_y * camera->look_sens);
+    camera->up = up;
+    camera->right = dm_vec3_cross(camera->forward, camera->up);
+    
+    camera->pos = pos;
+    
+    // rotation
+    if(look_delta.x || look_delta.y)
+    {
+        float delta_pitch = look_delta.y;
+        float delta_yaw = look_delta.x;
+        
+        dm_quat q1 = dm_quat_from_axis_angle_deg(camera->right, -delta_pitch);
+        dm_quat q2 = dm_quat_from_axis_angle_deg(camera->up, -delta_yaw);
+        dm_quat rot = dm_quat_cross(q1, q2);
+        dm_quat_norm_inpl(&rot);
+        
+        dm_vec3_rotate_inpl(rot, &camera->forward);
+    }
+    
+    update_camera_view(camera);
 }
