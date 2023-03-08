@@ -31,8 +31,8 @@ return_code app_init()
     dm_ecs_entity_add_mesh(entities[entity_count], BOX_MESH);
 #else
     dm_ecs_entity_add_transform(entities[entity_count], 0,0,0, PLANE_SCALE * 0.5f,PLANE_SCALE * 0.5f,PLANE_SCALE * 0.5f, 0,0,0,1);
-    //dm_ecs_entity_add_collision_sphere(entities[entity_count], PLANE_SCALE * 0.5f);
-    dm_ecs_entity_add_collision_mesh(entities[entity_count]);
+    dm_ecs_entity_add_collision_sphere(entities[entity_count], PLANE_SCALE * 0.5f);
+    //dm_ecs_entity_add_collision_mesh(entities[entity_count]);
     dm_ecs_entity_add_mesh(entities[entity_count], ICOSPHERE_MESH);
 #endif
     dm_ecs_entity_add_physics_at_rest(entities[entity_count], 1e12f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);

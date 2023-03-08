@@ -316,6 +316,11 @@ return_code __blackbody_pass_init(float* positions, float* tex_coords, uint32_t 
         DM_MAKE_VERTEX_ATTRIB("BRIGHTNESS", airy_disc_vertex, brightness, DM_VERTEX_ATTRIB_CLASS_VERTEX, DM_VERTEX_DATA_T_FLOAT, 1, 0, false),
     };
     
+#ifdef DM_OPENGL
+    dm_render_handle point_buffers[] = { bb_handles.point_vb };
+    if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/airy_point_vertex.glsl", "assets/shaders/airy_point_pixel.glsl", point_buffers, unis, airy_point_attribs, pipeline_desc, bb_handles.point_pass)) return RESOURCE_CREATION_FAIL;
+    
+#else
 #ifdef DM_DIRECTX
     const char* airy_vertex = "assets/shaders/airy_point_vertex.fxc";
     const char* airy_pixel = "assets/shaders/airy_point_pixel.fxc";
@@ -323,8 +328,8 @@ return_code __blackbody_pass_init(float* positions, float* tex_coords, uint32_t 
     const char* airy_vertex = "assets/shaders/airy_point.metallib";
     const char* airy_pixel = "assets/shaders/airy_point.metallib";
 #endif
-    
     if(!DM_RENDERER_CREATE_RENDERPASS(airy_vertex, airy_pixel, unis, airy_point_attribs, pipeline_desc, bb_handles.point_pass)) return RESOURCE_CREATION_FAIL;
+#endif
     
     // blur pass
     float blur_vertices[] = {
@@ -338,7 +343,7 @@ return_code __blackbody_pass_init(float* positions, float* tex_coords, uint32_t 
     };
     if(!__dm_renderer_create_static_vertex_buffer(blur_vertices, sizeof(blur_vertices), sizeof(float) * 4, &bb_handles.blur_vb)) return RESOURCE_CREATION_FAIL;
     
-#ifndef DM_METAL
+#if 0
     dm_uniform blur_uni[] = {
         { .data_size=sizeof(airy_blur_uni), .name="scene_uni" }
     };
@@ -350,6 +355,7 @@ return_code __blackbody_pass_init(float* positions, float* tex_coords, uint32_t 
     
     if(!DM_RENDERER_CREATE_RENDERPASS("assets/shaders/airy_blur_vertex.fxc", "assets/shaders/airy_blur_pixel.fxc", blur_uni, airy_blur_attribs, pipeline_desc, bb_handles.blur_pass)) return RESOURCE_CREATION_FAIL;
 #endif
+    
     // register render system
     dm_ecs_id blackbody_system_component_ids[] = { DM_COMPONENT_TRANSFORM, DM_COMPONENT_MESH, get_blackbody_id() };
     dm_ecs_id blackbody_system_exclude_ids[] = { get_light_id() };
