@@ -37,7 +37,7 @@ struct fragment_out
 struct scene_uniform
 {
 	float4x4 view_proj;
-	float3   view_pos;
+	packed_float3   view_pos;
 	float    fcoef_inv;
 };
 
