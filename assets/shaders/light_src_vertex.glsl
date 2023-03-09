@@ -12,7 +12,7 @@ struct ps_input
 	vec4  position;
 	vec2  tex_coords;
 	vec4  obj_diffuse;
-	float logz;
+	float depth;
 };
 
 layout (std140) uniform scene_uni
@@ -31,7 +31,7 @@ void main()
 
 	vs_output.obj_diffuse = obj_diffuse;
 
-	vs_output.logz = 1.0f + vs_output.position.w;
+	vs_output.depth = log2(1.0f + vs_output.position.w) * fcoef_inv;
 
 	gl_Position = vs_output.position;
 }

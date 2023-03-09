@@ -2,11 +2,10 @@
 
 struct ps_input
 {
-	vec4 position;
-	vec2 tex_coords;
-	vec4 obj_diffuse;
-	float logz;
-	float brightness;
+	vec4  position;
+	vec2  tex_coords;
+	vec4  obj_color;
+	float depth;
 };
 
 layout (std140) uniform scene_uni
@@ -20,6 +19,6 @@ out vec4 FragColor;
 
 void main()
 {
-	FragColor = vs_output.obj_diffuse * vs_output.brightness;
-	gl_FragDepth = log2(vs_output.logz) * fcoef_inv;
+	FragColor = vs_output.obj_color;
+	gl_FragDepth = vs_output.depth;
 }
