@@ -15,7 +15,7 @@ struct PS_OUTPUT
 	float  depth : SV_Depth;
 };
 
-#define MAX_LIGHTS 500
+#define MAX_LIGHTS 10
 struct point_light
 {
 	float4 position;
