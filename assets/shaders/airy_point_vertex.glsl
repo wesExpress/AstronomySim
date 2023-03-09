@@ -7,10 +7,9 @@ layout (location = 3) in float brightness;
 
 struct ps_input
 {
-	vec4 position;
-	vec4 obj_color;
-	float logz;
-	float brightness;
+	vec4  position;
+	vec4  obj_color;
+	float depth;
 };
 
 layout (std140) uniform scene_uni
@@ -25,9 +24,9 @@ void main()
 {
 	vs_output.position =  view_proj * vec4(pos, 1);
 
-	vs_output.obj_color = obj_color;
+	vs_output.obj_color = obj_color * brightness;
 
-	vs_output.logz = 1.0f + vs_output.position.w;
+	vs_output.depth = log2(1.0f + vs_output.position.w) * fcoef_inv;
 
 	gl_Position = vs_output.position;
 }

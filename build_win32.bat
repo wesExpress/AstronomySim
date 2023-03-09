@@ -3,7 +3,7 @@ SetLocal EnableDelayedExpansion
 
 SET SRC_DIR=%cd%
 
-SET /A opengl=0
+SET /A opengl=1
 SET /A debug=1
 SET /A simd_256=1
 
