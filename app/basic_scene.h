@@ -20,7 +20,7 @@ return_code app_init()
     
     entities[entity_count] = dm_ecs_create_entity();
     dm_ecs_entity_add_transform(entities[entity_count], 0,4,0, 0,0,0, 0,0,0,1);
-    add_point_light_component(entities[entity_count], dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec3_set(0,0,0), 1,0.0009f,0.00007f);
+    add_point_light_component(entities[entity_count], dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec4_set(1,1,1,1), dm_vec3_set(0,0,0), 1,0.25f,0.0007f);
     
     entities[++entity_count] = dm_ecs_create_entity();
 #define PLANE_SCALE 5.0f
@@ -38,8 +38,7 @@ return_code app_init()
     dm_ecs_entity_add_physics_at_rest(entities[entity_count], 1e12f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_material(entities[entity_count], dm_vec4_set(0.5f,0.15f,0,1), dm_vec4_set(0.5f,0,0,1));
     
-    //dm_physics_add_angular_momentum(entities[entity_count], dm_vec3_set(0,5e10f,0));
-    dm_physics_add_angular_velocity(entities[entity_count], dm_vec3_set(0,0.1f,0));
+    dm_physics_add_angular_velocity(entities[entity_count], dm_vec3_set(0.1f,0.1f,0));
     
     float size = 0.25f;
     float half_s = size * 0.5f;
@@ -57,7 +56,7 @@ return_code app_init()
     dm_ecs_entity_add_physics_at_rest(entities[entity_count], 1.0f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_material(entities[entity_count], dm_vec4_set(0,0.25f,0.25f,1), dm_vec4_set(0.5f,0,0,1));
     
-    //dm_physics_add_impulse(entities[entity_count], dm_vec3_set(0,0,-0.5f));
+    dm_physics_add_impulse(entities[entity_count], dm_vec3_set(0,0,-0.9f));
     
     floating_origin_system_init(entities[entity_count]);
     
@@ -77,8 +76,8 @@ return_code app_update(view_camera* camera)
 
 return_code app_render()
 {
-    dm_debug_render_aabb(entities[1]);
-    dm_debug_render_aabb(entities[2]);
+    //dm_debug_render_aabb(entities[1]);
+    //dm_debug_render_aabb(entities[2]);
     
     return SUCCESS;
 }
