@@ -153,7 +153,7 @@ return_code __light_src_pass_init(float* positions, float* tex_coords, uint32_t 
     };
     
     dm_uniform unis[] = {
-        { .data_size=sizeof(light_src_scene_uni), .stage=DM_UNIFORM_STAGE_BOTH, .name="scene_uni" }
+        { .data_size=sizeof(light_src_scene_uni), .stage=DM_UNIFORM_STAGE_VERTEX, .name="scene_uni" }
     };
     
     // pipeline desc

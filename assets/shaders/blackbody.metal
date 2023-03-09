@@ -10,9 +10,9 @@ struct vertex_in
 
 struct vertex_inst
 {
-	float4x4      obj_model;
-	float4        object_diffuse;
-	float         brightness;
+	float4x4 obj_model;
+	float4   object_diffuse;
+	float    brightness;
 };
 
 struct vertex_out
@@ -20,7 +20,7 @@ struct vertex_out
 	float4 position [[position]];
 	float2 tex_coords;
 	float4 obj_diffuse;
-	float  logz;
+	float  depth;
 	float  brightness;
 };
 
@@ -48,18 +48,18 @@ vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], co
 	v_out.tex_coords = v_in.tex_coords;
 	v_out.obj_diffuse = v_inst.object_diffuse;
 
-	v_out.logz = 1.0f + v_out.position.w;
+	v_out.depth = log2(1.0f + v_out.position.w) * scene_uni.fcoef_inv;
 	v_out.brightness = instance_data[instid].brightness;
 
 	return v_out;
 }
 
-fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], texture2d<float> obj_texture [[texture(0)]], constant scene_uniform& scene_uni [[buffer(0)]], sampler samplr [[sampler(0)]])
+fragment fragment_out fragment_main(vertex_out v_in [[stage_in]])
 {
 	fragment_out out;
 
 	out.color = v_in.obj_diffuse * v_in.brightness;
-	out.depth = log2(v_in.logz) * scene_uni.fcoef_inv;
+	out.depth = v_in.depth;
 
 	return out;
 }

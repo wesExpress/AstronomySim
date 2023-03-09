@@ -25,7 +25,7 @@ struct vertex_out
 	float3 frag_pos;
 	float4 obj_diffuse;
 	float4 obj_specular;
-	float  logz;
+	float  depth;
 };
 
 struct fragment_out
@@ -36,9 +36,9 @@ struct fragment_out
 
 struct scene_uniform
 {
-	float4x4 view_proj;
-	packed_float3   view_pos;
-	float    fcoef_inv;
+	float4x4      view_proj;
+	packed_float3 view_pos;
+	float         fcoef_inv;
 };
 
 vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], const device vertex_inst* instance_data [[buffer(1)]], constant scene_uniform& scene_uni [[buffer(2)]], uint vid [[vertex_id]], uint instid [[instance_id]])
@@ -56,7 +56,7 @@ vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], co
 	v_out.obj_diffuse = v_inst.object_diffuse;
 	v_out.obj_specular = v_inst.object_specular;
 
-	v_out.logz = 1.0f + v_out.position.w;
+	v_out.depth = log2(1.0f + v_out.position.w) * scene_uni.fcoef_inv;
 
 	return v_out;
 }
@@ -132,7 +132,7 @@ fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], texture2d<floa
 
 	float3 norm_normal = normalize(v_in.normal);
 	float3 view_dir = normalize(scene_uni.view_pos.xyz - v_in.frag_pos);
-	
+
 	out.color = 0;
 
 	for(uint i=0; i<lights_uni.num_point_lights; i++)
@@ -148,7 +148,7 @@ fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], texture2d<floa
 	}
 
 	out.color *= obj_texture.sample(samplr, v_in.tex_coords);
-	out.depth = log2(v_in.logz) * scene_uni.fcoef_inv;
+	out.depth = v_in.depth;
 
 	return out;
 }
