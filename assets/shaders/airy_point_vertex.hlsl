@@ -9,7 +9,7 @@ struct PS_INPUT
 {
 	float4 position   : SV_Position;
 	float4 obj_color  : OBJ_COLOR1;
-	float  logz       : LOGZ;
+	float  depth      : DEPTH;
 	float  brightness : BRIGHTNESS1;
 };
 
@@ -27,7 +27,7 @@ PS_INPUT v_main(VS_INPUT input)
 
 	output.obj_color = input.obj_color;
 
-	output.logz = 1.0f + output.position.w;
+	output.depth = log2(1.0f + output.position.w) * fcoef_inv;
 	output.brightness = input.brightness;
 
 	return output;

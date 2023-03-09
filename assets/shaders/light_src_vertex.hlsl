@@ -11,7 +11,7 @@ struct PS_INPUT
 	float4 position     : SV_Position;
 	float2 tex_coords   : TEXCOORD1;
 	float4 obj_diffuse  : OBJ_DIFFUSE1;
-	float  logz         : LOGZ;
+	float  depth        : DEPTH;
 };
 
 cbuffer scene_cb : register(b0)
@@ -31,7 +31,7 @@ PS_INPUT v_main(VS_INPUT input)
 
 	output.obj_diffuse = input.obj_diffuse;
 
-	output.logz = 1.0f + output.position.w;
+	output.depth = log2(1.0f + output.position.w) * fcoef_inv;
 
 	return output;
 }

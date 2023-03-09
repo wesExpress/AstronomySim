@@ -6,7 +6,7 @@ struct PS_INPUT
 	float3 frag_pos     : FRAG_POS;
 	float4 obj_diffuse  : OBJ_DIFFUSE1;
 	float4 obj_specular : OBJ_SPECULAR1;
-	float  logz         : LOGZ;
+	float  depth        : DEPTH;
 };
 
 struct PS_OUTPUT
@@ -112,7 +112,7 @@ PS_OUTPUT p_main(PS_INPUT input)
 	}
 	
 	output.color *= obj_texture.Sample(sample_state, input.tex_coords);
-	output.depth = log2(input.logz) * fcoef_inv;
+	output.depth = input.depth;
 
 	return output;
 }
