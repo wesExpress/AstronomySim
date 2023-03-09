@@ -61,7 +61,7 @@ vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], co
 	return v_out;
 }
 
-#define MAX_LIGHTS 500
+#define MAX_LIGHTS 10
 struct point_light
 {
 	float4 position;

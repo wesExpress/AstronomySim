@@ -77,15 +77,6 @@ return_code app_update(view_camera* camera)
 
 return_code app_render()
 {
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
-    float* radius = dm_ecs_get_component_member(DM_COMPONENT_COLLISION, DM_COLLISION_MEM_UNION_0);
-    
-    dm_entity entity = entities[entity_count];
-    
-    //dm_debug_render_line(pos_x[entity],pos_y[entity],pos_z[entity], pos_x[entity],pos_y[entity]-radius[entity],pos_z[entity], 1.0f, 1,1,1,1);
-    
     dm_debug_render_aabb(entities[1]);
     dm_debug_render_aabb(entities[2]);
     
