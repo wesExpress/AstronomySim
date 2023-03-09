@@ -37,7 +37,7 @@ struct fragment_out
 struct scene_uniform
 {
 	float4x4 view_proj;
-	float3   view_pos;
+	packed_float3   view_pos;
 	float    fcoef_inv;
 };
 
@@ -92,7 +92,7 @@ struct lights_uniform
 
 #define INV_4PI 0.0795774715459f
 
-float3 calc_point_light(point_light light, float3 normal, float3 frag_pos, float3 view_dir, float3 diffuse_color, float3 specular_color, float3 texture_color)
+float3 calc_point_light(point_light light, float3 normal, float3 frag_pos, float3 view_dir, float3 diffuse_color, float3 specular_color)
 {
 	float3 light_pos   = light.position.xyz;
 	float3 light_dir   = normalize(light_pos - frag_pos);
@@ -108,10 +108,10 @@ float3 calc_point_light(point_light light, float3 normal, float3 frag_pos, float
 	float3 diffuse  = light.diffuse.xyz  * diff * diffuse_color;
 	float3 specular = light.specular.xyz * spec * specular_color;
 
-	return (ambient + diffuse + specular) * texture_color * attenuation;
+	return (ambient + diffuse + specular) * attenuation;
 }
 
-float3 calc_blackbody_light(blackbody bb, float3 normal, float3 frag_pos, float3 view_dir, float3 diffuse_color, float3 specular_color, float3 texture_color)
+float3 calc_blackbody_light(blackbody bb, float3 normal, float3 frag_pos, float3 view_dir, float3 diffuse_color, float3 specular_color)
 {
 	float3 light_pos   = bb.position.xyz;
 	float3 light_dir   = normalize(light_pos - frag_pos);
@@ -123,7 +123,7 @@ float3 calc_blackbody_light(blackbody bb, float3 normal, float3 frag_pos, float3
 	float3 diffuse  = bb.color.xyz * diff * diffuse_color;
 	float3 specular = bb.color.xyz * spec * specular_color;
 
-	return (diffuse + specular) * texture_color * bb.brightness / 2048.0f;
+	return (diffuse + specular) * bb.brightness / 2048.0f;
 }
 
 fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], texture2d<float> obj_texture [[texture(0)]], constant scene_uniform& scene_uni [[buffer(0)]], constant lights_uniform& lights_uni [[buffer(1)]], sampler samplr [[sampler(0)]])
@@ -132,23 +132,22 @@ fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], texture2d<floa
 
 	float3 norm_normal = normalize(v_in.normal);
 	float3 view_dir = normalize(scene_uni.view_pos.xyz - v_in.frag_pos);
-
-	float4 texture_color = obj_texture.sample(samplr, v_in.tex_coords);
-
+	
 	out.color = 0;
 
 	for(uint i=0; i<lights_uni.num_point_lights; i++)
 	{
-		float3 color = calc_point_light(lights_uni.point_lights[i], norm_normal, v_in.frag_pos, view_dir, v_in.obj_diffuse.xyz, v_in.obj_specular.xyz, texture_color.xyz);
+		float3 color = calc_point_light(lights_uni.point_lights[i], norm_normal, v_in.frag_pos, view_dir, v_in.obj_diffuse.xyz, v_in.obj_specular.xyz);
 		out.color += float4(color, 1);
 	}
 
 	for(uint j=0; j<lights_uni.num_blackbodies; j++)
 	{
-		float3 color = calc_blackbody_light(lights_uni.blackbodies[j], norm_normal, v_in.frag_pos, view_dir, v_in.obj_diffuse.xyz, v_in.obj_specular.xyz, texture_color.xyz);
+		float3 color = calc_blackbody_light(lights_uni.blackbodies[j], norm_normal, v_in.frag_pos, view_dir, v_in.obj_diffuse.xyz, v_in.obj_specular.xyz);
 		out.color += float4(color, 1);
 	}
 
+	out.color *= obj_texture.sample(samplr, v_in.tex_coords);
 	out.depth = log2(v_in.logz) * scene_uni.fcoef_inv;
 
 	return out;
