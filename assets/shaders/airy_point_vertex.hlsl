@@ -27,7 +27,7 @@ PS_INPUT v_main(VS_INPUT input)
 
 	output.obj_color = input.obj_color;
 
-	output.depth = log2(1.0f + output.position.w) * fcoef_inv;
+	output.depth = 1.0f + output.position.w;
 	output.brightness = input.brightness;
 
 	return output;

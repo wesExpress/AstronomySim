@@ -31,7 +31,7 @@ PS_INPUT v_main(VS_INPUT input)
 
 	output.obj_diffuse = input.obj_diffuse;
 
-	output.depth = log2(1.0f + output.position.w) * fcoef_inv;
+	output.depth = 1.0f + output.position.w;
 
 	return output;
 }

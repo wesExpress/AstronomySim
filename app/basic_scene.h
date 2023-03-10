@@ -7,7 +7,7 @@
 static dm_entity entities[NUM_ENTITIES] = { 0 };
 static uint32_t  entity_count = 0;
 
-//#define NBODY
+#define NBODY
 #define OBJ_SPHERE
 
 return_code app_init()
@@ -78,7 +78,7 @@ return_code app_render()
     dm_debug_render_aabb(entities[1]);
     dm_debug_render_aabb(entities[2]);
     
-    dm_debug_render_box_with_model_matrix(dm_ecs_entity_get_model_matrix(entities[1]), dm_vec4_set(1,1,1,1));
+    //dm_debug_render_box_with_model_matrix(dm_ecs_entity_get_model_matrix(entities[1]), dm_vec4_set(1,1,1,1));
     
     return SUCCESS;
 }

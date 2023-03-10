@@ -31,7 +31,7 @@ void main()
 
 	vs_output.obj_diffuse = obj_diffuse;
 
-	vs_output.depth = log2(1.0f + vs_output.position.w) * fcoef_inv;
+	vs_output.depth = vs_output.position.w;
 
 	gl_Position = vs_output.position;
 }

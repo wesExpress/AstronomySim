@@ -12,12 +12,18 @@ struct PS_OUTPUT
 	float  depth : SV_Depth;
 };
 
+cbuffer scene_cb : register(b0)
+{
+	matrix view_proj;
+	float  fcoef_inv;
+};
+
 PS_OUTPUT p_main(PS_INPUT input)
 {
 	PS_OUTPUT output = (PS_OUTPUT)0;
 
 	output.color = input.obj_diffuse;
-	output.depth = input.depth;
+	output.depth = log2(input.depth) * fcoef_inv;
 
 	return output;
 }

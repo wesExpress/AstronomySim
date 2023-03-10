@@ -113,7 +113,7 @@ PS_OUTPUT p_main(PS_INPUT input)
 	
 	output.color *= obj_texture.Sample(sample_state, input.tex_coords);
 	
-	output.depth = input.depth;
+	output.depth = log2(input.depth) * fcoef_inv;
 
 	return output;
 }

@@ -104,7 +104,6 @@ void main()
 	}
 
 	color *= texture(default_texture, vs_output.tex_coords);
-	//color *= vec4(vs_output.normal, 1);
 
-	gl_FragDepth = vs_output.depth;
+	gl_FragDepth = log2(vs_output.depth) * fcoef_inv;
 }

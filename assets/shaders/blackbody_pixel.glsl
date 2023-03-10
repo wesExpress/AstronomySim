@@ -20,5 +20,5 @@ out vec4 FragColor;
 void main()
 {
 	FragColor = vs_output.obj_color;
-	gl_FragDepth = vs_output.depth;
+	gl_FragDepth = log2(vs_output.depth) * fcoef_inv;
 }

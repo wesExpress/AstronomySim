@@ -48,18 +48,18 @@ vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], co
 	v_out.tex_coords = v_in.tex_coords;
 	v_out.obj_diffuse = v_inst.object_diffuse;
 
-	v_out.depth = log2(1.0f + v_out.position.w) * scene_uni.fcoef_inv;
+	v_out.depth = 1.0f + v_out.position.w;
 	v_out.brightness = instance_data[instid].brightness;
 
 	return v_out;
 }
 
-fragment fragment_out fragment_main(vertex_out v_in [[stage_in]])
+fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], constant scene_uniform& scene_uni [[buffer(0)]])
 {
 	fragment_out out;
 
 	out.color = v_in.obj_diffuse * v_in.brightness;
-	out.depth = v_in.depth;
+	out.depth = log2(v_in.depth) * scene_uni.fcoef_inv;
 
 	return out;
 }

@@ -56,7 +56,7 @@ vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], co
 	v_out.obj_diffuse = v_inst.object_diffuse;
 	v_out.obj_specular = v_inst.object_specular;
 
-	v_out.depth = log2(1.0f + v_out.position.w) * scene_uni.fcoef_inv;
+	v_out.depth = 1.0f + v_out.position.w;
 
 	return v_out;
 }
@@ -148,7 +148,7 @@ fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], texture2d<floa
 	}
 
 	out.color *= obj_texture.sample(samplr, v_in.tex_coords);
-	out.depth = v_in.depth;
+	out.depth = log2(v_in.depth) * scene_uni.fcoef_inv;
 
 	return out;
 }

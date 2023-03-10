@@ -38,17 +38,17 @@ vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], co
 	
 	v_out.obj_color = v_in.obj_color * v_in.brightness;
 
-	v_out.depth = log2(1.0f + v_out.position.w) * scene_uni.fcoef_inv;
+	v_out.depth = 1.0f + v_out.position.w;
 
 	return v_out;
 }
 
-fragment fragment_out fragment_main(vertex_out v_in [[stage_in]])
+fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], constant scene_uniform& scene_uni [[buffer(0)]])
 {
 	fragment_out out;
 
 	out.color = v_in.obj_color;
-	out.depth = v_in.depth;
+	out.depth = log2(v_in.depth) * scene_uni.fcoef_inv;
 
 	return out;
 }

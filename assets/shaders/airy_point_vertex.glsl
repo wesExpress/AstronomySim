@@ -26,7 +26,7 @@ void main()
 
 	vs_output.obj_color = obj_color * brightness;
 
-	vs_output.depth = log2(1.0f + vs_output.position.w) * fcoef_inv;
+	vs_output.depth = 1.0f + vs_output.position.w;
 
 	gl_Position = vs_output.position;
 }
