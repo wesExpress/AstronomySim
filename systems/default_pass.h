@@ -115,14 +115,10 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
         
         default_instance* inst = &default_instances[mesh_handle][default_insts_count[mesh_handle]++];
         
-        inst->model = dm_mat_scale(dm_mat4_identity(), scale);
-        inst->model = dm_mat4_mul_mat4(inst->model, dm_mat4_rotate_from_quat(rot));
-        inst->model = dm_mat_translate(inst->model, pos);
+        inst->model = dm_ecs_entity_get_model_matrix(entity);
         
         inst->normal = dm_mat4_inverse(inst->model);
-#ifdef DM_DIRECTX
-        inst->model = dm_mat4_transpose(inst->model);
-#else
+#ifndef DM_DIRECTX
         inst->normal = dm_mat4_transpose(inst->normal);
 #endif
         
