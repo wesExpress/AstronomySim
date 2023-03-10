@@ -122,8 +122,6 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
         inst->normal = dm_mat4_transpose(dm_mat4_inverse(inst->model));
 #ifdef DM_DIRECTX
         inst->model = dm_mat4_transpose(inst->model);
-#else
-        //inst->normal = dm_mat4_transpose(inst->normal);
 #endif
         
         inst->diffuse_color = diffuse;
