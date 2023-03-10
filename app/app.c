@@ -22,14 +22,15 @@ static application_data app_data = { 0 };
 #include "../systems/gravity.h"
 #include "../systems/floating_origin.h"
 
-//#define STRESS_TEST
+#define STRESS_TEST
 #ifndef STRESS_TEST
 //#define PHYSICS_TEST
 #define BASIC
 #endif
 
 #ifdef STRESS_TEST
-#include "stress_test.h"
+//#include "stress_test.h"
+#include "new_stress_test.h"
 #elif defined(PHYSICS_TEST)
 #include "physics_test.h"
 #elif defined(BASIC)
