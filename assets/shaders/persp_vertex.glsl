@@ -36,7 +36,7 @@ void main()
 	vs_output.frag_pos = vs_output.position.xyz;
 	vs_output.position = view_proj * vs_output.position;
 
-	vs_output.normal = (obj_norm * vec4(normal, 1)).xyz;
+	vs_output.normal = (obj_norm * vec4(normal, 0)).xyz;
 	
 	vs_output.tex_coords = tex_coords;
 
