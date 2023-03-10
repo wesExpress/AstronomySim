@@ -112,7 +112,6 @@ PS_OUTPUT p_main(PS_INPUT input)
 	}
 	
 	output.color *= obj_texture.Sample(sample_state, input.tex_coords);
-	output.color *= float4(norm_normal, 1);
 	
 	output.depth = input.depth;
 
