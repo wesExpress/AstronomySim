@@ -32,8 +32,9 @@ out ps_input vs_output;
 
 void main()
 {
-	vs_output.frag_pos = (obj_model * vec4(pos.x, pos.y, pos.z, 1)).xyz;
-	vs_output.position =  view_proj * vec4(vs_output.frag_pos, 1);
+	vs_output.position = obj_model * vec4(pos, 1);
+	vs_output.frag_pos = vs_output.position.xyz;
+	vs_output.position = view_proj * vs_output.position;
 
 	vs_output.normal = (obj_norm * vec4(normal, 1)).xyz;
 	

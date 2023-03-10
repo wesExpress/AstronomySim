@@ -53,8 +53,8 @@ out vec4 color;
 
 vec3 calc_point_light(point_light light, vec3 normal, vec3 frag_pos, vec3 view_dir, vec3 diffuse_color, vec3 specular_color)
 {
-	vec3 light_pos = light.position.xyz;
-	vec3 light_dir = normalize(light_pos - frag_pos);
+	vec3 light_pos   = light.position.xyz;
+	vec3 light_dir   = normalize(light_pos - frag_pos);
 	vec3 reflect_dir = reflect(-light_dir, normal);
 
 	float diff = max(dot(normal, light_dir), 0.0f);
@@ -63,8 +63,8 @@ vec3 calc_point_light(point_light light, vec3 normal, vec3 frag_pos, vec3 view_d
 	float distance    = length(light_pos - frag_pos);
 	float attenuation = 1.0f / (light.params.x + light.params.y * distance + light.params.z * distance * distance);
 
-	vec3 ambient  = light.ambient.xyz * diffuse_color;
-	vec3 diffuse  = light.diffuse.xyz * diff * diffuse_color;
+	vec3 ambient  = light.ambient.xyz  * diffuse_color;
+	vec3 diffuse  = light.diffuse.xyz  * diff * diffuse_color;
 	vec3 specular = light.specular.xyz * spec * specular_color;
 
 	return (ambient + diffuse + specular) * attenuation;
@@ -72,7 +72,7 @@ vec3 calc_point_light(point_light light, vec3 normal, vec3 frag_pos, vec3 view_d
 
 vec3 calc_blackbody_light(blackbody bb, vec3 normal, vec3 frag_pos, vec3 view_dir, vec3 diffuse_color, vec3 specular_color)
 {
-	vec3 light_pos = bb.position.xyz;
+	vec3 light_pos   = bb.position.xyz;
 	vec3 light_dir   = normalize(light_pos - frag_pos);
 	vec3 reflect_dir = reflect(-light_dir, normal);
 
@@ -104,6 +104,7 @@ void main()
 	}
 
 	color *= texture(default_texture, vs_output.tex_coords);
+	color *= vec4(vs_output.normal, 1);
 
 	gl_FragDepth = vs_output.depth;
 }

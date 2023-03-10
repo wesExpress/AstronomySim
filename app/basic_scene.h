@@ -38,7 +38,7 @@ return_code app_init()
     dm_ecs_entity_add_physics_at_rest(entities[entity_count], 1e12f, DM_PHYSICS_BODY_TYPE_RIGID, DM_PHYSICS_MOVEMENT_KINEMATIC);
     dm_ecs_entity_add_material(entities[entity_count], dm_vec4_set(0.5f,0.15f,0,1), dm_vec4_set(0.5f,0,0,1));
     
-    dm_physics_add_angular_velocity(entities[entity_count], dm_vec3_set(0.1f,0.1f,0));
+    dm_physics_add_angular_velocity(entities[entity_count], dm_vec3_set(0.1f,0.1f,0.1f));
     
     float size = 0.25f;
     float half_s = size * 0.5f;
@@ -58,7 +58,7 @@ return_code app_init()
     
     dm_physics_add_impulse(entities[entity_count], dm_vec3_set(0,0,-0.9f));
     
-    floating_origin_system_init(entities[entity_count]);
+    //floating_origin_system_init(entities[entity_count]);
     
     return SUCCESS;
 }
