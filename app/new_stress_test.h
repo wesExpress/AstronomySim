@@ -1,13 +1,13 @@
 #ifdef DM_DEBUG
-#define D_SCALE 30.0f
-#define NUM_OBJECTS 512
+#define D_SCALE 4.0f
+#define NUM_OBJECTS 10
 #else
 #define D_SCALE 75.0f
 #define NUM_OBJECTS 1024
 #endif
 
-#define M_SCALE  1e9f    // kg
-#define V_SCALE  1.0f   // m/s
+#define M_SCALE  2e9f    // kg
+#define V_SCALE  0.5f   // m/s
 #define HD       D_SCALE * 0.5f
 #define R        2.0f
 #define HR       R * 0.5f
