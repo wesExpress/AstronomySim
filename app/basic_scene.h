@@ -24,7 +24,7 @@ return_code app_init()
     
     entities[++entity_count] = dm_ecs_create_entity();
 #define PLANE_SCALE 5.0f
-#if 1
+#if 0
 #define PLANE_DEPTH  0.1f
     dm_ecs_entity_add_transform(entities[entity_count], 0,0,0, PLANE_SCALE,PLANE_DEPTH,PLANE_SCALE, 0,0,0,1);
     dm_ecs_entity_add_collision_box(entities[entity_count], dm_vec3_set(-PLANE_SCALE * 0.5f,-PLANE_DEPTH * 0.5f,-PLANE_SCALE * 0.5f), dm_vec3_set(PLANE_SCALE * 0.5f,PLANE_DEPTH * 0.5f,PLANE_SCALE * 0.5f));
@@ -43,7 +43,7 @@ return_code app_init()
     float half_s = size * 0.5f;
     
     entities[++entity_count] = dm_ecs_create_entity();
-#if 1
+#if 0
     dm_ecs_entity_add_transform(entities[entity_count], 0,7,0, size,size,size, 1,0.25f,1,1);
     dm_ecs_entity_add_collision_box(entities[entity_count], dm_vec3_set(-half_s, -half_s, -half_s), dm_vec3_set(half_s, half_s, half_s));
     dm_ecs_entity_add_mesh(entities[entity_count], BOX_MESH);
@@ -75,10 +75,15 @@ return_code app_update(view_camera* camera)
 
 return_code app_render()
 {
-    dm_debug_render_aabb(entities[1]);
-    dm_debug_render_aabb(entities[2]);
+    //dm_debug_render_aabb(entities[1]);
+    //dm_debug_render_aabb(entities[2]);
     
-    dm_debug_render_box_with_model_matrix(dm_ecs_entity_get_model_matrix(entities[1]), dm_vec4_set(1,1,1,1));
+    //dm_debug_render_box_with_model_matrix(dm_ecs_entity_get_model_matrix(entities[1]), dm_vec4_set(1,1,1,1));
+    
+    if(dm_input_is_mousebutton_pressed(DM_MOUSEBUTTON_L))
+    {
+        dm_physics_add_impulse(entities[2], dm_vec3_scale(dm_ecs_entity_get_transform_right(entities[2]), 0.15f));
+    }
     
     return SUCCESS;
 }

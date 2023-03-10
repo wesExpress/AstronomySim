@@ -112,9 +112,7 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
         inst->model = dm_ecs_entity_get_model_matrix(entity);
         
         inst->normal = dm_mat4_inverse(inst->model);
-#ifndef DM_DIRECTX
         inst->normal = dm_mat4_transpose(inst->normal);
-#endif
         
         inst->diffuse_color = diffuse;
         inst->specular_color = specular;
