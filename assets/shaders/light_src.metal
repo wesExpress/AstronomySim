@@ -51,7 +51,7 @@ vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], co
 	return v_out;
 }
 
-fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], constant scene_uniform& scen_uni [[buffer(0)]])
+fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], constant scene_uniform& scene_uni [[buffer(0)]])
 {
 	fragment_out out;
 

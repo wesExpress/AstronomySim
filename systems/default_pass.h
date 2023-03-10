@@ -85,10 +85,6 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
     float* scale_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_X);
     float* scale_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Y);
     float* scale_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Z);
-    float* rot_i = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_I);
-    float* rot_j = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_J);
-    float* rot_k = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_K);
-    float* rot_r = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_R);
     dm_render_handle* mesh_handles = dm_ecs_get_component_member(DM_COMPONENT_MESH, DM_MESH_MEM_HANDLE);
     dm_vec4* diffuses = dm_ecs_get_component_member(DM_COMPONENT_MATERIAL, DM_MATERIAL_MEM_DIFFUSE);
     dm_vec4* speculars = dm_ecs_get_component_member(DM_COMPONENT_MATERIAL, DM_MATERIAL_MEM_SPECULAR);
@@ -107,8 +103,6 @@ bool default_render_pass(dm_entity* entities, uint32_t entity_count)
         // angular resolution of 'eye'
         if(theta < 0.0003f) continue;
         
-        dm_vec3 scale = dm_vec3_set(scale_x[entity], scale_y[entity], scale_z[entity]);
-        dm_quat rot   = dm_quat_set(rot_i[entity], rot_j[entity], rot_k[entity], rot_r[entity]);
         dm_vec4 diffuse = diffuses[entity];
         dm_vec4 specular = speculars[entity];
         dm_render_handle mesh_handle = mesh_handles[entity];
