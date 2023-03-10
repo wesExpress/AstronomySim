@@ -35,7 +35,7 @@ PS_INPUT v_main(VS_INPUT input)
 	output.frag_pos = output.position.xyz;
 	output.position = mul(output.position, view_proj);
 
-	output.normal = mul(float4(input.normal, 1), input.obj_norm).xyz;
+	output.normal = mul(float4(input.normal, 0), input.obj_norm).xyz;
 
 	output.tex_coords = input.tex_coords;
 
