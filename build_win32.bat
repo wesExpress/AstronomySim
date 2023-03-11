@@ -4,7 +4,7 @@ SetLocal EnableDelayedExpansion
 SET SRC_DIR=%cd%
 
 SET /A opengl=0
-SET /A debug=1
+SET /A debug=0
 SET /A simd_256=1
 
 SET c_filenames=
@@ -23,10 +23,10 @@ IF /I "%simd_256%" EQU "1" (
 
 IF /I "%debug%" EQU "1" (
 	SET defines=%defines% /DDM_DEBUG
-	SET compiler_flags=/W2 /Z7
+	SET compiler_flags=/Wall /Z7 /Od /Ob0
 ) ELSE (
 	SET defines=%defines% /DDM_RELEASE
-	SET compiler_flags=/W2 /Zo /Ox
+	SET compiler_flags=/W1 /Zo /O2 /Ob2
 )
 
 IF /I "%opengl%" EQU "1" (

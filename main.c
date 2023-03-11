@@ -1,6 +1,8 @@
 #define DM_IMPL
 //#define DM_PHYSICS_MORE_MASS
-//#define DM_PHYSICS_SMALLER_DT
+#ifndef DM_DEBUG
+#define DM_PHYSICS_SMALLER_DT
+#endif
 //#define DM_PHYSICS_NO_SLOP
 #define DM_PHYSICS_NO_PERSISTENT_MANIFOLDS
 #include "DarkMatter/dm.h"

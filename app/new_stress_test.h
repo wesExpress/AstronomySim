@@ -1,6 +1,6 @@
 #ifdef DM_DEBUG
-#define D_SCALE 4.0f
-#define NUM_OBJECTS 10
+#define D_SCALE 40.0f
+#define NUM_OBJECTS 512
 #else
 #define D_SCALE 75.0f
 #define NUM_OBJECTS 1024
@@ -20,7 +20,7 @@ dm_entity make_object()
     dm_entity entity = dm_ecs_create_entity();
     
     float rand_mesh = dm_random_float();
-    dm_render_handle mesh_handle = rand_mesh > 0.0f ? ICOSPHERE_MESH : BOX_MESH;
+    dm_render_handle mesh_handle = rand_mesh > 0.5f ? ICOSPHERE_MESH : BOX_MESH;
     dm_ecs_entity_add_mesh(entity, mesh_handle);
     
     float scale_x, scale_y, scale_z;
@@ -103,11 +103,6 @@ return_code app_update(view_camera* camera)
 
 return_code app_render()
 {
-    for(uint32_t i=0; i<NUM_OBJECTS+1; i++)
-    {
-        dm_debug_render_collider(objects[i]);
-        dm_debug_render_aabb(objects[i]);
-    }
     
     return SUCCESS;
 }
