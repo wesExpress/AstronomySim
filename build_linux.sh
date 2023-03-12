@@ -3,7 +3,7 @@
 set echo on
 output="app"
 
-debug=0
+debug=1
 simd_256=0
 
 SRC_DIR=$PWD
@@ -17,7 +17,7 @@ c_files="$c_files $(find $SRC_DIR/systems -type f -name "*.c")"
 external_files=$(find $SRC_DIR/DarkMatter/lib/mt19937 -type f -name "*.c")
 external_files="$external_files $SRC_DIR/DarkMatter/lib/glad/src/glad.c"
 
-compiler_flags="-g -fPIC -MD -std=gnu99 -fdiagnostics-absolute-paths -fdeclspec -fPIC -Wall -Wno-missing-braces"
+compiler_flags="-g -fPIC -MD -std=gnu99 -fdiagnostics-absolute-paths -fPIC -Wall -Wno-missing-braces"
 defines="-DDM_OPENGL"
 
 if ((simd_256)); then
