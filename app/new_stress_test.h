@@ -1,10 +1,5 @@
-#ifdef DM_DEBUG
-#define D_SCALE 40.0f
+#define D_SCALE 20.0f
 #define NUM_OBJECTS 512
-#else
-#define D_SCALE 75.0f
-#define NUM_OBJECTS 1024
-#endif
 
 #define M_SCALE  2e9f    // kg
 #define V_SCALE  0.5f   // m/s
@@ -31,6 +26,10 @@ dm_entity make_object()
     pos_y = dm_random_float() * D_SCALE - HD;
     pos_z = dm_random_float() * D_SCALE - HD;
     
+    scale_x = dm_random_float();
+    scale_y = dm_random_float();
+    scale_z = dm_random_float();
+    
     rot_i = dm_random_float() * R - HR;
     rot_j = dm_random_float() * R - HR;
     rot_k = dm_random_float() * R - HR;
@@ -49,12 +48,11 @@ dm_entity make_object()
         break;
         
         case ICOSPHERE_MESH:
-        scale_x = dm_random_float() * 0.5f;
         scale_y = scale_x;
         scale_z = scale_x;
         
-        dm_ecs_entity_add_transform(entity, pos_x,pos_y,pos_z, scale_x,scale_y,scale_z, rot_i,rot_j,rot_k,rot_r);
-        dm_ecs_entity_add_collision_sphere(entity, scale_x);
+        dm_ecs_entity_add_transform(entity, pos_x,pos_y,pos_z, scale_x * 0.5f,scale_y * 0.5f,scale_z * 0.5f, rot_i,rot_j,rot_k,rot_r);
+        dm_ecs_entity_add_collision_sphere(entity, scale_x * 0.5f);
         
         break;
         
@@ -103,6 +101,10 @@ return_code app_update(view_camera* camera)
 
 return_code app_render()
 {
+    for(uint32_t i=0; i<NUM_OBJECTS; i++)
+    {
+        dm_debug_render_collider(objects[i+1]);
+    }
     
     return SUCCESS;
 }
