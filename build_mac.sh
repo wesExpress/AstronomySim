@@ -3,6 +3,8 @@
 set echo on
 output="app"
 
+debug=1
+
 SRC_DIR=$PWD
 
 mkdir -p build
