@@ -117,14 +117,14 @@ return_code app_run()
         APP_FUNC_CHECK(app_update(&app_data.camera));
         //////////////////////////////////////
         
-        // DarkMatter end update
-        if(!dm_end_update()) return UPDATE_FAIL;
-        
         // resize camera
         uint32_t width  = DM_SCREEN_WIDTH;
         uint32_t height = DM_SCREEN_HEIGHT;
         
         resize_camera(width, height, &app_data.camera);
+        
+        // DarkMatter end update
+        if(!dm_end_update()) return UPDATE_FAIL;
         
         // render
         dm_timer render_timer = { 0 };
