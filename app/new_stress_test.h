@@ -1,5 +1,5 @@
 #define D_SCALE 20.0f
-#define NUM_OBJECTS 512
+#define NUM_OBJECTS 256
 
 #define M_SCALE  2e9f    // kg
 #define V_SCALE  0.5f   // m/s

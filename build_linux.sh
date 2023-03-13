@@ -3,7 +3,7 @@
 set echo on
 output="app"
 
-debug=1
+debug=0
 simd_256=0
 
 SRC_DIR=$PWD
