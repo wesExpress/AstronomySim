@@ -31,7 +31,7 @@ if ((debug)); then
 	defines="-DDM_DEBUG $defines"
 	compiler_flags="-O0 $compiler_flags"
 else
-	compiler_flags="-O3 $compiler_flags"
+	compiler_flags="-O2 $compiler_flags"
 fi
 
 include_flags="-I$SRC_DIR/ -I$SRC_DIR/DarkMatter/ -I$SRC_DIR/DarkMatter/lib/ -I$SRC_DIR/DarkMatter/lib/mt19937/include -I$SRC_DIR/DarkMatter/lib/glad/include"
