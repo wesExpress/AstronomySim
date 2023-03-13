@@ -69,16 +69,16 @@ bool resolved_pass(dm_entity* entities, uint32_t entity_count)
 {
     dm_memzero(bb_instances.resolved_count, sizeof(uint32_t) * BLACKBODY_MAX_MESHES);
     
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
-    float* scale_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_X);
-    float* scale_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Y);
-    float* scale_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Z);
-    float* rot_i = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_I);
-    float* rot_j = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_J);
-    float* rot_k = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_K);
-    float* rot_r = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_R);
+    float* pos_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    float* scale_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_X);
+    float* scale_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Y);
+    float* scale_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_SCALE_Z);
+    float* rot_i = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_I);
+    float* rot_j = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_J);
+    float* rot_k = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_K);
+    float* rot_r = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_R);
     
     float* brightness = get_blackbody_member(BLACKBODY_MEM_BRIGHTNESS);
     float* color_r = get_blackbody_member(BLACKBODY_MEM_COLOR_R);
@@ -86,7 +86,7 @@ bool resolved_pass(dm_entity* entities, uint32_t entity_count)
     float* color_b = get_blackbody_member(BLACKBODY_MEM_COLOR_B);
     float* color_a = get_blackbody_member(BLACKBODY_MEM_COLOR_A);
     
-    dm_render_handle* mesh_handles = dm_ecs_get_component_member(DM_COMPONENT_MESH, DM_MESH_MEM_HANDLE);
+    dm_render_handle* mesh_handles = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_MESH, DM_MESH_MEM_HANDLE);
     
     // update instance buffer
     for(uint32_t i=0; i<entity_count; i++)
@@ -162,9 +162,9 @@ bool airy_disc_pass(dm_entity* entities, uint32_t entity_count)
 {
     bb_instances.airy_disc_count = 0;
     
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    float* pos_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
     
     float* brightness = get_blackbody_member(BLACKBODY_MEM_BRIGHTNESS);
     float* color_r = get_blackbody_member(BLACKBODY_MEM_COLOR_R);

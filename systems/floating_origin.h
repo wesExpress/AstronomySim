@@ -14,9 +14,9 @@ bool floating_origin_func(dm_entity* entities, uint32_t entity_count)
     if(dm_physics_is_paused()) return true;
     if(!origin_data.has_pos_ref) { DM_LOG_FATAL("Floating origin system needs a reference entity"); return false; }
     
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    float* pos_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
     
     const float ref_x = pos_x[origin_data.pos_ref];
     const float ref_y = pos_y[origin_data.pos_ref];
@@ -25,23 +25,23 @@ bool floating_origin_func(dm_entity* entities, uint32_t entity_count)
     // more involved 'rotation' floating origin
     if(origin_data.has_rot_ref)
     {
-        float* rot_i = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_I);
-        float* rot_j = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_J);
-        float* rot_k = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_K);
-        float* rot_r = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_R);
+        float* rot_i = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_I);
+        float* rot_j = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_J);
+        float* rot_k = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_K);
+        float* rot_r = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_ROT_R);
         
-        float* vel_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_X);
-        float* vel_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Y);
-        float* vel_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Z);
-        float* w_x   = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_W_X);
-        float* w_y   = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_W_Y);
-        float* w_z   = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_W_Z);
-        float* force_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
-        float* force_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
-        float* force_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
-        float* torque_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_TORQUE_X);
-        float* torque_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_TORQUE_Y);
-        float* torque_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_TORQUE_Z);
+        float* vel_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_X);
+        float* vel_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Y);
+        float* vel_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_VEL_Z);
+        float* w_x   = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_W_X);
+        float* w_y   = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_W_Y);
+        float* w_z   = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS,   DM_PHYSICS_MEM_W_Z);
+        float* force_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
+        float* force_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
+        float* force_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
+        float* torque_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_TORQUE_X);
+        float* torque_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_TORQUE_Y);
+        float* torque_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_TORQUE_Z);
         
         const float rot_ref_x = pos_x[origin_data.rot_ref];
         const float rot_ref_y = pos_y[origin_data.rot_ref];

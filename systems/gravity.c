@@ -42,14 +42,14 @@ GRAVITATIONAL CALCULATIONS
 ****************************/
 void calculate_gravitational_force(dm_entity entity_a, dm_entity entity_b)
 {
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    float* pos_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
     
-    float* force_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
-    float* force_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
-    float* force_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
-    float* mass = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_MASS);
+    float* force_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
+    float* force_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
+    float* force_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
+    float* mass = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_MASS);
     
     float mass_a = mass[entity_a];
     float mass_b = mass[entity_b];
@@ -81,14 +81,14 @@ void simd_gravity(dm_entity* entities, uint32_t entity_count)
     dm_timer timer = { 0 };
     dm_timer_start(&timer);
     
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    float* pos_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
     
-    float* force_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
-    float* force_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
-    float* force_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
-    float* mass = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_MASS);
+    float* force_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
+    float* force_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
+    float* force_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
+    float* mass = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_MASS);
     
     dm_mm_float grav_const = dm_mm_set1_ps(G);
     
@@ -199,14 +199,14 @@ void simd_gravity_v2(dm_entity* entities, uint32_t entity_count)
     dm_timer timer = { 0 };
     dm_timer_start(&timer);
     
-    float* pos_x = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
-    float* pos_y = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
-    float* pos_z = dm_ecs_get_component_member(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
+    float* pos_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_X);
+    float* pos_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Y);
+    float* pos_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_TRANSFORM, DM_TRANSFORM_MEM_POS_Z);
     
-    float* force_x = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
-    float* force_y = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
-    float* force_z = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
-    float* mass = dm_ecs_get_component_member(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_MASS);
+    float* force_x = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_X);
+    float* force_y = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Y);
+    float* force_z = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_FORCE_Z);
+    float* mass = DM_GET_COMPONENT_MEMBER(DM_COMPONENT_PHYSICS, DM_PHYSICS_MEM_MASS);
     
     dm_mm_float grav_const = dm_mm_set1_ps(G);
     

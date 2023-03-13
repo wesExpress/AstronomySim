@@ -40,7 +40,7 @@ void update_camera(view_camera* camera)
     
     camera->up = dm_vec3_unit_y;
     
-    float speed =  camera->move_speed * dm_physics_get_simulation_time_step();
+    float speed =  camera->move_speed * dm_get_delta_time();
     int delta_x, delta_y;
     dm_input_get_mouse_delta(&delta_x, &delta_y);
     dm_vec2 look_delta = dm_vec2_set((float)delta_x * camera->look_sens, (float)delta_y * camera->look_sens);

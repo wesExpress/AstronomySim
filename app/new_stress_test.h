@@ -1,5 +1,5 @@
 #define D_SCALE 20.0f
-#define NUM_OBJECTS 128
+#define NUM_OBJECTS 512
 
 #define M_SCALE  2e9f    // kg
 #define V_SCALE  0.5f   // m/s
@@ -15,7 +15,7 @@ dm_entity make_object()
     dm_entity entity = dm_ecs_create_entity();
     
     float rand_mesh = dm_random_float();
-    dm_render_handle mesh_handle = rand_mesh > 0.5f ? ICOSPHERE_MESH : BOX_MESH;
+    dm_render_handle mesh_handle = rand_mesh > 1.0 ? ICOSPHERE_MESH : BOX_MESH;
     dm_ecs_entity_add_mesh(entity, mesh_handle);
     
     float scale_x, scale_y, scale_z;

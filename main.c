@@ -1,5 +1,4 @@
 #define DM_IMPL
-//#define DM_PHYSICS_MORE_MASS
 #ifndef DM_DEBUG
 #define DM_PHYSICS_SMALLER_DT
 #endif

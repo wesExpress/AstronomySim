@@ -3,8 +3,8 @@ SetLocal EnableDelayedExpansion
 
 SET SRC_DIR=%cd%
 
-SET /A opengl=1
-SET /A debug=1
+SET /A opengl=0
+SET /A debug=0
 SET /A simd_256=1
 
 SET c_filenames=
@@ -26,7 +26,7 @@ IF /I "%debug%" EQU "1" (
 	SET compiler_flags=/W2 /Z7 /Od /Ob0
 ) ELSE (
 	SET defines=%defines% /DDM_RELEASE
-	SET compiler_flags=/W1 /Z7 /O2 /Ob2
+	SET compiler_flags=/Zi /O2 /Ob2
 )
 
 IF /I "%opengl%" EQU "1" (
@@ -44,7 +44,7 @@ SET assembly=app
 if not exist "build" mkdir build
 cd build
 ECHO Building %assembly%...
-cl %compiler_flags% %defines% /FC %include_flags% %c_filenames% /Fe%assembly% %linker_flags%
+cl %compiler_flags% %defines% /DNEW_ECS /FC %include_flags% %c_filenames% /Fe%assembly% %linker_flags%
 
 REM hlsl shaders
 IF /I "%opengl%" EQU "0" (
