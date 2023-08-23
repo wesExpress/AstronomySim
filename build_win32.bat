@@ -7,8 +7,6 @@ SET DM_DIR=%SRC_DIR%\DarkMatter
 SET /A vulkan=0
 SET /A debug=1
 SET /A simd_256=1
-SET /A phys_simd=1
-SET /A phys_multi_th=0
 
 SET c_filenames=%SRC_DIR%\app\app.c %SRC_DIR%\app\camera.c %SRC_DIR%\app\components.c %SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c %SRC_DIR%\rendering\imgui_render_pass.c %SRC_DIR%\systems\physics_system.c %SRC_DIR%\systems\gravity_system.c
 
@@ -20,14 +18,6 @@ SET compiler_flags=/arch:AVX2 /Wall /WL /TC /std:c99 /RTCsu
 
 IF /I "%simd_256%" EQU "1" (
 	SET defines="/DDM_SIMD_256"
-)
-
-IF /I "%phys_simd%" EQU "1" (
-	SET defines=%defines% /DDM_PHYSICS_SIMD
-)
-
-IF /I "%phys_multi_th%" EQU "1" (
-	SET defines=%defines% /DDM_PHYSICS_MULTI_TH
 )
 
 IF /I "%debug%" EQU "1" (
@@ -48,7 +38,7 @@ IF /I "%vulkan%" EQU "1" (
 	SET linker_flags=%linker_flags% d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib
 )
 
-SET assembly=app
+SET assembly=AstronomySim
 
 if not exist "build" mkdir build
 cd build

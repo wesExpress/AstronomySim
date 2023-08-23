@@ -1,3 +1,3 @@
 cd build
 
-app
+AstronomySim

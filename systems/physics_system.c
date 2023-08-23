@@ -739,11 +739,6 @@ void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* c
         t_block->pos_y[t_index] += p_block->vel_y[p_index] * DM_PHYSICS_FIXED_DT;
         t_block->pos_z[t_index] += p_block->vel_z[p_index] * DM_PHYSICS_FIXED_DT;
         
-        if(t_block->pos_x[t_index]!=t_block->pos_x[t_index])
-        {
-            DM_LOG_ERROR("HERE");
-        }
-        
         // integrate velocity
         dt_mass = p_block->mass[p_index] * DM_PHYSICS_FIXED_DT;
         

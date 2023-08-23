@@ -4,10 +4,21 @@ set(CMAKE_C_STANDARD 99)
 project(MacDebug)
 
 set(SOURCES
-    main.c
+	app/app.c
+	app/components.c
+	app/camera.c
 
-    dm_platform_mac.m
-    dm_renderer_metal.m
+	rendering/render_pass.c
+	rendering/debug_render_pass.c
+	rendering/imgui_render_pass.c
+
+	systems/physics_system.c
+	systems/gravity_system.c    
+
+	dm_impl.c
+	dm_physics.c
+    DarkMatter/platform/dm_platform_mac.m
+    DarkMatter/rendering/dm_renderer_metal.m
 )
 add_executable(MacDebug ${SOURCES})
 target_include_directories(MacDebug
