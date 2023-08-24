@@ -38,7 +38,7 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     float vel_y = dm_random_float(context) * 2 - 1;
     float vel_z = dm_random_float(context) * 2 - 1;
     
-    float mass = dm_random_float(context) * 4e3;
+    float mass = dm_random_float(context) * 1e3;
     if(dm_random_float(context) > 1)
     {
         scale_y = scale_z = scale_x;
@@ -49,12 +49,12 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     else
     {
         entity_add_box_collider(entity, app_data->components.collision, 0,0,0, scale_x,scale_y,scale_z, context);
-        entity_add_kinematics_box_rigid_body(entity, app_data->components.physics, mass, vel_x,vel_y,vel_z, 0,0.1f, -scale_x * 0.5f,-scale_y * 0.5f,-scale_z * 0.5f,scale_x * 0.5f,scale_y * 0.5f,scale_z * 0.5f, context);
+        entity_add_kinematics_box_rigid_body(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, -scale_x * 0.5f,-scale_y * 0.5f,-scale_z * 0.5f,scale_x * 0.5f,scale_y * 0.5f,scale_z * 0.5f, context);
     }
     
     entity_add_transform(entity, app_data->components.transform, pos_x,pos_y,pos_z, scale_x,scale_y,scale_z, rot_i,rot_j,rot_k,rot_r, context);
     
-    entity_add_angular_velocity(entity, app_data->components.physics, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
+    //entity_add_angular_velocity(entity, app_data->components.physics, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
     
     return entity;
 }

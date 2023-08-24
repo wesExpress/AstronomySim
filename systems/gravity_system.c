@@ -52,6 +52,8 @@ bool gravity_system_init(dm_ecs_id t_id, dm_ecs_id p_id, dm_context* context)
     manager->transform = t_id;
     manager->physics = p_id;
     
+    manager->simd = true;
+    
     return true;
 }
 
@@ -76,8 +78,8 @@ void gravity_system_shutdown(void* s, void* c)
 
 void gravity_populate_arrays(gravity_manager* manager, dm_ecs_system_manager* system, dm_context* context)
 {
-    component_transform_block* t_block = context->ecs_manager.components[manager->transform].data;
-    component_physics_block*   p_block = context->ecs_manager.components[manager->physics].data;
+    component_transform_block* t_block = dm_ecs_get_component_block(manager->transform, context);
+    component_physics_block*   p_block = dm_ecs_get_component_block(manager->physics, context);
     
     uint32_t t_c_index, p_c_index;
     uint32_t t_b_index, p_b_index;
@@ -171,40 +173,6 @@ bool gravity_system_run(void* s, void* c)
     return true;
 }
 
-/*******************************
-BRUTE FORCE GRAVITY CALCULATION
-*********************************/
-void apply_gravity(float pos_i_x,float pos_i_y,float pos_i_z, float pos_j_x,float pos_j_y,float pos_j_z, float mass_i,float mass_j, float* force_i_x, float* force_i_y, float* force_i_z, float* force_j_x, float* force_j_y, float* force_j_z)
-{
-    float dir_x = pos_j_x - pos_i_x;
-    float dir_y = pos_j_y - pos_i_y;
-    float dir_z = pos_j_z - pos_i_z;
-
-    float dis2 = dir_x * dir_x;
-    dis2 += dir_y * dir_y;
-    dis2 += dir_z * dir_z;
-    float grav = G * mass_i * mass_j / dis2;
-
-    dis2 = dm_sqrtf(dis2);
-    dis2 = 1 / dis2;
-
-    dir_x *= dis2;
-    dir_y *= dis2;
-    dir_z *= dis2;
-
-    float f_x = dir_x * grav;
-    float f_y = dir_y * grav;
-    float f_z = dir_z * grav;
-
-    *force_i_x += f_x;
-    *force_i_y += f_y;
-    *force_i_z += f_z;
-
-    *force_j_x -= f_x;
-    *force_j_y -= f_y;
-    *force_j_z -= f_z;
-}
-
 /************
 NAIVE GRAITY
 **************/
@@ -212,70 +180,42 @@ void naive_gravity(dm_ecs_system_manager* system, dm_context* context)
 {
     gravity_manager* manager = system->system_data;
     
-    const dm_ecs_id t_id = manager->transform;
     const dm_ecs_id p_id = manager->physics;
-    
-    dm_ecs_system_entity_container entity_a, entity_b;
-    
-    component_transform_block* t_block = dm_ecs_get_component_block(t_id, context);
-    component_physics_block*   p_block = dm_ecs_get_component_block(p_id, context);
-    
-    component_transform_block* a_t_block = NULL;
-    component_physics_block*   a_p_block = NULL;
-    component_transform_block* b_t_block = NULL;
-    component_physics_block*   b_p_block = NULL;
-    
-    uint32_t a_t_index, a_p_index;
-    uint32_t b_t_index, b_p_index;
     
     float mass_a, mass_b;
     float pos_a_x, pos_a_y, pos_a_z;
     float pos_b_x, pos_b_y, pos_b_z;
     
-    float sep_x, sep_y, sep_z;
+    float dir_x, dir_y, dir_z;
     float dis2, grav;
     float local_f_x, local_f_y, local_f_z;
     
-    for(uint32_t i=0; i<system->entity_count; i++)
+    uint32_t i=0,j=0;
+    for(; i<system->entity_count; i++)
     {
-        entity_a = system->entity_containers[i];
+        pos_a_x = manager->data_cache.pos_x[i];
+        pos_a_y = manager->data_cache.pos_y[i];
+        pos_a_z = manager->data_cache.pos_z[i];
         
-        a_t_block = t_block + entity_a.block_indices[t_id];
-        a_p_block = p_block + entity_a.block_indices[p_id];
+        mass_a = manager->data_cache.mass[i];
         
-        a_t_index = entity_a.component_indices[t_id];
-        a_p_index = entity_a.component_indices[p_id];
-        
-        pos_a_x = a_t_block->pos_x[a_t_index];
-        pos_a_y = a_t_block->pos_y[a_t_index];
-        pos_a_z = a_t_block->pos_z[a_t_index];
-        
-        mass_a = a_p_block->mass[a_p_index];
-        
-        for(uint32_t j=i+1; j<system->entity_count; j++)
+        j = i + 1;
+        for(; j<system->entity_count; j++)
         {
-            entity_b = system->entity_containers[j];
+            pos_b_x = manager->data_cache.pos_x[j];
+            pos_b_y = manager->data_cache.pos_y[j];
+            pos_b_z = manager->data_cache.pos_z[j];
             
-            b_t_block = t_block + entity_b.block_indices[t_id];
-            b_p_block = p_block + entity_b.block_indices[p_id];
-            
-            b_t_index = entity_b.component_indices[t_id];
-            b_p_index = entity_b.component_indices[p_id];
-            
-            pos_b_x = b_t_block->pos_x[b_t_index];
-            pos_b_y = b_t_block->pos_y[b_t_index];
-            pos_b_z = b_t_block->pos_z[b_t_index];
-            
-            mass_b = b_p_block->mass[b_p_index];
+            mass_b = manager->data_cache.mass[j];
             
             // force calculation
-            sep_x = pos_b_x - pos_a_x;
-            sep_y = pos_b_y - pos_a_y;
-            sep_z = pos_b_z - pos_a_z;
+            dir_x = pos_b_x - pos_a_x;
+            dir_y = pos_b_y - pos_a_y;
+            dir_z = pos_b_z - pos_a_z;
             
-            dis2  = sep_x * sep_x;
-            dis2 += sep_y * sep_y;
-            dis2 += sep_z * sep_z;
+            dis2  = dir_x * dir_x;
+            dis2 += dir_y * dir_y;
+            dis2 += dir_z * dir_z;
             
             grav  = G * mass_a;
             grav *= mass_b;
@@ -284,23 +224,37 @@ void naive_gravity(dm_ecs_system_manager* system, dm_context* context)
             dis2 = dm_sqrtf(dis2);
             dis2 = 1.0f / dis2;
             
-            sep_x *= dis2;
-            sep_y *= dis2;
-            sep_z *= dis2;
+            dir_x *= dis2;
+            dir_y *= dis2;
+            dir_z *= dis2;
             
-            local_f_x = sep_x * grav;
-            local_f_y = sep_y * grav;
-            local_f_z = sep_z * grav;
+            local_f_x = dir_x * grav;
+            local_f_y = dir_y * grav;
+            local_f_z = dir_z * grav;
             
             // a gets force, b gets negative!
-            a_p_block->force_x[a_p_index] += local_f_x;
-            a_p_block->force_y[a_p_index] += local_f_y;
-            a_p_block->force_z[a_p_index] += local_f_z;
+            manager->data_cache.force_x[i] += local_f_x;
+            manager->data_cache.force_y[i] += local_f_y;
+            manager->data_cache.force_z[i] += local_f_z;
             
-            b_p_block->force_x[b_p_index] -= local_f_x;
-            b_p_block->force_y[b_p_index] -= local_f_y;
-            b_p_block->force_z[b_p_index] -= local_f_z;
+            manager->data_cache.force_x[j] -= local_f_x;
+            manager->data_cache.force_y[j] -= local_f_y;
+            manager->data_cache.force_z[j] -= local_f_z;
         }
+    }
+    
+    // now update data
+    component_physics_block* p_block = dm_ecs_get_component_block(p_id, context);
+    uint32_t p_index, b_index;
+    
+    for(uint32_t i=0; i<system->entity_count; i++)
+    {
+        p_index = manager->entity_cache.c_indices[i][p_id];
+        b_index = manager->entity_cache.b_indices[i][p_id];
+        
+        (p_block + b_index)->force_x[p_index] = manager->data_cache.force_x[i];
+        (p_block + b_index)->force_y[p_index] = manager->data_cache.force_y[i];
+        (p_block + b_index)->force_z[p_index] = manager->data_cache.force_z[i];
     }
 }
 
@@ -312,7 +266,7 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
     gravity_manager* manager = system->system_data;
     
     const dm_ecs_id p_id = manager->physics;
-
+    
     dm_mm_float mass_i, mass_j;
     dm_mm_float pos_i_x, pos_i_y, pos_i_z;
     dm_mm_float pos_j_x, pos_j_y, pos_j_z;
@@ -324,11 +278,11 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
     
     const dm_mm_float grav_const = dm_mm_set1_ps(G);
     const dm_mm_float ones = dm_mm_set1_ps(1.0f);
-
+    
     uint32_t i=0, j=0;
     uint32_t leftovers = 0;
     float loader_x[DM_SIMD_N], loader_y[DM_SIMD_N], loader_z[DM_SIMD_N];
-
+    
     for(; i<system->entity_count; i++)
     {
         // load in entity_i data
@@ -361,18 +315,18 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
             dis2 = dm_mm_fmadd_ps(dir_y, dir_y, dis2);
             dis2 = dm_mm_fmadd_ps(dir_z, dir_z, dis2);
             
-            // G mi * mj / (r^2)^(3/2)
-            grav = dm_mm_div_ps(grav_const, mass_i);
+            // G mi * mj 
+            grav = dm_mm_mul_ps(grav_const, mass_i);
             grav = dm_mm_mul_ps(grav, mass_j);
             grav = dm_mm_div_ps(grav, dis2);
-
+            
             dis2 = dm_mm_sqrt_ps(dis2);
             dis2 = dm_mm_div_ps(ones, dis2);
-
+            
             dir_x = dm_mm_mul_ps(dir_x, dis2);
             dir_y = dm_mm_mul_ps(dir_y, dis2);
             dir_z = dm_mm_mul_ps(dir_z, dis2);
-
+            
             // local force
             local_x = dm_mm_mul_ps(grav, dir_x);
             local_y = dm_mm_mul_ps(grav, dir_y);
@@ -392,7 +346,7 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
             manager->data_cache.force_y[i] += dm_mm_sum_elements(local_y);
             manager->data_cache.force_z[i] += dm_mm_sum_elements(local_z);
         }
-
+        
         // we probably have a partial pass to do
         leftovers = system->entity_count - j;
         if(leftovers>=DM_SIMD_N) continue;
@@ -401,23 +355,23 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
         dm_memzero(&pos_j_x, sizeof(pos_j_x));
         dm_memzero(&pos_j_y, sizeof(pos_j_y));
         dm_memzero(&pos_j_z, sizeof(pos_j_z));
-
+        
         dm_memzero(&force_j_x, sizeof(force_j_x));
         dm_memzero(&force_j_y, sizeof(force_j_y));
         dm_memzero(&force_j_z, sizeof(force_j_z));
-
+        
         dm_memzero(&mass_j, sizeof(mass_j));
-
+        
         dm_memcpy(&pos_j_x, manager->data_cache.pos_x+j, sizeof(float) * leftovers);
         dm_memcpy(&pos_j_y, manager->data_cache.pos_y+j, sizeof(float) * leftovers);
         dm_memcpy(&pos_j_z, manager->data_cache.pos_z+j, sizeof(float) * leftovers);
-
+        
         dm_memcpy(&force_j_x, manager->data_cache.force_x+j, sizeof(float) * leftovers);
         dm_memcpy(&force_j_y, manager->data_cache.force_y+j, sizeof(float) * leftovers);
         dm_memcpy(&force_j_z, manager->data_cache.force_z+j, sizeof(float) * leftovers);
-
+        
         dm_memcpy(&mass_j, manager->data_cache.mass+j, sizeof(float) * leftovers);
-
+        
         // rij = pos_j - pos_i
         dir_x = dm_mm_sub_ps(pos_j_x, pos_i_x);
         dir_y = dm_mm_sub_ps(pos_j_y, pos_i_y);
@@ -429,17 +383,17 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
         dis2 = dm_mm_fmadd_ps(dir_z, dir_z, dis2);
         
         // G mi * mj / (r^2)^(3/2)
-        grav = dm_mm_div_ps(grav_const, mass_i);
+        grav = dm_mm_mul_ps(grav_const, mass_i);
         grav = dm_mm_mul_ps(grav, mass_j);
         grav = dm_mm_div_ps(grav, dis2);
-
+        
         dis2 = dm_mm_sqrt_ps(dis2);
         dis2 = dm_mm_div_ps(ones, dis2);
-
+        
         dir_x = dm_mm_mul_ps(dir_x, dis2);
         dir_y = dm_mm_mul_ps(dir_y, dis2);
         dir_z = dm_mm_mul_ps(dir_z, dis2);
-
+        
         // local force
         local_x = dm_mm_mul_ps(grav, dir_x);
         local_y = dm_mm_mul_ps(grav, dir_y);
@@ -450,13 +404,10 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
         force_j_y = dm_mm_sub_ps(force_j_y, local_y);
         force_j_z = dm_mm_sub_ps(force_j_z, local_z);
         
-        //dm_mm_store_ps(manager->data_cache.force_x+j, force_j_x);
-        //dm_mm_store_ps(manager->data_cache.force_y+j, force_j_y);
-        //dm_mm_store_ps(manager->data_cache.force_z+j, force_j_z);
         dm_mm_store_ps(loader_x, force_j_x);
         dm_mm_store_ps(loader_y, force_j_y);
         dm_mm_store_ps(loader_z, force_j_z);
-
+        
         dm_memcpy(manager->data_cache.force_x+j, loader_x, sizeof(float) * leftovers);
         dm_memcpy(manager->data_cache.force_y+j, loader_y, sizeof(float) * leftovers);
         dm_memcpy(manager->data_cache.force_z+j, loader_z, sizeof(float) * leftovers);
@@ -471,13 +422,13 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
     component_physics_block*   p_block = dm_ecs_get_component_block(p_id, context);
     uint32_t b_index, c_index;
     
-    for(uint32_t i=0; i<system->entity_count; i++)
+    for(uint32_t e=0; e<system->entity_count; e++)
     {
-        c_index = manager->entity_cache.c_indices[i][p_id];
-        b_index = manager->entity_cache.b_indices[i][p_id];
+        c_index = manager->entity_cache.c_indices[e][p_id];
+        b_index = manager->entity_cache.b_indices[e][p_id];
         
-        (p_block + b_index)->force_x[c_index] = manager->data_cache.force_x[i];
-        (p_block + b_index)->force_y[c_index] = manager->data_cache.force_y[i];
-        (p_block + b_index)->force_z[c_index] = manager->data_cache.force_z[i];
+        (p_block + b_index)->force_x[c_index] = manager->data_cache.force_x[e];
+        (p_block + b_index)->force_y[c_index] = manager->data_cache.force_y[e];
+        (p_block + b_index)->force_z[c_index] = manager->data_cache.force_z[e];
     }
 }
