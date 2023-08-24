@@ -4,8 +4,9 @@ SetLocal EnableDelayedExpansion
 SET SRC_DIR=%cd%
 SET DM_DIR=%SRC_DIR%\DarkMatter
 
-SET /A vulkan=0
-SET /A debug=1
+REM SET /A vulkan=0
+SET /A opengl=0
+SET /A debug=0
 SET /A simd_256=1
 
 SET c_filenames=%SRC_DIR%\app\app.c %SRC_DIR%\app\camera.c %SRC_DIR%\app\components.c %SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c %SRC_DIR%\rendering\imgui_render_pass.c %SRC_DIR%\systems\physics_system.c %SRC_DIR%\systems\gravity_system.c
@@ -33,6 +34,11 @@ IF /I "%vulkan%" EQU "1" (
 	SET include_flags=%include_flags% /I%VULKAN_SDK%\Include
 	SET linker_flags=%linker_flags% /LIBPATH:%VULKAN_SDK%\Lib vulkan-1.lib
 	SET defines=%defines% /DDM_VULKAN
+) ELSE IF /I "%opengl%" EQU "1" (
+	SET dm_filenames=%dm_filenames% %DM_DIR%\rendering\dm_renderer_opengl.c %DM_DIR%\lib\glad\src\glad.c %DM_DIR%\lib\glad\src\glad_wgl.c
+	SET include_flags=%include_flags% /I%DM_DIR%\lib\glad\include
+	SET linker_flags=%linker_flags% Opengl32.lib
+	SET defines=%defines% /DDM_OPENGL
 ) ELSE (
 	SET dm_filenames=%dm_filenames% %DM_DIR%\rendering\dm_renderer_dx11.c
 	SET linker_flags=%linker_flags% d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib
@@ -40,12 +46,12 @@ IF /I "%vulkan%" EQU "1" (
 
 SET assembly=AstronomySim
 
-if not exist "build" mkdir build
-cd build
+IF NOT EXIST "build" mkdir build
+CD build
 ECHO Building %assembly%...
 cl %compiler_flags% %defines% /FC %include_flags% %c_filenames% %dm_filenames% /Fe%assembly% %linker_flags%
 
-cd ..
+CD ..
 IF NOT EXIST "build\assets\shaders" mkdir build\assets\shaders
 
 cd assets/shaders
@@ -65,6 +71,10 @@ IF /I "%vulkan%" EQU "1" (
 
 		%VULKAN_SDK%\bin\glslc !shader_flags! !fname! -o !output!
 		MOVE !output! %SRC_DIR%\build\assets\shaders
+	)
+) ELSE IF /I "%opengl%" EQU "1" (
+	FOR /R %%f in (*.glsl) DO (
+		COPY /y %%f %SRC_DIR%\build\assets\shaders
 	)
 ) ELSE (
 	FOR /R %%f IN (*.hlsl) DO (
@@ -89,10 +99,10 @@ IF /I "%vulkan%" EQU "1" (
 	)
 )
 
-cd ..\..
+CD ..\..
 
 IF NOT EXIST "build\assets\textures" mkdir build\assets\textures
-copy /y "assets\textures\default_texture.png" build\assets\textures
+COPY /y "assets\textures\default_texture.png" build\assets\textures
 
 IF NOT EXIST "build\assets\fonts" mkdir build\assets\fonts
-copy /y "assets\fonts\Chicago.ttf" build\assets\fonts
+COPY /y "assets\fonts\Chicago.ttf" build\assets\fonts
