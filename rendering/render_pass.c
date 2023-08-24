@@ -22,7 +22,7 @@ typedef struct uniform_t
     float view_proj[M4];
 } uniform;
 
-#define MAX_ENTITIES_PER_FRAME 1024
+#define MAX_ENTITIES_PER_FRAME MAX_ENTITIES
 typedef struct render_pass_data_t
 {
     dm_render_handle vb, instb, ib, shader, pipe, uni;
@@ -155,6 +155,8 @@ void render_pass_submit_entity(dm_entity entity, dm_context* context)
     application_data* app_data = context->app_data;
     render_pass_data* pass_data = app_data->render_pass_data;
     
+    if(pass_data->entity_count+1 > MAX_ENTITIES_PER_FRAME) { DM_LOG_ERROR("Trying to render too many entities"); return; }
+
     pass_data->entities[pass_data->entity_count++] = entity;
 }
 
@@ -173,7 +175,8 @@ bool render_pass_render(dm_context* context)
     for(uint32_t i=0; i<pass_data->entity_count; i++)
     {
         transform = entity_get_transform(pass_data->entities[i], app_data->components.transform, context);
-        
+        if(transform.rot[0]==0 && transform.rot[1]==0 && transform.rot[2]==0 && transform.rot[3]==0) return false;
+
         inst = &pass_data->insts[i];
         
         dm_mat4_rotate_from_quat(transform.rot, obj_rm);

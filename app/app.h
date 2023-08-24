@@ -11,7 +11,7 @@ typedef struct component_ids_t
     dm_ecs_id physics;
 } component_ids;
 
-#define MAX_ENTITIES 2048
+#define MAX_ENTITIES 512
 typedef struct application_data_t
 {
     uint32_t     entity_count;
@@ -24,12 +24,5 @@ typedef struct application_data_t
     void*        debug_render_pass_data;
     void*        imgui_pass_data;
 } application_data;
-
-/*
-bool app_init(dm_context* context);
-void app_shutdown(dm_context* context);
-bool app_update(dm_context* context);
-bool app_render(dm_context* context);
-*/
 
 #endif //APP_H

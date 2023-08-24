@@ -149,7 +149,7 @@ bool imgui_render_pass_render(dm_context* context)
         imgui_draw_text_internal(pass_data->text_packets[i], context);
     }
     
-    pass_data->text_count        = 0;
+    pass_data->text_count = 0;
     
     return true;
 }
@@ -191,9 +191,6 @@ void imgui_draw_text(uint32_t x, uint32_t y, float r, float g, float b, float a,
 
 void imgui_draw_text_fmt(uint32_t x, uint32_t y, float r, float g, float b, float a, dm_context* context, const char* text, ...)
 {
-    application_data* app_data = context->app_data;
-    imgui_pass_data* pass_data = app_data->imgui_pass_data;
-    
 #define IMGUI_PASS_BUFFER_LEN 5000
     char buffer[IMGUI_PASS_BUFFER_LEN];
     dm_memzero(buffer, sizeof(buffer));
