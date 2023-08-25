@@ -18,8 +18,8 @@ typedef struct physics_system_collision_pair_t
 
 typedef enum physics_system_flag_t
 {
-    DM_PHYSICS_FLAG_PAUSED,
-    DM_PHYSICS_FLAG_UNKNOWN
+    DM_PHYSICS_FLAG_PAUSED = 1 << 0,
+    DM_PHYSICS_FLAG_NO_COLLISIONS = 1 << 1,
 } physics_system_flag;
 
 typedef struct dm_system_physics_broadphase_sort_data_t
@@ -35,8 +35,8 @@ typedef struct dm_system_physics_broadphase_sort_data_t
 #define PHYSICS_SYSTEM_RESIZE_FACTOR              2
 typedef struct physics_system_manager_t
 {
-    double          accum_time, simulation_time;
-    physics_system_flag flag;
+    double              accum_time, simulation_time;
+    physics_system_flag flags;
     
     uint32_t broadphase_checks;
     uint32_t num_possible_collisions, collision_capacity;
@@ -115,25 +115,34 @@ bool physics_system_run(void* s, void* d)
     
     uint32_t iters = 0;
     
+    if(dm_input_key_just_pressed(DM_KEY_C, context))
+    {
+        if(manager->flags & DM_PHYSICS_FLAG_NO_COLLISIONS) manager->flags &= ~DM_PHYSICS_FLAG_NO_COLLISIONS;
+        else manager->flags |= DM_PHYSICS_FLAG_NO_COLLISIONS;
+    }
+    
     dm_timer_start(&full, context);
     while(manager->accum_time >= DM_PHYSICS_FIXED_DT)
     {
         iters++;
         
         // broadphase
-        dm_timer_start(&t, context);
-        if(!physics_system_broadphase(system, context)) return false;
-        broad_time += dm_timer_elapsed_ms(&t, context);
-        
-        // narrowphase
-        dm_timer_start(&t, context);
-        if(!physics_system_narrowphase(system, context)) return false;
-        narrow_time += dm_timer_elapsed_ms(&t, context);
-        
-        // collision resolution
-        dm_timer_start(&t, context);
-        physics_system_solve_constraints(manager, context);
-        collision_time += dm_timer_elapsed_ms(&t, context);
+        if(!(manager->flags & DM_PHYSICS_FLAG_NO_COLLISIONS))
+        {
+            dm_timer_start(&t, context);
+            if(!physics_system_broadphase(system, context)) return false;
+            broad_time += dm_timer_elapsed_ms(&t, context);
+            
+            // narrowphase
+            dm_timer_start(&t, context);
+            if(!physics_system_narrowphase(system, context)) return false;
+            narrow_time += dm_timer_elapsed_ms(&t, context);
+            
+            // collision resolution
+            dm_timer_start(&t, context);
+            physics_system_solve_constraints(manager, context);
+            collision_time += dm_timer_elapsed_ms(&t, context);
+        }
         
         // update
         dm_timer_start(&t, context);
@@ -740,7 +749,7 @@ void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* c
         t_block->pos_z[t_index] += p_block->vel_z[p_index] * DM_PHYSICS_FIXED_DT;
         
         // integrate velocity
-        dt_mass = p_block->mass[p_index] * DM_PHYSICS_FIXED_DT;
+        dt_mass = p_block->inv_mass[p_index] * DM_PHYSICS_FIXED_DT;
         
         p_block->vel_x[p_index] += p_block->force_x[p_index] * dt_mass;
         p_block->vel_y[p_index] += p_block->force_y[p_index] * dt_mass;

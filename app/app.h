@@ -11,7 +11,8 @@ typedef struct component_ids_t
     dm_ecs_id physics;
 } component_ids;
 
-#define MAX_ENTITIES 2048
+#define DRAW_LEN 100
+#define MAX_ENTITIES 4096
 typedef struct application_data_t
 {
     uint32_t     entity_count;
@@ -19,6 +20,11 @@ typedef struct application_data_t
     basic_camera camera;
     
     component_ids components;
+    
+    float draw_pos_x[DRAW_LEN];
+    float draw_pos_y[DRAW_LEN];
+    float draw_pos_z[DRAW_LEN];
+    dm_timer draw_timer;
     
     void*        render_pass_data;
     void*        debug_render_pass_data;

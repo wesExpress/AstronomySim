@@ -8,7 +8,37 @@
 #include "rendering/debug_render_pass.h"
 #include "rendering/imgui_render_pass.h"
 
-#define WORLD_SIZE 150
+#define WORLD_SIZE 300
+#define TIME_LIM 1.0f
+void draw_path(application_data* app_data, dm_context* context)
+{
+    if(dm_timer_elapsed(&app_data->draw_timer, context) >= TIME_LIM)
+    {
+        component_transform transform = entity_get_transform(app_data->entities[1], app_data->components.transform, context);
+        
+        for(uint32_t i=DRAW_LEN-1; i>0; i--)
+        {
+            app_data->draw_pos_x[i] = app_data->draw_pos_x[i-1];
+            app_data->draw_pos_y[i] = app_data->draw_pos_y[i-1];
+            app_data->draw_pos_z[i] = app_data->draw_pos_z[i-1];
+        }
+        
+        app_data->draw_pos_x[0] = transform.pos[0];
+        app_data->draw_pos_y[0] = transform.pos[1];
+        app_data->draw_pos_z[0] = transform.pos[2];
+        
+        dm_timer_start(&app_data->draw_timer, context);
+    }
+    
+    for(uint32_t i=0; i<DRAW_LEN; i++)
+    {
+        if(app_data->draw_pos_x[0]==0 && app_data->draw_pos_y[0]==0 && app_data->draw_pos_z[0]==0) break;
+        
+        float r = (float)(DRAW_LEN - i) / (float)DRAW_LEN;
+        
+        debug_render_bilboard((float[]){ app_data->draw_pos_x[i],app_data->draw_pos_y[i],app_data->draw_pos_z[i] }, 0.1f,0.1f, (float[]){ r,0,0,r}, context);
+    }
+}
 
 dm_entity create_entity(application_data* app_data, dm_context* context)
 {
@@ -38,7 +68,7 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     float vel_y = dm_random_float(context) * 2 - 1;
     float vel_z = dm_random_float(context) * 2 - 1;
     
-    float mass = dm_random_float(context) * 1e3;
+    float mass = dm_random_float(context) * 1e10;
     if(dm_random_float(context) > 1)
     {
         scale_y = scale_z = scale_x;
@@ -100,20 +130,29 @@ bool dm_application_init(dm_context* context)
 #else
     dm_entity entity = dm_ecs_create_entity(context);
     
-    entity_add_transform(entity, app_data->components.transform, 0.9f,0,0, 1,1,1, 0,0,0,1, context);
-    //entity_add_box_collider(entity, app_data->components.collision, 0,0,0, 1,1,1, context);
-    entity_add_sphere_collider(entity, app_data->components.collision, 0,0,0, 0.5f, context);
-    entity_add_kinematics_sphere_rigid_body(entity, app_data->components.physics, 1, 0,0,0, 0,0.1f, 0.5f, context);
-    
-    app_data->entities[app_data->entity_count++] = entity;
-    
-    entity = dm_ecs_create_entity(context);
+    float mass = 1e10f;
     entity_add_transform(entity, app_data->components.transform, 0,0,0, 1,1,1, 0,0,0,1, context);
     entity_add_box_collider(entity, app_data->components.collision, 0,0,0, 1,1,1, context);
-    entity_add_kinematics_box_rigid_body(entity, app_data->components.physics, 1, 0,0,0, 0,0.1f, -0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f, context);
+    entity_add_kinematics_box_rigid_body(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, -0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f, context);
+    app_data->entities[app_data->entity_count++] = entity;
+    
+    // orbiter
+    entity = dm_ecs_create_entity(context);
+    float radius = 3;
+    entity_add_transform(entity, app_data->components.transform, radius,0,0, 0.1f,0.1f,0.1f, 0,0,0,1, context);
+    entity_add_box_collider(entity, app_data->components.collision, 0,0,0, 1,1,1, context);
+    entity_add_kinematics_box_rigid_body(entity, app_data->components.physics, 1, 0,0,0, 0,0.1f, -0.05f,-0.05f,-0.05f,0.05f,0.05f,0.05f, context);
+    
+    float vc = 6.67e-11f * mass / radius;
+    vc = dm_sqrtf(vc);
+    
+    entity_add_velocity(entity, app_data->components.physics, 0,0,vc, context);
     
     app_data->entities[app_data->entity_count++] = entity;
 #endif
+    
+    dm_timer_start(&app_data->draw_timer, context);
+    
     return true;
 }
 
@@ -137,6 +176,8 @@ bool dm_application_update(dm_context* context)
     {
         render_pass_submit_entity(app_data->entities[i], context);
     }
+    
+    draw_path(app_data, context);
     
     imgui_draw_text_fmt(DM_SCREEN_WIDTH(context)-100,20, 0,1,0,1, context, "FPS: %0.2f", 1.0f / context->delta);
     

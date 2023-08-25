@@ -5,7 +5,7 @@
 #include "rendering/debug_render_pass.h"
 #include "rendering/imgui_render_pass.h"
 
-#define G 6.673e-11f
+#define G 6.6743e-11f
 
 typedef struct gravity_data_cache_t
 {
@@ -133,8 +133,6 @@ bool gravity_system_run(void* s, void* c)
         manager->entity_cache.b_indices = dm_alloc(sizeof(uint32_t) * DM_ECS_MAX * system->entity_count);
         
         manager->entity_count = system->entity_count;
-        
-        gravity_populate_arrays(manager, system, context);
     }
     else if(manager->entity_count != system->entity_count)
     {
@@ -152,13 +150,11 @@ bool gravity_system_run(void* s, void* c)
         manager->entity_cache.b_indices = dm_realloc(manager->entity_cache.b_indices, sizeof(uint32_t) * DM_ECS_MAX * system->entity_count);
         
         manager->entity_count = system->entity_count;
-        
-        gravity_populate_arrays(manager, system, context);
     }
     
     dm_timer t = { 0 };
     dm_timer_start(&t, context);
-    
+    gravity_populate_arrays(manager, system, context);
     if(dm_input_key_just_pressed(DM_KEY_P, context)) 
     {
         DM_LOG_INFO("Switching gravity method");
@@ -295,9 +291,9 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
         j = i+1;
         for(; (system->entity_count-j)>DM_SIMD_N; j+=DM_SIMD_N)
         {
-            pos_j_x = dm_mm_load_ps(manager->data_cache.pos_x + j);
-            pos_j_y = dm_mm_load_ps(manager->data_cache.pos_y + j);
-            pos_j_z = dm_mm_load_ps(manager->data_cache.pos_z + j);
+            pos_j_x = dm_mm_load_ps(&manager->data_cache.pos_x[j]);
+            pos_j_y = dm_mm_load_ps(&manager->data_cache.pos_y[j]);
+            pos_j_z = dm_mm_load_ps(&manager->data_cache.pos_z[j]);
             
             mass_j = dm_mm_load_ps(manager->data_cache.mass + j);
             
