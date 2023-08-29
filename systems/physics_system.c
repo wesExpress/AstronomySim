@@ -148,7 +148,7 @@ bool physics_system_run(void* s, void* d)
     }
     
     // reset forces
-    component_physics_block* physics = dm_ecs_get_component_block(manager->physics, context);
+    component_physics* physics = dm_ecs_get_component_block(manager->physics, context);
     dm_memzero(physics->force_x,  sizeof(float) * DM_ECS_MAX_ENTITIES);
     dm_memzero(physics->force_y,  sizeof(float) * DM_ECS_MAX_ENTITIES);
     dm_memzero(physics->force_z,  sizeof(float) * DM_ECS_MAX_ENTITIES);
@@ -201,8 +201,8 @@ void physics_system_broadphase_update_sphere_aabbs(uint32_t sphere_count, float 
     
     float center[3] = { 0 };
     
-    component_transform_block* transform = dm_ecs_get_component_block(t_id, context);
-    component_collision_block* collision = dm_ecs_get_component_block(c_id, context);
+    component_transform* transform = dm_ecs_get_component_block(t_id, context);
+    component_collision* collision = dm_ecs_get_component_block(c_id, context);
     
     for(uint32_t i=0; i<sphere_count; i++)
     {
@@ -244,8 +244,8 @@ void physics_system_broadphase_update_box_aabbs(uint32_t box_count, float center
     
     uint32_t t_index, c_index;
     
-    component_transform_block* transform = dm_ecs_get_component_block(t_id, context);
-    component_collision_block* collision = dm_ecs_get_component_block(c_id, context);
+    component_transform* transform = dm_ecs_get_component_block(t_id, context);
+    component_collision* collision = dm_ecs_get_component_block(c_id, context);
     
     float center[3] = { 0 };
     
@@ -386,8 +386,8 @@ void physics_system_broadphase_update_box_aabbs_simd(uint32_t box_count, float c
     
     uint32_t t_index, c_index;
     
-    component_transform_block* transform = dm_ecs_get_component_block(t_id, context);
-    component_collision_block* collision = dm_ecs_get_component_block(c_id, context);
+    component_transform* transform = dm_ecs_get_component_block(t_id, context);
+    component_collision* collision = dm_ecs_get_component_block(c_id, context);
     
     dm_mm_float center_x, center_y, center_z;
     dm_mm_float center_sum_x, center_sum_y, center_sum_z;
@@ -800,13 +800,11 @@ int physics_system_broadphase_get_variance_axis(dm_ecs_system_manager* system, d
     
     int axis = 0;
     
-    float center[N3], dum[N3];
-    
     uint32_t sphere_count=0, box_count=0;
     
     const dm_ecs_id c_id = manager->collision;
     
-    component_collision_block* collision = dm_ecs_get_component_block(c_id, context);
+    component_collision* collision = dm_ecs_get_component_block(c_id, context);
     
     for(uint32_t i=0; i<system->entity_count; i++)
     {
@@ -817,6 +815,9 @@ int physics_system_broadphase_get_variance_axis(dm_ecs_system_manager* system, d
             break;
             
             case DM_COLLISION_SHAPE_BOX: manager->box_indices[box_count++] = i;
+            break;
+
+            default:
             break;
         }
     }
@@ -858,7 +859,7 @@ void physics_system_broadphase_sort_sweep(uint32_t count, float* sort_min, float
     
     const dm_ecs_id c_id = manager->collision;
     
-    component_collision_block* collision = dm_ecs_get_component_block(c_id, context);
+    component_collision* collision = dm_ecs_get_component_block(c_id, context);
     
 #ifdef DM_PLATFORM_WIN32
     qsort_s(manager->sweep_indices, count, sizeof(uint32_t), physics_system_broadphase_sort, sort_min);
@@ -973,7 +974,7 @@ bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* contex
     
     const int axis = physics_system_broadphase_get_variance_axis(system, context);
     
-    component_collision_block* collision = dm_ecs_get_component_block(manager->collision, context);
+    component_collision* collision = dm_ecs_get_component_block(manager->collision, context);
     
     float* min, *max;
     
@@ -1028,10 +1029,10 @@ bool physics_system_narrowphase(dm_ecs_system_manager* system, dm_context* conte
     const dm_ecs_id p_id = manager->physics;
     const dm_ecs_id r_id = manager->rigid_body;
     
-    component_transform_block*  transform = dm_ecs_get_component_block(t_id, context);
-    component_collision_block*  collision = dm_ecs_get_component_block(c_id, context);
-    component_physics_block*    physics   = dm_ecs_get_component_block(p_id, context);
-    component_rigid_body_block* rigid_body = dm_ecs_get_component_block(r_id, context);
+    component_transform*  transform = dm_ecs_get_component_block(t_id, context);
+    component_collision*  collision = dm_ecs_get_component_block(c_id, context);
+    component_physics*    physics   = dm_ecs_get_component_block(p_id, context);
+    component_rigid_body* rigid_body = dm_ecs_get_component_block(r_id, context);
     
     uint32_t t_a, c_a, p_a, r_a;
     uint32_t t_b, c_b, p_b, r_b;
@@ -1185,16 +1186,14 @@ void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* c
     physics_system_manager* manager = system->system_data;
     
     const dm_ecs_id t_id = manager->transform;
-    const dm_ecs_id c_id = manager->collision;
     const dm_ecs_id p_id = manager->physics;
     const dm_ecs_id r_id = manager->rigid_body;
     
-    component_transform_block*  transform = dm_ecs_get_component_block(t_id, context);
-    component_collision_block*  collision = dm_ecs_get_component_block(c_id, context);
-    component_physics_block*    physics   = dm_ecs_get_component_block(p_id, context);
-    component_rigid_body_block* rigid_body = dm_ecs_get_component_block(r_id, context);
+    component_transform*  transform = dm_ecs_get_component_block(t_id, context);
+    component_physics*    physics   = dm_ecs_get_component_block(p_id, context);
+    component_rigid_body* rigid_body = dm_ecs_get_component_block(r_id, context);
     
-    uint32_t t_index, c_index, p_index, r_index;
+    uint32_t t_index, p_index, r_index;
     
     float dt_mass;
     
@@ -1208,17 +1207,12 @@ void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* c
     float body_inv_00, body_inv_01, body_inv_02;
     float body_inv_10, body_inv_11, body_inv_12;
     float body_inv_20, body_inv_21, body_inv_22;
-    
-    float new_i_inv_00, new_i_inv_01, new_i_inv_02;
-    float new_i_inv_10, new_i_inv_11, new_i_inv_12;
-    float new_i_inv_20, new_i_inv_21, new_i_inv_22;
-    
+        
     const static float half_dt = 0.5f * DM_PHYSICS_FIXED_DT;
     
     for(uint32_t i=0; i<system->entity_count; i++)
     {
         t_index = system->entity_indices[i][t_id];
-        c_index = system->entity_indices[i][c_id];
         p_index = system->entity_indices[i][p_id];
         r_index = system->entity_indices[i][r_id];
         

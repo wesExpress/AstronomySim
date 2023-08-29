@@ -17,11 +17,12 @@
 #define TIME_LIM 1.0f
 void draw_path(application_data* app_data, dm_context* context)
 {
-    const t_id = app_data->components.transform;
-    const component_transform_block* t_block = dm_ecs_get_component_block(t_id, context);
+    const dm_ecs_id t_id = app_data->components.transform;
+    const component_transform* transform = dm_ecs_get_component_block(t_id, context);
     const dm_entity entity = app_data->entities[0];
     const uint32_t index   = dm_ecs_entity_get_component_index(entity, t_id, context);
-    
+    if(index==DM_ECS_INVALID_ENTITY) return;
+
     timer_draw_data* draw_data = &app_data->draw_data;
     
     if(dm_timer_elapsed(&draw_data->draw_timer, context) >= TIME_LIM)
@@ -33,9 +34,9 @@ void draw_path(application_data* app_data, dm_context* context)
             draw_data->draw_pos_z[i] = draw_data->draw_pos_z[i-1];
         }
         
-        draw_data->draw_pos_x[0] = t_block->pos_x[index];
-        draw_data->draw_pos_y[0] = t_block->pos_y[index];
-        draw_data->draw_pos_z[0] = t_block->pos_z[index];
+        draw_data->draw_pos_x[0] = transform->pos_x[index];
+        draw_data->draw_pos_y[0] = transform->pos_y[index];
+        draw_data->draw_pos_z[0] = transform->pos_z[index];
         
         dm_timer_start(&draw_data->draw_timer, context);
     }

@@ -165,9 +165,8 @@ bool render_pass_render(dm_context* context)
     render_pass_data* pass_data = app_data->render_pass_data;
     
     const dm_ecs_id t_id = app_data->components.transform;
-    const dm_ecs_id c_id = app_data->components.collision;
     
-    component_transform_block* transform = dm_ecs_get_component_block(t_id, context);
+    component_transform* transform = dm_ecs_get_component_block(t_id, context);
     uint32_t t_index; 
     
     float obj_rm[M4];
@@ -180,7 +179,8 @@ bool render_pass_render(dm_context* context)
     {
         dm_entity entity = pass_data->entities[i];
         t_index = dm_ecs_entity_get_component_index(entity, t_id, context);
-        
+        if(t_index==DM_ECS_INVALID_ENTITY) break;
+
         pos[0] = transform->pos_x[t_index]; 
         pos[1] = transform->pos_y[t_index]; 
         pos[2] = transform->pos_z[t_index];

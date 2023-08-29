@@ -1,10 +1,11 @@
 #ifndef COMPONENTS_H
 #define COMPONENTS_H
 
+#include "app_defines.h"
 #include "dm.h"
 
 // transform
-typedef struct component_transform_block_t
+typedef struct component_transform_t
 {
     float pos_x[DM_ECS_MAX_ENTITIES];
     float pos_y[DM_ECS_MAX_ENTITIES];
@@ -18,7 +19,7 @@ typedef struct component_transform_block_t
     float rot_j[DM_ECS_MAX_ENTITIES];
     float rot_k[DM_ECS_MAX_ENTITIES];
     float rot_r[DM_ECS_MAX_ENTITIES];
-} component_transform_block;
+} component_transform;
 
 // collision
 typedef enum collision_flag_t
@@ -29,7 +30,7 @@ typedef enum collision_flag_t
     COLLISION_FLAG_UNKNOWN
 } collision_flag;
 
-typedef struct component_collision_block_t
+typedef struct component_collision_t
 {
     float aabb_local_min_x[DM_ECS_MAX_ENTITIES];
     float aabb_local_min_y[DM_ECS_MAX_ENTITIES];
@@ -60,7 +61,7 @@ typedef struct component_collision_block_t
     
     dm_collision_shape shape[DM_ECS_MAX_ENTITIES];
     collision_flag     flag[DM_ECS_MAX_ENTITIES];
-} component_collision_block;
+} component_collision;
 
 // physics
 typedef enum physics_movement_type_t
@@ -70,7 +71,7 @@ typedef enum physics_movement_type_t
     MOVEMENT_UNKNOWN
 } physics_movement_type;
 
-typedef struct dm_component_physics_block_t
+typedef struct dm_component_physics_t
 {
     float vel_x[DM_ECS_MAX_ENTITIES];
     float vel_y[DM_ECS_MAX_ENTITIES];
@@ -95,17 +96,16 @@ typedef struct dm_component_physics_block_t
     float mass[DM_ECS_MAX_ENTITIES];
     float inv_mass[DM_ECS_MAX_ENTITIES];
     
-    
     // damping coefs
     float damping_v[DM_ECS_MAX_ENTITIES];
     float damping_w[DM_ECS_MAX_ENTITIES];
     
     // enums
     physics_movement_type movement_type[DM_ECS_MAX_ENTITIES];
-} component_physics_block;
+} component_physics;
 
 // rigid body
-typedef struct component_rigid_body_block_t
+typedef struct component_rigid_body_t
 {
     // moment of inertia at rest are diagonals
     // but global inertia is a full 3x3 matrix
@@ -128,7 +128,7 @@ typedef struct component_rigid_body_block_t
     float i_inv_20[DM_ECS_MAX_ENTITIES];
     float i_inv_21[DM_ECS_MAX_ENTITIES];
     float i_inv_22[DM_ECS_MAX_ENTITIES];
-} component_rigid_body_block;
+} component_rigid_body;
 
 // funcs
 bool register_transform(dm_ecs_id* id, dm_context* context);

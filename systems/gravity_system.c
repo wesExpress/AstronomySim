@@ -24,8 +24,6 @@ bool gravity_system_init(dm_ecs_id t_id, dm_ecs_id p_id, dm_context* context)
     dm_ecs_id comps[] = { t_id, p_id };
     
     dm_ecs_system_timing timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
-    // 3 position floats, 3 force floats, 1 mass float
-    size_t cache_elem_size = sizeof(float) * 3 + sizeof(float);
     
     dm_ecs_id id;
     id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, gravity_system_run, gravity_system_shutdown, context);
@@ -80,8 +78,8 @@ void naive_gravity(dm_ecs_system_manager* system, dm_context* context)
     const dm_ecs_id t_id = manager->transform;
     const dm_ecs_id p_id = manager->physics;
     
-    component_transform_block*  transform = dm_ecs_get_component_block(t_id, context);
-    component_physics_block*    physics   = dm_ecs_get_component_block(p_id, context);
+    component_transform* transform = dm_ecs_get_component_block(t_id, context);
+    component_physics*   physics   = dm_ecs_get_component_block(p_id, context);
     
     uint32_t t_a, p_a;
     uint32_t t_b, p_b;
@@ -165,8 +163,8 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
     const dm_ecs_id t_id = manager->transform;
     const dm_ecs_id p_id = manager->physics;
     
-    component_transform_block*  transform = dm_ecs_get_component_block(t_id, context);
-    component_physics_block*    physics   = dm_ecs_get_component_block(p_id, context);
+    component_transform* transform = dm_ecs_get_component_block(t_id, context);
+    component_physics*   physics   = dm_ecs_get_component_block(p_id, context);
     
     uint32_t t_a, p_a;
     uint32_t t_b[DM_SIMD_N], p_b[DM_SIMD_N];

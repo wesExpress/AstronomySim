@@ -110,9 +110,9 @@ void imgui_render_pass_shutdown(dm_context* context)
     application_data* app_data = context->app_data;
     imgui_pass_data*  pass_data = app_data->imgui_pass_data;
     
-    for(uint32_t i=0; i<pass_data->text_count; i++)
+    for(uint32_t i=0; i<IMGUI_PASS_MAX_TEXT_COUNT; i++)
     {
-        dm_free(pass_data->text_packets[i].text);
+        if(pass_data->text_packets[i].text) dm_free(pass_data->text_packets[i].text);
     }
     
     dm_free(app_data->imgui_pass_data);
