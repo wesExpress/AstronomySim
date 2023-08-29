@@ -1,6 +1,7 @@
 #ifndef DEBUG_RENDER_PASS_H
 #define DEBUG_RENDER_PASS_H
 
+#include "app/app_defines.h"
 #include "dm.h"
 
 bool debug_render_pass_init(dm_context* context);

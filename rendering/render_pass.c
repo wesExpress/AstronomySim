@@ -2,7 +2,6 @@
 #include "debug_render_pass.h"
 #include "imgui_render_pass.h"
 
-#include "app/app.h"
 #include "app/components.h"
 
 typedef struct vertex_t
@@ -165,71 +164,45 @@ bool render_pass_render(dm_context* context)
     application_data* app_data = context->app_data;
     render_pass_data* pass_data = app_data->render_pass_data;
     
+    const dm_ecs_id t_id = app_data->components.transform;
+    const dm_ecs_id c_id = app_data->components.collision;
+    
+    component_transform_block* transform = dm_ecs_get_component_block(t_id, context);
+    uint32_t t_index; 
+    
     float obj_rm[M4];
-    component_transform transform = { 0 };
     
     inst_vertex* inst = NULL;
     
+    float pos[3], scale[3], rot[4];
+    
     for(uint32_t i=0; i<pass_data->entity_count; i++)
     {
-        transform = entity_get_transform(pass_data->entities[i], app_data->components.transform, context);
-        if(transform.rot[0]==0 && transform.rot[1]==0 && transform.rot[2]==0 && transform.rot[3]==0) return false;
+        dm_entity entity = pass_data->entities[i];
+        t_index = dm_ecs_entity_get_component_index(entity, t_id, context);
+        
+        pos[0] = transform->pos_x[t_index]; 
+        pos[1] = transform->pos_y[t_index]; 
+        pos[2] = transform->pos_z[t_index];
+        
+        scale[0] = transform->scale_x[t_index]; 
+        scale[1] = transform->scale_y[t_index]; 
+        scale[2] = transform->scale_z[t_index]; 
+        
+        rot[0] = transform->rot_i[t_index];
+        rot[1] = transform->rot_j[t_index];
+        rot[2] = transform->rot_k[t_index];
+        rot[3] = transform->rot_r[t_index];
         
         inst = &pass_data->insts[i];
         
-        dm_mat4_rotate_from_quat(transform.rot, obj_rm);
+        dm_mat4_rotate_from_quat(rot, obj_rm);
         
-        dm_mat_scale_make(transform.scale, inst->model);
+        dm_mat_scale_make(scale, inst->model);
         dm_mat4_mul_mat4(inst->model, obj_rm, inst->model);
-        dm_mat_translate(inst->model, transform.pos, inst->model);
+        dm_mat_translate(inst->model, pos, inst->model);
 #ifdef DM_DIRECTX
         dm_mat4_transpose(inst->model, inst->model);
-#endif
-        
-#if 0
-        component_collision collision = entity_get_collision(pass_data->entities[i], app_data->components.collision, context);
-        
-        float dim[] = {
-            collision.aabb_global_max[0] - collision.aabb_global_min[0],
-            collision.aabb_global_max[1] - collision.aabb_global_min[1],
-            collision.aabb_global_max[2] - collision.aabb_global_min[2],
-        };
-        
-        float color[4] = { 0,0,0,1 };
-        if(collision.flag==COLLISION_FLAG_YES)
-        {
-            color[0] = 1;
-        }
-        else if(collision.flag==COLLISION_FLAG_POSSIBLE)
-        {
-            color[0] = 1;
-            color[1] = 1;
-        }
-        else
-        {
-            color[0] = 1;
-            color[1] = 1;
-            color[2] = 1;
-        }
-        
-        //debug_render_aabb(transform.pos, dim, color, context);
-        switch(collision.shape)
-        {
-            case DM_COLLISION_SHAPE_BOX:
-            dim[0] = collision.internal[3] - collision.internal[0];
-            dim[1] = collision.internal[4] - collision.internal[1];
-            dim[2] = collision.internal[5] - collision.internal[2];
-            break;
-            
-            case DM_COLLISION_SHAPE_SPHERE:
-            dim[0] = dim[1] = dim[2] = collision.internal[0] * 2;
-            break;
-            
-            default:
-            break;
-        }
-        
-        debug_render_cube(transform.pos, dim, transform.rot, color, context);
 #endif
         
         inst->color[0] = 1;

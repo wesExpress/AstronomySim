@@ -1,7 +1,7 @@
 #ifndef RENDER_PASS_H
 #define RENDER_PASS_H
 
-#include "dm.h"
+#include "../app/app.h"
 
 bool render_pass_init(dm_context* context);
 void render_pass_shutdown(dm_context* context);

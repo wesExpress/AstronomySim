@@ -13,7 +13,7 @@
 
 typedef struct physics_system_collision_pair_t
 {
-    dm_ecs_system_entity_container entity_a, entity_b;
+    uint32_t entity_a, entity_b;
 } physics_system_collision_pair;
 
 typedef enum physics_system_flag_t
@@ -22,66 +22,62 @@ typedef enum physics_system_flag_t
     DM_PHYSICS_FLAG_NO_COLLISIONS = 1 << 1,
 } physics_system_flag;
 
-typedef struct dm_system_physics_broadphase_sort_data_t
-{
-    uint32_t index;
-    size_t   block_size;
-    float*   min;
-} physics_system_broadphase_sort_data;
-
-#define PHYSICS_SYSTEM_DEFAULT_COLLISION_CAPACITY 16
-#define PHYSICS_SYSTEM_DEFAULT_MANIFOLD_CAPACITY  16
-#define PHYSICS_SYSTEM_LOAD_FACTOR                0.75f
-#define PHYSICS_SYSTEM_RESIZE_FACTOR              2
+#define PHYSICS_SYSTEM_DYNAMIC_CAPACITY      16
+#define PHYSICS_SYSTEM_DYNAMIC_CAPACITY      16
+#define PHYSICS_SYSTEM_DYNAMIC_LOAD_FACTOR   0.75f
+#define PHYSICS_SYSTEM_DYNAMIC_RESIZE_FACTOR 2
 typedef struct physics_system_manager_t
 {
     double              accum_time, simulation_time;
     physics_system_flag flags;
     
     uint32_t broadphase_checks;
+    
+    uint32_t entity_count, entity_capacity;
+    
+    dm_ecs_id transform, collision, physics, rigid_body;
+    
+    uint32_t sweep_indices[DM_ECS_MAX_ENTITIES];
+    uint32_t sphere_indices[DM_ECS_MAX_ENTITIES], box_indices[DM_ECS_MAX_ENTITIES];
+    
     uint32_t num_possible_collisions, collision_capacity;
     uint32_t num_manifolds, manifold_capacity;
     
-    dm_ecs_id transform, collision, physics;
-    uint32_t  copied_entity_count;
-    
-    physics_system_collision_pair*   possible_collisions;
-    dm_contact_manifold* manifolds;
-    
-    dm_ecs_system_entity_container* copied_entities;
+    physics_system_collision_pair* possible_collisions;
+    dm_contact_manifold*           manifolds;
 } physics_system_manager;
 
 bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* context);
 bool physics_system_narrowphase(dm_ecs_system_manager* system, dm_context* context);
 void physics_system_solve_constraints(physics_system_manager* manager, dm_context* context);
 void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* context);
-void physics_system_reset_forces(dm_ecs_system_manager* system, dm_context* context);
 
 /************
 SYSTEM FUNCS
 **************/
-bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_context* context)
+bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_ecs_id r_id, dm_context* context)
 {
-    dm_ecs_id comps[] = { t_id, c_id, p_id, };
+    dm_ecs_id comps[] = { t_id, c_id, p_id, r_id };
     
     dm_ecs_system_timing timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
-    dm_ecs_id id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, physics_system_run, physics_system_shutdown, context);
+    
+    dm_ecs_id id;
+    id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, physics_system_run, physics_system_shutdown, context);
     
     dm_ecs_system_manager* system = &context->ecs_manager.systems[timing][id];
     system->system_data = dm_alloc(sizeof(physics_system_manager));
     
     physics_system_manager* manager = system->system_data;
     
-    manager->collision_capacity  = PHYSICS_SYSTEM_DEFAULT_COLLISION_CAPACITY;
-    manager->manifold_capacity   = PHYSICS_SYSTEM_DEFAULT_MANIFOLD_CAPACITY;
+    manager->collision_capacity  = PHYSICS_SYSTEM_DYNAMIC_CAPACITY;
+    manager->manifold_capacity   = PHYSICS_SYSTEM_DYNAMIC_CAPACITY;
     manager->possible_collisions = dm_alloc(sizeof(physics_system_collision_pair) * manager->collision_capacity);
     manager->manifolds           = dm_alloc(sizeof(dm_contact_manifold) * manager->manifold_capacity);
     
-    manager->transform = t_id;
-    manager->collision = c_id;
-    manager->physics   = p_id;
-    
-    manager->copied_entity_count = 0;
+    manager->transform  = t_id;
+    manager->collision  = c_id;
+    manager->physics    = p_id;
+    manager->rigid_body = r_id;
     
     return true;
 }
@@ -91,7 +87,6 @@ void physics_system_shutdown(void* s, void* c)
     dm_ecs_system_manager* system = s;   
     physics_system_manager* manager = system->system_data;
     
-    if(manager->copied_entities) dm_free(manager->copied_entities);
     dm_free(manager->possible_collisions);
     dm_free(manager->manifolds);
 }
@@ -152,7 +147,15 @@ bool physics_system_run(void* s, void* d)
         manager->accum_time -= DM_PHYSICS_FIXED_DT;
     }
     
-    physics_system_reset_forces(system, context);
+    // reset forces
+    component_physics_block* physics = dm_ecs_get_component_block(manager->physics, context);
+    dm_memzero(physics->force_x,  sizeof(float) * DM_ECS_MAX_ENTITIES);
+    dm_memzero(physics->force_y,  sizeof(float) * DM_ECS_MAX_ENTITIES);
+    dm_memzero(physics->force_z,  sizeof(float) * DM_ECS_MAX_ENTITIES);
+    dm_memzero(physics->torque_x, sizeof(float) * DM_ECS_MAX_ENTITIES);
+    dm_memzero(physics->torque_y, sizeof(float) * DM_ECS_MAX_ENTITIES);
+    dm_memzero(physics->torque_z, sizeof(float) * DM_ECS_MAX_ENTITIES);
+    
     total_time = dm_timer_elapsed_ms(&full, context);
     
     float iter_f = (float)iters;
@@ -176,105 +179,616 @@ int physics_system_broadphase_sort(const void* a, const void* b, void* c)
 int physics_system_broadphase_sort(void* c, const void* a, const void* b)
 #endif
 {
-    physics_system_broadphase_sort_data* sort_data = c;
-    dm_ecs_system_entity_container container_a = *(dm_ecs_system_entity_container*)a;
-    dm_ecs_system_entity_container container_b = *(dm_ecs_system_entity_container*)b;
+    float* min = c;
     
-    uint32_t c_index = sort_data->index;
+    uint32_t entity_a = *(uint32_t*)a;
+    uint32_t entity_b = *(uint32_t*)b;
     
-    uint32_t a_c_index = container_a.component_indices[c_index];
-    uint32_t b_c_index = container_b.component_indices[c_index];
-    
-    uint32_t a_b_index = container_a.block_indices[c_index];
-    uint32_t b_b_index = container_b.block_indices[c_index];
-    
-    size_t a_offset = a_b_index * sort_data->block_size;
-    size_t b_offset = b_b_index * sort_data->block_size;
-    
-    float a_min = ((float*)((char*)sort_data->min + a_offset))[a_c_index];
-    float b_min = ((float*)((char*)sort_data->min + b_offset))[b_c_index];
+    float a_min = min[entity_a];
+    float b_min = min[entity_b];
     
     return (a_min > b_min) - (a_min < b_min);
 }
 
-void physics_system_update_sphere_aabb(uint32_t t_index, uint32_t c_index, component_transform_block* t_block, component_collision_block* c_block)
+void physics_system_broadphase_update_sphere_aabbs(uint32_t sphere_count, float center_sum[3], float center_sq_sum[3], dm_ecs_system_manager* system, dm_context* context)
 {
-    c_block->aabb_global_min_x[c_index] = c_block->aabb_local_min_x[c_index] + t_block->pos_x[t_index];
-    c_block->aabb_global_min_y[c_index] = c_block->aabb_local_min_y[c_index] + t_block->pos_y[t_index];
-    c_block->aabb_global_min_z[c_index] = c_block->aabb_local_min_z[c_index] + t_block->pos_z[t_index];
+    physics_system_manager* manager = system->system_data;
     
-    c_block->aabb_global_max_x[c_index] = c_block->aabb_local_max_x[c_index] + t_block->pos_x[t_index];
-    c_block->aabb_global_max_y[c_index] = c_block->aabb_local_max_y[c_index] + t_block->pos_y[t_index];
-    c_block->aabb_global_max_z[c_index] = c_block->aabb_local_max_z[c_index] + t_block->pos_z[t_index];
+    const dm_ecs_id t_id = manager->transform;
+    const dm_ecs_id c_id = manager->collision;
+    
+    uint32_t t_index, c_index;
+    
+    float center[3] = { 0 };
+    
+    component_transform_block* transform = dm_ecs_get_component_block(t_id, context);
+    component_collision_block* collision = dm_ecs_get_component_block(c_id, context);
+    
+    for(uint32_t i=0; i<sphere_count; i++)
+    {
+        t_index = system->entity_indices[manager->sphere_indices[i]][t_id];
+        c_index = system->entity_indices[manager->sphere_indices[i]][c_id];
+        
+        collision->aabb_global_min_x[c_index] = collision->aabb_local_min_x[c_index] + transform->pos_x[t_index];
+        collision->aabb_global_min_y[c_index] = collision->aabb_local_min_y[c_index] + transform->pos_y[t_index];
+        collision->aabb_global_min_z[c_index] = collision->aabb_local_min_z[c_index] + transform->pos_z[t_index];
+        
+        collision->aabb_global_max_x[c_index] = collision->aabb_local_max_x[c_index] + transform->pos_x[t_index];
+        collision->aabb_global_max_y[c_index] = collision->aabb_local_max_y[c_index] + transform->pos_y[t_index];
+        collision->aabb_global_max_z[c_index] = collision->aabb_local_max_z[c_index] + transform->pos_z[t_index];
+        
+        center[0] = 0.5f * (collision->aabb_global_max_x[c_index] - collision->aabb_global_min_x[c_index]);
+        center[1] = 0.5f * (collision->aabb_global_max_y[c_index] - collision->aabb_global_min_y[c_index]);
+        center[2] = 0.5f * (collision->aabb_global_max_z[c_index] - collision->aabb_global_min_z[c_index]);
+        
+        center_sum[0] += center[0];
+        center_sum[1] += center[1];
+        center_sum[2] += center[2];
+        
+        center[0] = center[0] * center[0];
+        center[1] = center[1] * center[1];
+        center[2] = center[2] * center[2];
+        
+        center_sq_sum[0] += center[0];
+        center_sq_sum[1] += center[1];
+        center_sq_sum[2] += center[2];
+    }
 }
 
-void physics_system_update_box_aabb(const uint32_t t_index, const uint32_t c_index, component_transform_block* t_block, component_collision_block* c_block)
+void physics_system_broadphase_update_box_aabbs(uint32_t box_count, float center_sum[3], float center_sq_sum[3], dm_ecs_system_manager* system, dm_context* context)
 {
+    physics_system_manager* manager = system->system_data;
+    
+    const dm_ecs_id t_id = manager->transform;
+    const dm_ecs_id c_id = manager->collision;
+    
+    uint32_t t_index, c_index;
+    
+    component_transform_block* transform = dm_ecs_get_component_block(t_id, context);
+    component_collision_block* collision = dm_ecs_get_component_block(c_id, context);
+    
+    float center[3] = { 0 };
+    
     float a,b      = 0.0f;
     float quat[N4] = { 0 };
     float rot[M3]  = { 0 };
     
     float world_min[3], world_max[3];
+    float min[3], max[3];
     
-    quat[0] = t_block->rot_i[t_index];
-    quat[1] = t_block->rot_j[t_index];
-    quat[2] = t_block->rot_k[t_index];
-    quat[3] = t_block->rot_r[t_index];
+    float xx,yy,zz;
+    float xy,xz,xw,yz,yw,zw;
     
-    dm_mat3_rotate_from_quat(quat, rot);
-    
-    const float min[] = {
-        c_block->aabb_local_min_x[c_index],
-        c_block->aabb_local_min_y[c_index],
-        c_block->aabb_local_min_z[c_index],
-    };
-    
-    const float max[] = {
-        c_block->aabb_local_max_x[c_index],
-        c_block->aabb_local_max_y[c_index],
-        c_block->aabb_local_max_z[c_index],
-    };
-    
-    // start
-    world_min[0] = world_max[0] = t_block->pos_x[t_index];
-    world_min[1] = world_max[1] = t_block->pos_y[t_index];
-    world_min[2] = world_max[2] = t_block->pos_z[t_index];
-    
-    for(uint32_t i=0; i<3; i++)
+    for(uint32_t i=0; i<box_count; i++)
     {
-        for(uint32_t j=0; j<3; j++)
+        t_index = system->entity_indices[manager->sphere_indices[i]][t_id];
+        c_index = system->entity_indices[manager->sphere_indices[i]][c_id];
+        
+        quat[0] = transform->rot_i[t_index];
+        quat[1] = transform->rot_j[t_index];
+        quat[2] = transform->rot_k[t_index];
+        quat[3] = transform->rot_r[t_index];
+        
+        min[0] = collision->aabb_local_min_x[c_index];
+        min[1] = collision->aabb_local_min_y[c_index];
+        min[2] = collision->aabb_local_min_z[c_index];
+        
+        max[0] = collision->aabb_local_max_x[c_index];
+        max[1] = collision->aabb_local_max_y[c_index];
+        max[2] = collision->aabb_local_max_z[c_index];
+        
+        xx = quat[0] * quat[0];
+        yy = quat[1] * quat[1];
+        zz = quat[2] * quat[2];
+        xy = quat[0] * quat[1];
+        xz = quat[0] * quat[2];
+        xw = quat[0] * quat[3];
+        yz = quat[1] * quat[2];
+        yw = quat[1] * quat[3];
+        zw = quat[2] * quat[3];
+        
+        rot[0] = 2 * (yy + zz);
+        rot[0] = 1 - rot[0];
+        rot[1] = 2 * (xy + zw);
+        rot[2] = 2 * (xz - yw);
+        
+        rot[3] = 2 * (xy - zw);
+        rot[4] = 1 - 2 * (xx + zz);
+        rot[5] = 2 * (yz + xw);
+        
+        rot[6] = 2 * (xz + yw);
+        rot[7] = 2 * (yz - xw);
+        rot[8] = 1 - 2 * (xx + yy);
+        
+        // start
+        world_min[0] = world_max[0] = transform->pos_x[t_index];
+        world_min[1] = world_max[1] = transform->pos_y[t_index];
+        world_min[2] = world_max[2] = transform->pos_z[t_index];
+        
+        // x
+        a = rot[0 * 3 + 0] * min[0];
+        b = rot[0 * 3 + 0] * max[0];
+        world_min[0] += DM_MIN(a,b);
+        world_max[0] += DM_MAX(a,b);
+        
+        a = rot[1 * 3 + 0] * min[1];
+        b = rot[1 * 3 + 0] * max[1];
+        world_min[0] += DM_MIN(a,b);
+        world_max[0] += DM_MAX(a,b);
+        
+        a = rot[2 * 3 + 0] * min[2];
+        b = rot[2 * 3 + 0] * max[2];
+        world_min[0] += DM_MIN(a,b);
+        world_max[0] += DM_MAX(a,b);
+        
+        // y
+        a = rot[0 * 3 + 1] * min[0];
+        b = rot[0 * 3 + 1] * max[0];
+        world_min[1] += DM_MIN(a,b);
+        world_max[1] += DM_MAX(a,b);
+        
+        a = rot[1 * 3 + 1] * min[1];
+        b = rot[1 * 3 + 1] * max[1];
+        world_min[1] += DM_MIN(a,b);
+        world_max[1] += DM_MAX(a,b);
+        
+        a = rot[2 * 3 + 1] * min[2];
+        b = rot[2 * 3 + 1] * max[2];
+        world_min[1] += DM_MIN(a,b);
+        world_max[1] += DM_MAX(a,b);
+        
+        // z
+        a = rot[0 * 3 + 2] * min[0];
+        b = rot[0 * 3 + 2] * max[0];
+        world_min[2] += DM_MIN(a,b);
+        world_max[2] += DM_MAX(a,b);
+        
+        a = rot[1 * 3 + 2] * min[1];
+        b = rot[1 * 3 + 2] * max[1];
+        world_min[2] += DM_MIN(a,b);
+        world_max[2] += DM_MAX(a,b);
+        
+        a = rot[2 * 3 + 2] * min[2];
+        b = rot[2 * 3 + 2] * max[2];
+        world_min[2] += DM_MIN(a,b);
+        world_max[2] += DM_MAX(a,b);
+        
+        // centers
+        center[0] = 0.5f * (world_max[0] - world_min[0]);
+        center[1] = 0.5f * (world_max[1] - world_min[1]);
+        center[2] = 0.5f * (world_max[2] - world_min[2]);
+        
+        center_sum[0] += center[0];
+        center_sum[1] += center[1];
+        center_sum[2] += center[2];
+        
+        center_sq_sum[0] += center[0] * center[0];
+        center_sq_sum[1] += center[1] * center[1];
+        center_sq_sum[2] += center[2] * center[2];
+        
+        // assign
+        collision->aabb_global_min_x[c_index] = world_min[0];
+        collision->aabb_global_min_y[c_index] = world_min[1];
+        collision->aabb_global_min_z[c_index] = world_min[2];
+        
+        collision->aabb_global_max_x[c_index] = world_max[0];
+        collision->aabb_global_max_y[c_index] = world_max[1];
+        collision->aabb_global_max_z[c_index] = world_max[2];
+    }
+}
+
+void physics_system_broadphase_update_box_aabbs_simd(uint32_t box_count, float center_sum[3], float center_sq_sum[3], dm_ecs_system_manager* system, dm_context* context)
+{
+    physics_system_manager* manager = system->system_data;
+    
+    const dm_ecs_id t_id = manager->transform;
+    const dm_ecs_id c_id = manager->collision;
+    
+    uint32_t t_index, c_index;
+    
+    component_transform_block* transform = dm_ecs_get_component_block(t_id, context);
+    component_collision_block* collision = dm_ecs_get_component_block(c_id, context);
+    
+    dm_mm_float center_x, center_y, center_z;
+    dm_mm_float center_sum_x, center_sum_y, center_sum_z;
+    dm_mm_float center_sq_sum_x, center_sq_sum_y, center_sq_sum_z;
+    
+    dm_mm_float a,b;
+    dm_mm_float rot_i, rot_j, rot_k, rot_r;
+    
+    dm_mm_float xx,yy,zz;
+    dm_mm_float xy,xz,xw,yz,yw,zw;
+    
+    dm_mm_float rot_00, rot_01, rot_02;
+    dm_mm_float rot_10, rot_11, rot_12;
+    dm_mm_float rot_20, rot_21, rot_22;
+    
+    dm_mm_float min_x, min_y, min_z;
+    dm_mm_float max_x, max_y, max_z;
+    dm_mm_float world_min_x, world_min_y, world_min_z;
+    dm_mm_float world_max_x, world_max_y, world_max_z;
+    
+    dm_mm_float ones = dm_mm_set1_ps(1);
+    dm_mm_float twos = dm_mm_set1_ps(2);
+    dm_mm_float half = dm_mm_set1_ps(0.5f);
+    
+    center_sum_x = dm_mm_set1_ps(0);
+    center_sum_y = dm_mm_set1_ps(0);
+    center_sum_z = dm_mm_set1_ps(0);
+    
+    center_sq_sum_x = dm_mm_set1_ps(0);
+    center_sq_sum_y = dm_mm_set1_ps(0);
+    center_sq_sum_z = dm_mm_set1_ps(0);
+    
+    float pos_x_loader[DM_SIMD_N],pos_y_loader[DM_SIMD_N],pos_z_loader[DM_SIMD_N];
+    float rot_i_loader[DM_SIMD_N],rot_j_loader[DM_SIMD_N],rot_k_loader[DM_SIMD_N],rot_r_loader[DM_SIMD_N];
+    float aabb_min_x_loader[DM_SIMD_N],aabb_min_y_loader[DM_SIMD_N],aabb_min_z_loader[DM_SIMD_N];
+    float aabb_max_x_loader[DM_SIMD_N],aabb_max_y_loader[DM_SIMD_N],aabb_max_z_loader[DM_SIMD_N];
+    
+    uint32_t i=0, j;
+    for(; (box_count-i)>=DM_SIMD_N; i+=DM_SIMD_N)
+    {
+        j = 0;
+        for(; j<DM_SIMD_N; j++)
         {
-            a = rot[j * 3 + i] * min[j];
-            b = rot[j * 3 + i] * max[j];
+            t_index = system->entity_indices[manager->sphere_indices[i]][t_id];
+            c_index = system->entity_indices[manager->sphere_indices[i]][c_id];
             
-            world_min[i] += DM_MIN(a,b);
-            world_max[i] += DM_MAX(a,b);
+            pos_x_loader[j] = transform->pos_x[t_index];
+            pos_y_loader[j] = transform->pos_y[t_index];
+            pos_z_loader[j] = transform->pos_z[t_index];
+            
+            rot_i_loader[j] = transform->rot_i[t_index];
+            rot_j_loader[j] = transform->rot_j[t_index];
+            rot_k_loader[j] = transform->rot_k[t_index];
+            rot_r_loader[j] = transform->rot_r[t_index];
+            
+            aabb_min_x_loader[j] = collision->aabb_local_min_x[c_index];
+            aabb_min_y_loader[j] = collision->aabb_local_min_y[c_index];
+            aabb_min_z_loader[j] = collision->aabb_local_min_z[c_index];
+            
+            aabb_max_x_loader[j] = collision->aabb_local_max_x[c_index];
+            aabb_max_y_loader[j] = collision->aabb_local_max_y[c_index];
+            aabb_max_z_loader[j] = collision->aabb_local_max_z[c_index];
+        }
+        
+        world_min_x = dm_mm_load_ps(pos_x_loader);
+        world_min_y = dm_mm_load_ps(pos_y_loader);
+        world_min_z = dm_mm_load_ps(pos_z_loader);
+        
+        world_max_x = dm_mm_load_ps(pos_x_loader);
+        world_max_y = dm_mm_load_ps(pos_y_loader);
+        world_max_z = dm_mm_load_ps(pos_z_loader);
+        
+        min_x = dm_mm_load_ps(aabb_min_x_loader);
+        min_y = dm_mm_load_ps(aabb_min_y_loader);
+        min_z = dm_mm_load_ps(aabb_min_z_loader);
+        
+        max_x = dm_mm_load_ps(aabb_max_x_loader);
+        max_y = dm_mm_load_ps(aabb_max_y_loader);
+        max_z = dm_mm_load_ps(aabb_max_z_loader);
+        
+        rot_i = dm_mm_load_ps(rot_i_loader);
+        rot_j = dm_mm_load_ps(rot_j_loader);
+        rot_k = dm_mm_load_ps(rot_k_loader);
+        rot_r = dm_mm_load_ps(rot_r_loader);
+        
+        xx = dm_mm_mul_ps(rot_i, rot_i);
+        yy = dm_mm_mul_ps(rot_j, rot_j);
+        zz = dm_mm_mul_ps(rot_k, rot_k);
+        xy = dm_mm_mul_ps(rot_i, rot_j);
+        xz = dm_mm_mul_ps(rot_i, rot_k);
+        xw = dm_mm_mul_ps(rot_i, rot_r);
+        yz = dm_mm_mul_ps(rot_j, rot_k);
+        yw = dm_mm_mul_ps(rot_j, rot_r);
+        zw = dm_mm_mul_ps(rot_k, rot_r);
+        
+        rot_00 = dm_mm_add_ps(yy,zz);
+        rot_00 = dm_mm_mul_ps(rot_00, twos);
+        rot_00 = dm_mm_sub_ps(ones, rot_00);
+        rot_01 = dm_mm_add_ps(xy,zw);
+        rot_01 = dm_mm_mul_ps(rot_01, twos);
+        rot_02 = dm_mm_sub_ps(xz,yw);
+        rot_02 = dm_mm_mul_ps(rot_02, twos);
+        
+        rot_10 = dm_mm_sub_ps(xy,zw);
+        rot_10 = dm_mm_mul_ps(rot_10, twos);
+        rot_11 = dm_mm_add_ps(xx,zz);
+        rot_11 = dm_mm_mul_ps(rot_11, twos);
+        rot_11 = dm_mm_sub_ps(ones, rot_11);
+        rot_12 = dm_mm_add_ps(yz,xw);
+        rot_12 = dm_mm_mul_ps(rot_12, twos);
+        
+        rot_20 = dm_mm_add_ps(xz,yw);
+        rot_20 = dm_mm_mul_ps(rot_20, twos);
+        rot_21 = dm_mm_sub_ps(yz,xw);
+        rot_21 = dm_mm_mul_ps(rot_21, twos);
+        rot_22 = dm_mm_add_ps(xx,yy);
+        rot_22 = dm_mm_mul_ps(rot_22, twos);
+        rot_22 = dm_mm_sub_ps(ones, rot_22);
+        
+        // x
+        a = dm_mm_mul_ps(rot_00, min_x);
+        b = dm_mm_mul_ps(rot_00, max_x);
+        world_min_x = dm_mm_add_ps(world_min_x, dm_mm_min_ps(a,b));
+        world_max_x = dm_mm_add_ps(world_max_x, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_10, min_y);
+        b = dm_mm_mul_ps(rot_10, max_y);
+        world_min_x = dm_mm_add_ps(world_min_x, dm_mm_min_ps(a,b));
+        world_max_x = dm_mm_add_ps(world_max_x, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_20, min_z);
+        b = dm_mm_mul_ps(rot_20, max_z);
+        world_min_x = dm_mm_add_ps(world_min_x, dm_mm_min_ps(a,b));
+        world_max_x = dm_mm_add_ps(world_max_x, dm_mm_max_ps(a,b));
+        
+        // y
+        a = dm_mm_mul_ps(rot_01, min_x);
+        b = dm_mm_mul_ps(rot_01, max_x);
+        world_min_y = dm_mm_add_ps(world_min_y, dm_mm_min_ps(a,b));
+        world_max_y = dm_mm_add_ps(world_max_y, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_11, min_y);
+        b = dm_mm_mul_ps(rot_11, max_y);
+        world_min_y = dm_mm_add_ps(world_min_y, dm_mm_min_ps(a,b));
+        world_max_y = dm_mm_add_ps(world_max_y, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_21, min_z);
+        b = dm_mm_mul_ps(rot_21, max_z);
+        world_min_y = dm_mm_add_ps(world_min_y, dm_mm_min_ps(a,b));
+        world_max_y = dm_mm_add_ps(world_max_y, dm_mm_max_ps(a,b));
+        
+        // z
+        a = dm_mm_mul_ps(rot_02, min_x);
+        b = dm_mm_mul_ps(rot_02, max_x);
+        world_min_z = dm_mm_add_ps(world_min_z, dm_mm_min_ps(a,b));
+        world_max_z = dm_mm_add_ps(world_max_z, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_12, min_y);
+        b = dm_mm_mul_ps(rot_12, max_y);
+        world_min_z = dm_mm_add_ps(world_min_z, dm_mm_min_ps(a,b));
+        world_max_z = dm_mm_add_ps(world_max_z, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_22, min_z);
+        b = dm_mm_mul_ps(rot_22, max_z);
+        world_min_z = dm_mm_add_ps(world_min_z, dm_mm_min_ps(a,b));
+        world_max_z = dm_mm_add_ps(world_max_z, dm_mm_max_ps(a,b));
+        
+        // centers
+        center_x = dm_mm_sub_ps(world_max_x, world_min_x);
+        center_x = dm_mm_mul_ps(center_x, half);
+        center_y = dm_mm_sub_ps(world_max_y, world_min_y);
+        center_y = dm_mm_mul_ps(center_y, half);
+        center_z = dm_mm_sub_ps(world_max_z, world_min_z);
+        center_z = dm_mm_mul_ps(center_z, half);
+        
+        center_sum_x = dm_mm_add_ps(center_sum_x, center_x);
+        center_sum_y = dm_mm_add_ps(center_sum_y, center_y);
+        center_sum_z = dm_mm_add_ps(center_sum_z, center_z);
+        
+        center_sq_sum_x = dm_mm_fmadd_ps(center_x,center_x, center_sq_sum_x);
+        center_sq_sum_y = dm_mm_fmadd_ps(center_y,center_y, center_sq_sum_y);
+        center_sq_sum_z = dm_mm_fmadd_ps(center_z,center_z, center_sq_sum_z);
+        
+        // assign
+        dm_mm_store_ps(aabb_min_x_loader, world_min_x);
+        dm_mm_store_ps(aabb_min_y_loader, world_min_y);
+        dm_mm_store_ps(aabb_min_z_loader, world_min_z);
+        dm_mm_store_ps(aabb_max_x_loader, world_max_x);
+        dm_mm_store_ps(aabb_max_y_loader, world_max_y);
+        dm_mm_store_ps(aabb_max_z_loader, world_max_z);
+        
+        j = 0;
+        for(; j<DM_SIMD_N; j++)
+        {
+            c_index = system->entity_indices[manager->sphere_indices[i]][c_id];
+            
+            collision->aabb_global_min_x[c_index] = aabb_min_x_loader[j];
+            collision->aabb_global_min_y[c_index] = aabb_min_y_loader[j];
+            collision->aabb_global_min_z[c_index] = aabb_min_z_loader[j];
+            
+            collision->aabb_global_max_x[c_index] = aabb_max_x_loader[j];
+            collision->aabb_global_max_y[c_index] = aabb_max_y_loader[j];
+            collision->aabb_global_max_z[c_index] = aabb_max_z_loader[j];
         }
     }
     
-    c_block->aabb_global_min_x[c_index] = world_min[0];
-    c_block->aabb_global_min_y[c_index] = world_min[1];
-    c_block->aabb_global_min_z[c_index] = world_min[2];
-    
-    c_block->aabb_global_max_x[c_index] = world_max[0];
-    c_block->aabb_global_max_y[c_index] = world_max[1];
-    c_block->aabb_global_max_z[c_index] = world_max[2];
-}
-
-void physics_system_update_world_aabb(uint32_t t_index, uint32_t c_index, component_transform_block* t_block, component_collision_block* c_block)
-{
-    switch(c_block->shape[c_index])
+    // might have one more pass
+    uint32_t leftovers = box_count - i;
+    if(leftovers)
     {
-        case DM_COLLISION_SHAPE_SPHERE: physics_system_update_sphere_aabb(t_index, c_index, t_block, c_block);
-        break;
+        dm_memzero(pos_x_loader, sizeof(pos_x_loader));
+        dm_memzero(pos_y_loader, sizeof(pos_y_loader));
+        dm_memzero(pos_z_loader, sizeof(pos_z_loader));
         
-        case DM_COLLISION_SHAPE_BOX: physics_system_update_box_aabb(t_index, c_index, t_block, c_block);
-        break;
+        dm_memzero(rot_i_loader, sizeof(rot_i_loader));
+        dm_memzero(rot_j_loader, sizeof(rot_j_loader));
+        dm_memzero(rot_k_loader, sizeof(rot_k_loader));
+        dm_memzero(rot_r_loader, sizeof(rot_r_loader));
         
-        default:
-        DM_LOG_ERROR("Unknown collider! Shouldn't be here...");
-        break;
+        dm_memzero(aabb_min_x_loader, sizeof(aabb_min_x_loader));
+        dm_memzero(aabb_min_y_loader, sizeof(aabb_min_y_loader));
+        dm_memzero(aabb_min_z_loader, sizeof(aabb_min_z_loader));
+        
+        dm_memzero(aabb_max_x_loader, sizeof(aabb_max_x_loader));
+        dm_memzero(aabb_max_y_loader, sizeof(aabb_max_y_loader));
+        dm_memzero(aabb_max_z_loader, sizeof(aabb_max_z_loader));
+        
+        for(; j<leftovers; j++)
+        {
+            t_index = system->entity_indices[manager->sphere_indices[i]][t_id];
+            c_index = system->entity_indices[manager->sphere_indices[i]][c_id];
+            
+            pos_x_loader[j] = transform->pos_x[t_index];
+            pos_y_loader[j] = transform->pos_y[t_index];
+            pos_z_loader[j] = transform->pos_z[t_index];
+            
+            rot_i_loader[j] = transform->rot_i[t_index];
+            rot_j_loader[j] = transform->rot_j[t_index];
+            rot_k_loader[j] = transform->rot_k[t_index];
+            rot_r_loader[j] = transform->rot_r[t_index];
+            
+            aabb_min_x_loader[j] = collision->aabb_local_min_x[c_index];
+            aabb_min_y_loader[j] = collision->aabb_local_min_y[c_index];
+            aabb_min_z_loader[j] = collision->aabb_local_min_z[c_index];
+            
+            aabb_max_x_loader[j] = collision->aabb_local_max_x[c_index];
+            aabb_max_y_loader[j] = collision->aabb_local_max_y[c_index];
+            aabb_max_z_loader[j] = collision->aabb_local_max_z[c_index];
+        }
+        
+        world_min_x = dm_mm_load_ps(pos_x_loader);
+        world_min_y = dm_mm_load_ps(pos_y_loader);
+        world_min_z = dm_mm_load_ps(pos_z_loader);
+        
+        world_max_x = dm_mm_load_ps(pos_x_loader);
+        world_max_y = dm_mm_load_ps(pos_y_loader);
+        world_max_z = dm_mm_load_ps(pos_z_loader);
+        
+        min_x = dm_mm_load_ps(aabb_min_x_loader);
+        min_y = dm_mm_load_ps(aabb_min_y_loader);
+        min_z = dm_mm_load_ps(aabb_min_z_loader);
+        
+        max_x = dm_mm_load_ps(aabb_max_x_loader);
+        max_y = dm_mm_load_ps(aabb_max_y_loader);
+        max_z = dm_mm_load_ps(aabb_max_z_loader);
+        
+        rot_i = dm_mm_load_ps(rot_i_loader);
+        rot_j = dm_mm_load_ps(rot_j_loader);
+        rot_k = dm_mm_load_ps(rot_k_loader);
+        rot_r = dm_mm_load_ps(rot_r_loader);
+        
+        xx = dm_mm_mul_ps(rot_i, rot_i);
+        yy = dm_mm_mul_ps(rot_j, rot_j);
+        zz = dm_mm_mul_ps(rot_k, rot_k);
+        xy = dm_mm_mul_ps(rot_i, rot_j);
+        xz = dm_mm_mul_ps(rot_i, rot_k);
+        xw = dm_mm_mul_ps(rot_i, rot_r);
+        yz = dm_mm_mul_ps(rot_j, rot_k);
+        yw = dm_mm_mul_ps(rot_j, rot_r);
+        zw = dm_mm_mul_ps(rot_k, rot_r);
+        
+        rot_00 = dm_mm_add_ps(yy,zz);
+        rot_00 = dm_mm_mul_ps(rot_00, twos);
+        rot_00 = dm_mm_sub_ps(ones, rot_00);
+        rot_01 = dm_mm_add_ps(xy,zw);
+        rot_01 = dm_mm_mul_ps(rot_01, twos);
+        rot_02 = dm_mm_sub_ps(xz,yw);
+        rot_02 = dm_mm_mul_ps(rot_02, twos);
+        
+        rot_10 = dm_mm_sub_ps(xy,zw);
+        rot_10 = dm_mm_mul_ps(rot_10, twos);
+        rot_11 = dm_mm_add_ps(xx,zz);
+        rot_11 = dm_mm_mul_ps(rot_11, twos);
+        rot_11 = dm_mm_sub_ps(ones, rot_11);
+        rot_12 = dm_mm_add_ps(yz,xw);
+        rot_12 = dm_mm_mul_ps(rot_12, twos);
+        
+        rot_20 = dm_mm_add_ps(xz,yw);
+        rot_20 = dm_mm_mul_ps(rot_20, twos);
+        rot_21 = dm_mm_sub_ps(yz,xw);
+        rot_21 = dm_mm_mul_ps(rot_21, twos);
+        rot_22 = dm_mm_add_ps(xx,yy);
+        rot_22 = dm_mm_mul_ps(rot_22, twos);
+        rot_22 = dm_mm_sub_ps(ones, rot_22);
+        
+        // x
+        a = dm_mm_mul_ps(rot_00, min_x);
+        b = dm_mm_mul_ps(rot_00, max_x);
+        world_min_x = dm_mm_add_ps(world_min_x, dm_mm_min_ps(a,b));
+        world_max_x = dm_mm_add_ps(world_max_x, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_10, min_y);
+        b = dm_mm_mul_ps(rot_10, max_y);
+        world_min_x = dm_mm_add_ps(world_min_x, dm_mm_min_ps(a,b));
+        world_max_x = dm_mm_add_ps(world_max_x, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_20, min_z);
+        b = dm_mm_mul_ps(rot_20, max_z);
+        world_min_x = dm_mm_add_ps(world_min_x, dm_mm_min_ps(a,b));
+        world_max_x = dm_mm_add_ps(world_max_x, dm_mm_max_ps(a,b));
+        
+        // y
+        a = dm_mm_mul_ps(rot_01, min_x);
+        b = dm_mm_mul_ps(rot_01, max_x);
+        world_min_y = dm_mm_add_ps(world_min_y, dm_mm_min_ps(a,b));
+        world_max_y = dm_mm_add_ps(world_max_y, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_11, min_y);
+        b = dm_mm_mul_ps(rot_11, max_y);
+        world_min_y = dm_mm_add_ps(world_min_y, dm_mm_min_ps(a,b));
+        world_max_y = dm_mm_add_ps(world_max_y, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_21, min_z);
+        b = dm_mm_mul_ps(rot_21, max_z);
+        world_min_y = dm_mm_add_ps(world_min_y, dm_mm_min_ps(a,b));
+        world_max_y = dm_mm_add_ps(world_max_y, dm_mm_max_ps(a,b));
+        
+        // z
+        a = dm_mm_mul_ps(rot_02, min_x);
+        b = dm_mm_mul_ps(rot_02, max_x);
+        world_min_z = dm_mm_add_ps(world_min_z, dm_mm_min_ps(a,b));
+        world_max_z = dm_mm_add_ps(world_max_z, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_12, min_x);
+        b = dm_mm_mul_ps(rot_12, max_x);
+        world_min_z = dm_mm_add_ps(world_min_z, dm_mm_min_ps(a,b));
+        world_max_z = dm_mm_add_ps(world_max_z, dm_mm_max_ps(a,b));
+        
+        a = dm_mm_mul_ps(rot_22, min_x);
+        b = dm_mm_mul_ps(rot_22, max_x);
+        world_min_z = dm_mm_add_ps(world_min_z, dm_mm_min_ps(a,b));
+        world_max_z = dm_mm_add_ps(world_max_z, dm_mm_max_ps(a,b));
+        
+        // centers
+        center_x = dm_mm_sub_ps(world_max_x, world_min_x);
+        center_x = dm_mm_mul_ps(center_x, half);
+        center_y = dm_mm_sub_ps(world_max_y, world_min_y);
+        center_y = dm_mm_mul_ps(center_y, half);
+        center_z = dm_mm_sub_ps(world_max_z, world_min_z);
+        center_z = dm_mm_mul_ps(center_z, half);
+        
+        center_sum_x = dm_mm_add_ps(center_sum_x, center_x);
+        center_sum_y = dm_mm_add_ps(center_sum_y, center_y);
+        center_sum_z = dm_mm_add_ps(center_sum_z, center_z);
+        
+        center_sq_sum_x = dm_mm_fmadd_ps(center_x,center_x, center_sq_sum_x);
+        center_sq_sum_y = dm_mm_fmadd_ps(center_y,center_y, center_sq_sum_y);
+        center_sq_sum_z = dm_mm_fmadd_ps(center_z,center_z, center_sq_sum_z);
+        
+        // assign
+        dm_mm_store_ps(aabb_min_x_loader, world_min_x);
+        dm_mm_store_ps(aabb_min_y_loader, world_min_y);
+        dm_mm_store_ps(aabb_min_z_loader, world_min_z);
+        
+        dm_mm_store_ps(aabb_max_x_loader, world_max_x);
+        dm_mm_store_ps(aabb_max_y_loader, world_max_y);
+        dm_mm_store_ps(aabb_max_z_loader, world_max_z);
+        
+        j = 0;
+        for(; j<leftovers; j++)
+        {
+            c_index = system->entity_indices[manager->sphere_indices[i]][c_id];
+            
+            collision->aabb_global_min_x[c_index] = aabb_min_x_loader[j];
+            collision->aabb_global_min_y[c_index] = aabb_min_y_loader[j];
+            collision->aabb_global_min_z[c_index] = aabb_min_z_loader[j];
+            
+            collision->aabb_global_max_x[c_index] = aabb_max_x_loader[j];
+            collision->aabb_global_max_y[c_index] = aabb_max_y_loader[j];
+            collision->aabb_global_max_z[c_index] = aabb_max_z_loader[j];
+        }
     }
+    
+    // add to center_sum and center_sq_sum
+    center_sum[0] += dm_mm_sum_elements(center_sum_x);
+    center_sum[1] += dm_mm_sum_elements(center_sum_y);
+    center_sum[2] += dm_mm_sum_elements(center_sum_z);
+    
+    center_sq_sum[0] += dm_mm_sum_elements(center_sq_sum_x);
+    center_sq_sum[1] += dm_mm_sum_elements(center_sq_sum_y);
+    center_sq_sum[2] += dm_mm_sum_elements(center_sq_sum_z);
 }
 
 int physics_system_broadphase_get_variance_axis(dm_ecs_system_manager* system, dm_context* context)
@@ -286,62 +800,48 @@ int physics_system_broadphase_get_variance_axis(dm_ecs_system_manager* system, d
     
     int axis = 0;
     
-    const uint32_t t_id = manager->transform;
-    const uint32_t c_id = manager->collision;
+    float center[N3], dum[N3];
     
-    component_transform_block* master_t_block = dm_ecs_get_component_block(t_id, context);
-    component_collision_block* master_c_block = dm_ecs_get_component_block(c_id, context);
+    uint32_t sphere_count=0, box_count=0;
     
-    component_transform_block* t_block = NULL;
-    component_collision_block* c_block = NULL;
+    const dm_ecs_id c_id = manager->collision;
     
-    uint32_t  t_block_index, t_index;
-    uint32_t  c_block_index, c_index;
+    component_collision_block* collision = dm_ecs_get_component_block(c_id, context);
     
-    float center[N3];
-    
-    for(uint32_t e=0; e<system->entity_count; e++)
+    for(uint32_t i=0; i<system->entity_count; i++)
     {
-        t_index       = system->entity_containers[e].component_indices[t_id];
-        t_block_index = system->entity_containers[e].block_indices[t_id];
-        
-        c_index       = system->entity_containers[e].component_indices[c_id];
-        c_block_index = system->entity_containers[e].block_indices[c_id];
-        
-        t_block = master_t_block + t_block_index;
-        c_block = master_c_block + c_block_index;
-        
-        // reset collision flags
-        c_block->flag[c_index] = COLLISION_FLAG_NO;
-        
-        // update global aabb
-        physics_system_update_world_aabb(t_index, c_index, t_block, c_block);
-        
-        // add to center and center sq vectors
-        center[0] = 0.5f * (c_block->aabb_global_max_x[c_index] - c_block->aabb_global_min_x[c_index]);
-        center[1] = 0.5f * (c_block->aabb_global_max_y[c_index] - c_block->aabb_global_min_y[c_index]);
-        center[2] = 0.5f * (c_block->aabb_global_max_z[c_index] - c_block->aabb_global_min_z[c_index]);
-        
-        float dum[3];
-        dm_vec3_add_vec3(center_sum, center, center_sum);
-        dm_vec3_mul_vec3(center_sum, center_sum, dum);
-        dm_vec3_add_vec3(center_sq_sum, dum, center_sq_sum);
+        manager->sweep_indices[i] = i;
+        switch(collision->shape[system->entity_indices[i][c_id]])
+        {
+            case DM_COLLISION_SHAPE_SPHERE: manager->sphere_indices[sphere_count++] = i;
+            break;
+            
+            case DM_COLLISION_SHAPE_BOX: manager->box_indices[box_count++] = i;
+            break;
+        }
     }
     
+    if(sphere_count) physics_system_broadphase_update_sphere_aabbs(sphere_count, center_sum, center_sq_sum, system, context);
+    //if(box_count) physics_system_broadphase_update_box_aabbs(box_count, manager, center_sum, center_sq_sum);
+    if(box_count) physics_system_broadphase_update_box_aabbs_simd(box_count, center_sum, center_sq_sum, system, context);
+    
     const float scale = 1.0f / system->entity_count;
+    
+    float var[3];
+    float max_var;
+    
     dm_vec3_scale(center_sum, scale, center_sum);
     dm_vec3_scale(center_sq_sum, scale, center_sq_sum);
     
-    float var[3];
     dm_vec3_mul_vec3(center_sum, center_sum, center_sum);
     var[0] = center_sq_sum[0] - center_sum[0];
     var[1] = center_sq_sum[1] - center_sum[1];
     var[2] = center_sq_sum[2] - center_sum[2];
     
-    float max_var = -FLT_MAX;
+    max_var = -FLT_MAX;
     for(uint32_t i=0; i<N3; i++)
     {
-        if(var[0] <= max_var) continue;
+        if(var[i] <= max_var) continue;
         
         max_var = var[i];
         axis = i;
@@ -350,159 +850,153 @@ int physics_system_broadphase_get_variance_axis(dm_ecs_system_manager* system, d
     return axis;
 }
 
-// uses simple sort and sweep based on objects' aabbs
-bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* context)
+void physics_system_broadphase_sort_sweep(uint32_t count, float* sort_min, float* max_i_array, dm_ecs_system_manager* system, dm_context* context)
 {
     physics_system_manager* manager = system->system_data;
     manager->broadphase_checks = 0;
-    
-    if(manager->copied_entity_count==0) 
-    {
-        manager->copied_entity_count = system->entity_count;
-        manager->copied_entities = dm_alloc(sizeof(dm_ecs_system_entity_container) * system->entity_count);
-        dm_memcpy(manager->copied_entities, system->entity_containers, sizeof(dm_ecs_system_entity_container) * manager->copied_entity_count);
-    }
-    else if(manager->copied_entity_count!=system->entity_count)
-    {
-        manager->copied_entity_count = system->entity_count;
-        manager->copied_entities = dm_realloc(manager->copied_entities, sizeof(dm_ecs_system_entity_container) * system->entity_count);
-        dm_memcpy(manager->copied_entities, system->entity_containers, sizeof(dm_ecs_system_entity_container) * manager->copied_entity_count);
-    }
-    
-    //manager->collision_capacity = DM_PHYSICS_DEFAULT_COLLISION_CAPACITY;
     manager->num_possible_collisions = 0;
     
-    const int axis = physics_system_broadphase_get_variance_axis(system, context);
+    const dm_ecs_id c_id = manager->collision;
     
-    physics_system_broadphase_sort_data data = { 0 };
-    data.index = manager->collision;
-    data.block_size = sizeof(component_collision_block);
-    
-    component_collision_block* master_block = dm_ecs_get_component_block(manager->collision, context);
-    
-    // sort
-    switch(axis)
-    {
-        case 0:
-        data.min = master_block->aabb_global_min_x;
-        break;
-        
-        case 1:
-        data.min = master_block->aabb_global_min_y;
-        break;
-        
-        case 2:
-        data.min = master_block->aabb_global_min_z;
-        break;
-    }
+    component_collision_block* collision = dm_ecs_get_component_block(c_id, context);
     
 #ifdef DM_PLATFORM_WIN32
-    qsort_s(manager->copied_entities, manager->copied_entity_count, sizeof(dm_ecs_system_entity_container), physics_system_broadphase_sort, &data);
+    qsort_s(manager->sweep_indices, count, sizeof(uint32_t), physics_system_broadphase_sort, sort_min);
 #elif defined(DM_PLATFORM_LINUX)
-    qsort_r(manager->copied_entities, manager->copied_entity_count, sizeof(dm_ecs_system_entity_container), physics_system_broadphase_sort, &data);
+    qsort_r(manager->sweep_indices, count, sizeof(uint32_t), physics_system_broadphase_sort, sort_min);
 #elif defined(DM_PLATFORM_APPLE)
-    qsort_r(manager->copied_entities, manager->copied_entity_count, sizeof(dm_ecs_system_entity_container), &data, physics_system_broadphase_sort);
+    qsort_r(manager->sweep_indices, count, sizeof(uint32_t), sort_min, physics_system_broadphase_sort);
 #endif
     
     // sweep
     float max_i, min_j;
-    dm_ecs_system_entity_container entity_a, entity_b;
-    uint32_t a_c_index, b_c_index;
     
     bool x_check, y_check, z_check;
     
     float a_pos[3], a_dim[3];
     float b_pos[3], b_dim[3];
     
-    component_collision_block* a_block = NULL;
-    component_collision_block* b_block = NULL;
+    uint32_t entity_a, entity_b;
     
-    for(uint32_t i=0; i<manager->copied_entity_count; i++)
+    float x_sep, y_sep, z_sep;
+    float x_dim, y_dim, z_dim;
+    
+    uint32_t a_index, b_index;
+    
+    for(uint32_t i=0; i<count; i++)
     {
-        //entity_a = system->entity_containers[i];
-        entity_a = manager->copied_entities[i];
+        entity_a = manager->sweep_indices[i];
         
-        a_c_index = entity_a.component_indices[data.index];
+        a_index = system->entity_indices[entity_a][c_id];
         
-        a_block = master_block + entity_a.block_indices[data.index];
+        a_dim[0] = collision->aabb_global_max_x[a_index] - collision->aabb_global_min_x[a_index];
+        a_dim[1] = collision->aabb_global_max_y[a_index] - collision->aabb_global_min_y[a_index];
+        a_dim[2] = collision->aabb_global_max_z[a_index] - collision->aabb_global_min_z[a_index];
         
-        a_dim[0] = 0.5f * dm_fabs(a_block->aabb_global_max_x[a_c_index] - a_block->aabb_global_min_x[a_c_index]);
-        a_dim[1] = 0.5f * dm_fabs(a_block->aabb_global_max_y[a_c_index] - a_block->aabb_global_min_y[a_c_index]);
-        a_dim[2] = 0.5f * dm_fabs(a_block->aabb_global_max_z[a_c_index] - a_block->aabb_global_min_z[a_c_index]);
+        a_dim[0] = a_dim[0] < 0 ? -a_dim[0] : a_dim[0];
+        a_dim[1] = a_dim[1] < 0 ? -a_dim[1] : a_dim[1];
+        a_dim[2] = a_dim[2] < 0 ? -a_dim[2] : a_dim[2];
         
-        a_pos[0] = a_block->aabb_global_max_x[a_c_index] - a_dim[0];
-        a_pos[1] = a_block->aabb_global_max_y[a_c_index] - a_dim[1];
-        a_pos[2] = a_block->aabb_global_max_z[a_c_index] - a_dim[2];
+        a_dim[0] *= 0.5f;
+        a_dim[1] *= 0.5f;
+        a_dim[2] *= 0.5f;
         
-        switch(axis)
+        a_pos[0] = collision->aabb_global_max_x[a_index] - a_dim[0];
+        a_pos[1] = collision->aabb_global_max_y[a_index] - a_dim[1];
+        a_pos[2] = collision->aabb_global_max_z[a_index] - a_dim[2];
+        
+        max_i = max_i_array[entity_a];
+        
+        for(uint32_t j=i+1; j<count; j++)
         {
-            case 0: max_i = a_block->aabb_global_max_x[a_c_index];
-            break;
+            entity_b = manager->sweep_indices[j];
             
-            case 1: max_i = a_block->aabb_global_max_y[a_c_index];
-            break;
+            b_index = system->entity_indices[entity_b][c_id];
             
-            case 2: max_i = a_block->aabb_global_max_z[a_c_index];
-            break;
+            b_dim[0] = collision->aabb_global_max_x[b_index] - collision->aabb_global_min_x[b_index];
+            b_dim[1] = collision->aabb_global_max_y[b_index] - collision->aabb_global_min_y[b_index];
+            b_dim[2] = collision->aabb_global_max_z[b_index] - collision->aabb_global_min_z[b_index];
             
-            default:
-            DM_LOG_FATAL("Shouldn't be here in broadphase");
-            return false;
-        }
-        
-        for(uint32_t j=i+1; j<system->entity_count; j++)
-        {
-            //entity_b = system->entity_containers[j];
-            entity_b = manager->copied_entities[j];
+            b_dim[0] = b_dim[0] < 0 ? -b_dim[0] : b_dim[0];
+            b_dim[1] = b_dim[1] < 0 ? -b_dim[1] : b_dim[1];
+            b_dim[2] = b_dim[2] < 0 ? -b_dim[2] : b_dim[2];
             
-            b_c_index = entity_b.component_indices[data.index];
+            b_dim[0] *= 0.5f;
+            b_dim[1] *= 0.5f;
+            b_dim[2] *= 0.5f;
             
-            b_block = master_block + entity_b.block_indices[data.index];
+            b_pos[0] = collision->aabb_global_max_x[b_index] - b_dim[0];
+            b_pos[1] = collision->aabb_global_max_y[b_index] - b_dim[1];
+            b_pos[2] = collision->aabb_global_max_z[b_index] - b_dim[2];
             
-            b_dim[0] = 0.5f * dm_fabs(b_block->aabb_global_max_x[b_c_index] - b_block->aabb_global_min_x[b_c_index]);
-            b_dim[1] = 0.5f * dm_fabs(b_block->aabb_global_max_y[b_c_index] - b_block->aabb_global_min_y[b_c_index]);
-            b_dim[2] = 0.5f * dm_fabs(b_block->aabb_global_max_z[b_c_index] - b_block->aabb_global_min_z[b_c_index]);
-            
-            b_pos[0] = b_block->aabb_global_max_x[b_c_index] - b_dim[0];
-            b_pos[1] = b_block->aabb_global_max_y[b_c_index] - b_dim[1];
-            b_pos[2] = b_block->aabb_global_max_z[b_c_index] - b_dim[2];
-            
-            switch(axis)
-            {
-                case 0: min_j = b_block->aabb_global_min_x[b_c_index];
-                break;
-                
-                case 1: min_j = b_block->aabb_global_min_y[b_c_index];
-                break;
-                
-                case 2: min_j = b_block->aabb_global_min_z[b_c_index];
-                break;
-                
-                default:
-                DM_LOG_FATAL("Shouldn't be here in broadphase");
-                return false;
-            }
+            min_j = sort_min[entity_b];
             
             if(min_j > max_i) break;
             
             manager->broadphase_checks++;
             
-            x_check = dm_fabs(a_pos[0] - b_pos[0]) <= (a_dim[0] + b_dim[0]);
-            y_check = dm_fabs(a_pos[1] - b_pos[1]) <= (a_dim[1] + b_dim[1]);
-            z_check = dm_fabs(a_pos[2] - b_pos[2]) <= (a_dim[2] + b_dim[2]);
+            x_sep = a_pos[0] - b_pos[0];
+            y_sep = a_pos[1] - b_pos[1];
+            z_sep = a_pos[2] - b_pos[2];
+            
+            x_sep = x_sep < 0 ? -x_sep : x_sep;
+            y_sep = y_sep < 0 ? -y_sep : y_sep;
+            z_sep = z_sep < 0 ? -z_sep : z_sep;
+            
+            x_dim = a_dim[0] + b_dim[0];
+            y_dim = a_dim[1] + b_dim[1];
+            z_dim = a_dim[2] + b_dim[2];
+            
+            x_check = x_sep <= x_dim;
+            y_check = y_sep <= y_dim;
+            z_check = z_sep <= z_dim;
             
             if(!x_check || !y_check || !z_check) continue;
             
-            a_block->flag[a_c_index] = COLLISION_FLAG_POSSIBLE;
-            b_block->flag[b_c_index] = COLLISION_FLAG_POSSIBLE;
+            collision->flag[a_index] = COLLISION_FLAG_POSSIBLE;
+            collision->flag[b_index] = COLLISION_FLAG_POSSIBLE;
             
             manager->possible_collisions[manager->num_possible_collisions].entity_a = entity_a;
             manager->possible_collisions[manager->num_possible_collisions].entity_b = entity_b;
             manager->num_possible_collisions++;
             
-            dm_grow_dyn_array((void**)&manager->possible_collisions, manager->num_possible_collisions, &manager->collision_capacity, sizeof(physics_system_collision_pair), PHYSICS_SYSTEM_LOAD_FACTOR, PHYSICS_SYSTEM_RESIZE_FACTOR);
+            dm_grow_dyn_array((void**)&manager->possible_collisions, manager->num_possible_collisions, &manager->collision_capacity, sizeof(physics_system_collision_pair), PHYSICS_SYSTEM_DYNAMIC_LOAD_FACTOR, PHYSICS_SYSTEM_DYNAMIC_RESIZE_FACTOR);
         }
     }
+    
+}
+
+// uses simple sort and sweep based on objects' aabbs
+bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* context)
+{
+    physics_system_manager* manager = system->system_data;
+    
+    const int axis = physics_system_broadphase_get_variance_axis(system, context);
+    
+    component_collision_block* collision = dm_ecs_get_component_block(manager->collision, context);
+    
+    float* min, *max;
+    
+    // sort
+    switch(axis)
+    {
+        case 0:
+        min = collision->aabb_global_min_x;
+        max = collision->aabb_global_max_x;
+        break;
+        
+        case 1: 
+        min = collision->aabb_global_min_y;
+        max = collision->aabb_global_max_y;
+        break;
+        
+        case 2: 
+        min = collision->aabb_global_min_z;
+        max = collision->aabb_global_max_z;
+        break;
+    }
+    
+    physics_system_broadphase_sort_sweep(system->entity_count, min, max, system, context);
     
     return true;
 }
@@ -516,32 +1010,31 @@ then generates contact manifolds
 bool physics_system_narrowphase(dm_ecs_system_manager* system, dm_context* context)
 {
     physics_system_manager* manager = system->system_data;
+    
     manager->num_manifolds = 0;
-    
-    const dm_ecs_id t_id = manager->transform;
-    const dm_ecs_id c_id = manager->collision;
-    const dm_ecs_id p_id = manager->physics;
-    
-    component_transform_block* t_block = dm_ecs_get_component_block(t_id, context);
-    component_collision_block* c_block = dm_ecs_get_component_block(c_id, context);
-    component_physics_block*   p_block = dm_ecs_get_component_block(p_id, context);
     
     float              pos[2][3], rots[2][4], cens[2][3], internals[2][6], vels[2][3], ws[2][3];
     dm_collision_shape shapes[2];
     
-    uint32_t a_t_c_index, a_c_c_index, a_p_c_index;
-    uint32_t b_t_c_index, b_c_c_index, b_p_c_index;
-    
-    component_transform_block* a_t_block, *b_t_block;
-    component_collision_block* a_c_block, *b_c_block;
-    component_physics_block*   a_p_block, *b_p_block;
-    
-    physics_system_collision_pair  collision_pair;
-    dm_ecs_system_entity_container entity_a, entity_b;
+    physics_system_collision_pair collision_pair;
+    uint32_t                      entity_a, entity_b;
     
     dm_contact_manifold* manifold;
     
     dm_simplex simplex;
+    
+    const dm_ecs_id t_id = manager->transform;
+    const dm_ecs_id c_id = manager->collision;
+    const dm_ecs_id p_id = manager->physics;
+    const dm_ecs_id r_id = manager->rigid_body;
+    
+    component_transform_block*  transform = dm_ecs_get_component_block(t_id, context);
+    component_collision_block*  collision = dm_ecs_get_component_block(c_id, context);
+    component_physics_block*    physics   = dm_ecs_get_component_block(p_id, context);
+    component_rigid_body_block* rigid_body = dm_ecs_get_component_block(r_id, context);
+    
+    uint32_t t_a, c_a, p_a, r_a;
+    uint32_t t_b, c_b, p_b, r_b;
     
     for(uint32_t i=0; i<manager->num_possible_collisions; i++)
     {
@@ -550,73 +1043,66 @@ bool physics_system_narrowphase(dm_ecs_system_manager* system, dm_context* conte
         entity_a = collision_pair.entity_a;
         entity_b = collision_pair.entity_b;
         
+        t_a = system->entity_indices[entity_a][t_id];
+        c_a = system->entity_indices[entity_a][c_id];
+        p_a = system->entity_indices[entity_a][p_id];
+        r_a = system->entity_indices[entity_a][r_id];
+        t_b = system->entity_indices[entity_b][t_id];
+        c_b = system->entity_indices[entity_b][c_id];
+        p_b = system->entity_indices[entity_b][p_id];
+        r_b = system->entity_indices[entity_b][r_id];
+        
         // get all data
         
         // entity a
-        a_t_c_index = entity_a.component_indices[t_id];
-        a_c_c_index = entity_a.component_indices[c_id];
-        a_p_c_index = entity_a.component_indices[p_id];
-        
-        a_t_block = t_block + entity_a.block_indices[t_id];;
-        a_c_block = c_block + entity_a.block_indices[c_id];;
-        a_p_block = p_block + entity_a.block_indices[p_id];;
-        
-        pos[0][0]       = a_t_block->pos_x[a_t_c_index];
-        pos[0][1]       = a_t_block->pos_y[a_t_c_index];
-        pos[0][2]       = a_t_block->pos_z[a_t_c_index];
-        rots[0][0]      = a_t_block->rot_i[a_t_c_index];
-        rots[0][1]      = a_t_block->rot_j[a_t_c_index];
-        rots[0][2]      = a_t_block->rot_k[a_t_c_index];
-        rots[0][3]      = a_t_block->rot_r[a_t_c_index];
-        cens[0][0]      = a_c_block->center_x[a_c_c_index];
-        cens[0][1]      = a_c_block->center_y[a_c_c_index];
-        cens[0][2]      = a_c_block->center_z[a_c_c_index];
-        internals[0][0] = a_c_block->internal_0[a_c_c_index];
-        internals[0][1] = a_c_block->internal_1[a_c_c_index];
-        internals[0][2] = a_c_block->internal_2[a_c_c_index];
-        internals[0][3] = a_c_block->internal_3[a_c_c_index];
-        internals[0][4] = a_c_block->internal_4[a_c_c_index];
-        internals[0][5] = a_c_block->internal_5[a_c_c_index];
-        shapes[0]       = a_c_block->shape[a_c_c_index];
-        vels[0][0]      = a_p_block->vel_x[a_p_c_index];
-        vels[0][1]      = a_p_block->vel_y[a_p_c_index];
-        vels[0][2]      = a_p_block->vel_z[a_p_c_index];
-        ws[0][0]        = a_p_block->w_x[a_p_c_index];
-        ws[0][1]        = a_p_block->w_y[a_p_c_index];
-        ws[0][2]        = a_p_block->w_z[a_p_c_index];
+        pos[0][0]       = transform->pos_x[t_a];
+        pos[0][1]       = transform->pos_y[t_a];
+        pos[0][2]       = transform->pos_z[t_a];
+        rots[0][0]      = transform->rot_i[t_a];
+        rots[0][1]      = transform->rot_j[t_a];
+        rots[0][2]      = transform->rot_k[t_a];
+        rots[0][3]      = transform->rot_r[t_a];
+        cens[0][0]      = collision->center_x[c_a];
+        cens[0][1]      = collision->center_y[c_a];
+        cens[0][2]      = collision->center_z[c_a];
+        internals[0][0] = collision->internal_0[c_a];
+        internals[0][1] = collision->internal_1[c_a];
+        internals[0][2] = collision->internal_2[c_a];
+        internals[0][3] = collision->internal_3[c_a];
+        internals[0][4] = collision->internal_4[c_a];
+        internals[0][5] = collision->internal_5[c_a];
+        shapes[0]       = collision->shape[c_a];
+        vels[0][0]      = physics->vel_x[p_a];
+        vels[0][1]      = physics->vel_y[p_a];
+        vels[0][2]      = physics->vel_z[p_a];
+        ws[0][0]        = physics->w_x[p_a];
+        ws[0][1]        = physics->w_y[p_a];
+        ws[0][2]        = physics->w_z[p_a];
         
         // entity b
-        b_t_c_index = entity_b.component_indices[t_id];
-        b_c_c_index = entity_b.component_indices[c_id];
-        b_p_c_index = entity_b.component_indices[p_id];
-        
-        b_t_block = t_block + entity_b.block_indices[t_id];;
-        b_c_block = c_block + entity_b.block_indices[c_id];;
-        b_p_block = p_block + entity_b.block_indices[p_id];;
-        
-        pos[1][0]       = b_t_block->pos_x[b_t_c_index];
-        pos[1][1]       = b_t_block->pos_y[b_t_c_index];
-        pos[1][2]       = b_t_block->pos_z[b_t_c_index];
-        rots[1][0]      = b_t_block->rot_i[b_t_c_index];
-        rots[1][1]      = b_t_block->rot_j[b_t_c_index];
-        rots[1][2]      = b_t_block->rot_k[b_t_c_index];
-        rots[1][3]      = b_t_block->rot_r[b_t_c_index];
-        cens[1][0]      = b_c_block->center_x[b_c_c_index];
-        cens[1][1]      = b_c_block->center_y[b_c_c_index];
-        cens[1][2]      = b_c_block->center_z[b_c_c_index];
-        internals[1][0] = b_c_block->internal_0[b_c_c_index];
-        internals[1][1] = b_c_block->internal_1[b_c_c_index];
-        internals[1][2] = b_c_block->internal_2[b_c_c_index];
-        internals[1][3] = b_c_block->internal_3[b_c_c_index];
-        internals[1][4] = b_c_block->internal_4[b_c_c_index];
-        internals[1][5] = b_c_block->internal_5[b_c_c_index];
-        shapes[1]       = b_c_block->shape[b_c_c_index];
-        vels[1][0]      = b_p_block->vel_x[b_p_c_index];
-        vels[1][1]      = b_p_block->vel_y[b_p_c_index];
-        vels[1][2]      = b_p_block->vel_z[b_p_c_index];
-        ws[1][0]        = b_p_block->w_x[b_p_c_index];
-        ws[1][1]        = b_p_block->w_y[b_p_c_index];
-        ws[1][2]        = b_p_block->w_z[b_p_c_index];
+        pos[1][0]       = transform->pos_x[t_b];
+        pos[1][1]       = transform->pos_y[t_b];
+        pos[1][2]       = transform->pos_z[t_b];
+        rots[1][0]      = transform->rot_i[t_b];
+        rots[1][1]      = transform->rot_j[t_b];
+        rots[1][2]      = transform->rot_k[t_b];
+        rots[1][3]      = transform->rot_r[t_b];
+        cens[1][0]      = collision->center_x[c_b];
+        cens[1][1]      = collision->center_y[c_b];
+        cens[1][2]      = collision->center_z[c_b];
+        internals[1][0] = collision->internal_0[c_b];
+        internals[1][1] = collision->internal_1[c_b];
+        internals[1][2] = collision->internal_2[c_b];
+        internals[1][3] = collision->internal_3[c_b];
+        internals[1][4] = collision->internal_4[c_b];
+        internals[1][5] = collision->internal_5[c_b];
+        shapes[1]       = collision->shape[c_b];
+        vels[1][0]      = physics->vel_x[p_b];
+        vels[1][1]      = physics->vel_y[p_b];
+        vels[1][2]      = physics->vel_z[p_b];
+        ws[1][0]        = physics->w_x[p_b];
+        ws[1][1]        = physics->w_y[p_b];
+        ws[1][2]        = physics->w_z[p_b];
         
         //////
         simplex = (dm_simplex){ 0 };
@@ -629,42 +1115,42 @@ bool physics_system_narrowphase(dm_ecs_system_manager* system, dm_context* conte
         manifold = &manager->manifolds[manager->num_manifolds++];
         *manifold = (dm_contact_manifold){ 0 };
         
-        a_c_block->flag[a_c_c_index] = COLLISION_FLAG_YES;
+        collision->flag[c_a] = COLLISION_FLAG_YES;
         
-        manifold->contact_data[0].vel_x         = &a_p_block->vel_x[a_p_c_index];
-        manifold->contact_data[0].vel_y         = &a_p_block->vel_y[a_p_c_index];
-        manifold->contact_data[0].vel_z         = &a_p_block->vel_z[a_p_c_index];
-        manifold->contact_data[0].w_x           = &a_p_block->w_x[a_p_c_index];
-        manifold->contact_data[0].w_y           = &a_p_block->w_y[a_p_c_index];
-        manifold->contact_data[0].w_z           = &a_p_block->w_z[a_p_c_index];
-        manifold->contact_data[0].mass          = a_p_block->mass[a_p_c_index];
-        manifold->contact_data[0].inv_mass      = a_p_block->inv_mass[a_p_c_index];
-        manifold->contact_data[0].v_damp        = a_p_block->damping_v[a_p_c_index];
-        manifold->contact_data[0].w_damp        = a_p_block->damping_w[a_p_c_index];
-        manifold->contact_data[0].i_body_inv_00 = a_p_block->i_body_inv_00[a_p_c_index];
-        manifold->contact_data[0].i_body_inv_11 = a_p_block->i_body_inv_11[a_p_c_index];
-        manifold->contact_data[0].i_body_inv_22 = a_p_block->i_body_inv_22[a_p_c_index];
+        manifold->contact_data[0].vel_x         = &physics->vel_x[p_a];
+        manifold->contact_data[0].vel_y         = &physics->vel_y[p_a];
+        manifold->contact_data[0].vel_z         = &physics->vel_z[p_a];
+        manifold->contact_data[0].w_x           = &physics->w_x[p_a];
+        manifold->contact_data[0].w_y           = &physics->w_y[p_a];
+        manifold->contact_data[0].w_z           = &physics->w_z[p_a];
+        manifold->contact_data[0].mass          = physics->mass[p_a];
+        manifold->contact_data[0].inv_mass      = physics->inv_mass[p_a];
+        manifold->contact_data[0].v_damp        = physics->damping_v[p_a];
+        manifold->contact_data[0].w_damp        = physics->damping_w[p_a];
+        manifold->contact_data[0].i_body_inv_00 = rigid_body->i_body_inv_00[r_a];
+        manifold->contact_data[0].i_body_inv_11 = rigid_body->i_body_inv_11[r_a];
+        manifold->contact_data[0].i_body_inv_22 = rigid_body->i_body_inv_22[r_a];
         
-        b_c_block->flag[b_c_c_index] = COLLISION_FLAG_YES;
+        collision->flag[c_b] = COLLISION_FLAG_YES;
         
-        manifold->contact_data[1].vel_x         = &b_p_block->vel_x[b_p_c_index];
-        manifold->contact_data[1].vel_y         = &b_p_block->vel_y[b_p_c_index];
-        manifold->contact_data[1].vel_z         = &b_p_block->vel_z[b_p_c_index];
-        manifold->contact_data[1].w_x           = &b_p_block->w_x[b_p_c_index];
-        manifold->contact_data[1].w_y           = &b_p_block->w_y[b_p_c_index];
-        manifold->contact_data[1].w_z           = &b_p_block->w_z[b_p_c_index];
-        manifold->contact_data[1].mass          = b_p_block->mass[b_p_c_index];
-        manifold->contact_data[1].inv_mass      = b_p_block->inv_mass[b_p_c_index];
-        manifold->contact_data[1].v_damp        = b_p_block->damping_v[b_p_c_index];
-        manifold->contact_data[1].w_damp        = b_p_block->damping_w[b_p_c_index];
-        manifold->contact_data[1].i_body_inv_00 = b_p_block->i_body_inv_00[b_p_c_index];
-        manifold->contact_data[1].i_body_inv_11 = b_p_block->i_body_inv_11[b_p_c_index];
-        manifold->contact_data[1].i_body_inv_22 = b_p_block->i_body_inv_22[b_p_c_index];
+        manifold->contact_data[1].vel_x         = &physics->vel_x[p_b];
+        manifold->contact_data[1].vel_y         = &physics->vel_y[p_b];
+        manifold->contact_data[1].vel_z         = &physics->vel_z[p_b];
+        manifold->contact_data[1].w_x           = &physics->w_x[p_b];
+        manifold->contact_data[1].w_y           = &physics->w_y[p_b];
+        manifold->contact_data[1].w_z           = &physics->w_z[p_b];
+        manifold->contact_data[1].mass          = physics->mass[p_b];
+        manifold->contact_data[1].inv_mass      = physics->inv_mass[p_b];
+        manifold->contact_data[1].v_damp        = physics->damping_v[p_b];
+        manifold->contact_data[1].w_damp        = physics->damping_w[p_b];
+        manifold->contact_data[1].i_body_inv_00 = rigid_body->i_body_inv_00[r_b];
+        manifold->contact_data[1].i_body_inv_11 = rigid_body->i_body_inv_11[r_b];
+        manifold->contact_data[1].i_body_inv_22 = rigid_body->i_body_inv_22[r_b];
         
         if(!dm_physics_collide_entities(pos, rots, cens, internals, vels, ws, shapes, &simplex, manifold)) return false;
         
         // resize manifolds
-        dm_grow_dyn_array((void**)&manager->manifolds, manager->num_manifolds, &manager->manifold_capacity, sizeof(dm_contact_manifold), PHYSICS_SYSTEM_LOAD_FACTOR, PHYSICS_SYSTEM_RESIZE_FACTOR);
+        dm_grow_dyn_array((void**)&manager->manifolds, manager->num_manifolds, &manager->manifold_capacity, sizeof(dm_contact_manifold), PHYSICS_SYSTEM_DYNAMIC_LOAD_FACTOR, PHYSICS_SYSTEM_DYNAMIC_RESIZE_FACTOR);
     }
     
     return true;
@@ -698,21 +1184,19 @@ void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* c
 {
     physics_system_manager* manager = system->system_data;
     
-    const uint32_t t_id = manager->transform;
-    const uint32_t p_id = manager->physics;
+    const dm_ecs_id t_id = manager->transform;
+    const dm_ecs_id c_id = manager->collision;
+    const dm_ecs_id p_id = manager->physics;
+    const dm_ecs_id r_id = manager->rigid_body;
     
-    component_transform_block* master_t_block = dm_ecs_get_component_block(t_id, context);
-    component_physics_block*   master_p_block = dm_ecs_get_component_block(p_id, context);
+    component_transform_block*  transform = dm_ecs_get_component_block(t_id, context);
+    component_collision_block*  collision = dm_ecs_get_component_block(c_id, context);
+    component_physics_block*    physics   = dm_ecs_get_component_block(p_id, context);
+    component_rigid_body_block* rigid_body = dm_ecs_get_component_block(r_id, context);
     
-    uint32_t t_index, p_index;
-    
-    component_transform_block* t_block;
-    component_physics_block*   p_block;
+    uint32_t t_index, c_index, p_index, r_index;
     
     float dt_mass;
-    
-    float w_x, w_y, w_z;
-    float rot_i, rot_j, rot_k, rot_r;
     
     float new_rot_i, new_rot_j, new_rot_k, new_rot_r;
     float new_rot_mag;
@@ -725,87 +1209,73 @@ void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* c
     float body_inv_10, body_inv_11, body_inv_12;
     float body_inv_20, body_inv_21, body_inv_22;
     
-    float i_inv_00, i_inv_01, i_inv_02;
-    float i_inv_10, i_inv_11, i_inv_12;
-    float i_inv_20, i_inv_21, i_inv_22;
+    float new_i_inv_00, new_i_inv_01, new_i_inv_02;
+    float new_i_inv_10, new_i_inv_11, new_i_inv_12;
+    float new_i_inv_20, new_i_inv_21, new_i_inv_22;
     
     const static float half_dt = 0.5f * DM_PHYSICS_FIXED_DT;
     
-    dm_ecs_system_entity_container entity;
-    
     for(uint32_t i=0; i<system->entity_count; i++)
     {
-        entity = system->entity_containers[i];
-        
-        t_block = master_t_block + entity.block_indices[t_id];
-        p_block = master_p_block + entity.block_indices[p_id];
-        
-        t_index = entity.component_indices[t_id];
-        p_index = entity.component_indices[p_id];
+        t_index = system->entity_indices[i][t_id];
+        c_index = system->entity_indices[i][c_id];
+        p_index = system->entity_indices[i][p_id];
+        r_index = system->entity_indices[i][r_id];
         
         // integrate position
-        t_block->pos_x[t_index] += p_block->vel_x[p_index] * DM_PHYSICS_FIXED_DT;
-        t_block->pos_y[t_index] += p_block->vel_y[p_index] * DM_PHYSICS_FIXED_DT;
-        t_block->pos_z[t_index] += p_block->vel_z[p_index] * DM_PHYSICS_FIXED_DT;
+        transform->pos_x[t_index] += physics->vel_x[p_index] * DM_PHYSICS_FIXED_DT;
+        transform->pos_y[t_index] += physics->vel_y[p_index] * DM_PHYSICS_FIXED_DT;
+        transform->pos_z[t_index] += physics->vel_z[p_index] * DM_PHYSICS_FIXED_DT;
         
         // integrate velocity
-        dt_mass = p_block->inv_mass[p_index] * DM_PHYSICS_FIXED_DT;
+        dt_mass = physics->inv_mass[p_index] * DM_PHYSICS_FIXED_DT;
         
-        p_block->vel_x[p_index] += p_block->force_x[p_index] * dt_mass;
-        p_block->vel_y[p_index] += p_block->force_y[p_index] * dt_mass;
-        p_block->vel_z[p_index] += p_block->force_z[p_index] * dt_mass;
+        physics->vel_x[p_index] += physics->force_x[p_index] * dt_mass;
+        physics->vel_y[p_index] += physics->force_y[p_index] * dt_mass;
+        physics->vel_z[p_index] += physics->force_z[p_index] * dt_mass;
         
         // integrate angular momentum
-        p_block->l_x[p_index] += p_block->torque_x[p_index] * DM_PHYSICS_FIXED_DT;
-        p_block->l_y[p_index] += p_block->torque_y[p_index] * DM_PHYSICS_FIXED_DT;
-        p_block->l_z[p_index] += p_block->torque_z[p_index] * DM_PHYSICS_FIXED_DT;
+        physics->l_x[p_index] += physics->torque_x[p_index] * DM_PHYSICS_FIXED_DT;
+        physics->l_y[p_index] += physics->torque_y[p_index] * DM_PHYSICS_FIXED_DT;
+        physics->l_z[p_index] += physics->torque_z[p_index] * DM_PHYSICS_FIXED_DT;
         
         // integrate angular velocity
-        p_block->w_x[p_index] += p_block->i_inv_00[p_index] * p_block->l_x[p_index];
-        p_block->w_x[p_index] += p_block->i_inv_01[p_index] * p_block->l_y[p_index];
-        p_block->w_x[p_index] += p_block->i_inv_02[p_index] * p_block->l_z[p_index];
+        physics->w_x[p_index] += rigid_body->i_inv_00[r_index] * physics->l_x[p_index];
+        physics->w_x[p_index] += rigid_body->i_inv_01[r_index] * physics->l_y[p_index];
+        physics->w_x[p_index] += rigid_body->i_inv_02[r_index] * physics->l_z[p_index];
         
-        p_block->w_y[p_index] += p_block->i_inv_10[p_index] * p_block->l_x[p_index];
-        p_block->w_y[p_index] += p_block->i_inv_11[p_index] * p_block->l_y[p_index];
-        p_block->w_y[p_index] += p_block->i_inv_12[p_index] * p_block->l_z[p_index];
+        physics->w_y[p_index] += rigid_body->i_inv_10[r_index] * physics->l_x[p_index];
+        physics->w_y[p_index] += rigid_body->i_inv_11[r_index] * physics->l_y[p_index];
+        physics->w_y[p_index] += rigid_body->i_inv_12[r_index] * physics->l_z[p_index];
         
-        p_block->w_z[p_index] += p_block->i_inv_20[p_index] * p_block->l_x[p_index];
-        p_block->w_z[p_index] += p_block->i_inv_21[p_index] * p_block->l_y[p_index];
-        p_block->w_z[p_index] += p_block->i_inv_22[p_index] * p_block->l_z[p_index];
+        physics->w_z[p_index] += rigid_body->i_inv_20[r_index] * physics->l_x[p_index];
+        physics->w_z[p_index] += rigid_body->i_inv_21[r_index] * physics->l_y[p_index];
+        physics->w_z[p_index] += rigid_body->i_inv_22[r_index] * physics->l_z[p_index];
         
         // integrate rotation
-        rot_i = t_block->rot_i[t_index];
-        rot_j = t_block->rot_j[t_index];
-        rot_k = t_block->rot_k[t_index];
-        rot_r = t_block->rot_r[t_index];
-        
-        w_x = p_block->w_x[p_index];
-        w_y = p_block->w_y[p_index];
-        w_z = p_block->w_z[p_index];
-        
-        new_rot_i  = w_x * rot_r;
-        new_rot_i += w_y * rot_k;
-        new_rot_i -= w_z * rot_j;
+        new_rot_i  = physics->w_x[p_index] * transform->rot_r[t_index];
+        new_rot_i += physics->w_y[p_index] * transform->rot_k[t_index];
+        new_rot_i -= physics->w_z[p_index] * transform->rot_j[t_index];
         new_rot_i *= half_dt;
-        new_rot_i += rot_i;
+        new_rot_i += transform->rot_i[t_index];
         
-        new_rot_j  = -w_x * rot_k;
-        new_rot_j +=  w_y * rot_r;
-        new_rot_j +=  w_z * rot_i;
+        new_rot_j  = -physics->w_x[p_index] * transform->rot_k[t_index];
+        new_rot_j +=  physics->w_y[p_index] * transform->rot_r[t_index];
+        new_rot_j +=  physics->w_z[p_index] * transform->rot_i[t_index];
         new_rot_j *= half_dt;
-        new_rot_j += rot_j;
+        new_rot_j += transform->rot_j[t_index];
         
-        new_rot_k  = w_x * rot_j;
-        new_rot_k -= w_y * rot_i;
-        new_rot_k += w_z * rot_r;
+        new_rot_k  = physics->w_x[p_index] * transform->rot_j[t_index];
+        new_rot_k -= physics->w_y[p_index] * transform->rot_i[t_index];
+        new_rot_k += physics->w_z[p_index] * transform->rot_r[t_index];
         new_rot_k *= half_dt;
-        new_rot_k += rot_k;
+        new_rot_k += transform->rot_k[t_index];
         
-        new_rot_r  = -w_x * rot_i;
-        new_rot_r -=  w_y * rot_j;
-        new_rot_r -=  w_z * rot_k;
+        new_rot_r  = -physics->w_x[p_index] * transform->rot_i[t_index];
+        new_rot_r -=  physics->w_y[p_index] * transform->rot_j[t_index];
+        new_rot_r -=  physics->w_z[p_index] * transform->rot_k[t_index];
         new_rot_r *= half_dt;
-        new_rot_r += rot_r;
+        new_rot_r += transform->rot_r[t_index];
         
         new_rot_mag  = new_rot_i * new_rot_i;
         new_rot_mag += new_rot_j * new_rot_j;
@@ -818,10 +1288,10 @@ void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* c
         new_rot_k /= new_rot_mag;
         new_rot_r /= new_rot_mag;
         
-        t_block->rot_i[t_index] = new_rot_i;
-        t_block->rot_j[t_index] = new_rot_j;
-        t_block->rot_k[t_index] = new_rot_k;
-        t_block->rot_r[t_index] = new_rot_r;
+        transform->rot_i[t_index] = new_rot_i;
+        transform->rot_j[t_index] = new_rot_j;
+        transform->rot_k[t_index] = new_rot_k;
+        transform->rot_r[t_index] = new_rot_r;
         
         // update i_inv
         orientation_00  = new_rot_j * new_rot_j;
@@ -864,93 +1334,57 @@ void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* c
         orientation_22  = 1 - orientation_22;
         
         // orientation is transposed here
-        body_inv_00 = orientation_00 * p_block->i_inv_00[p_index];
-        body_inv_01 = orientation_10 * p_block->i_inv_11[p_index];
-        body_inv_02 = orientation_20 * p_block->i_inv_22[p_index];
+        body_inv_00 = orientation_00 * rigid_body->i_inv_00[r_index];
+        body_inv_01 = orientation_10 * rigid_body->i_inv_11[r_index];
+        body_inv_02 = orientation_20 * rigid_body->i_inv_22[r_index];
         
-        body_inv_10 = orientation_01 * p_block->i_inv_00[p_index];
-        body_inv_11 = orientation_11 * p_block->i_inv_11[p_index];
-        body_inv_12 = orientation_21 * p_block->i_inv_22[p_index];
+        body_inv_10 = orientation_01 * rigid_body->i_inv_00[r_index];
+        body_inv_11 = orientation_11 * rigid_body->i_inv_11[r_index];
+        body_inv_12 = orientation_21 * rigid_body->i_inv_22[r_index];
         
-        body_inv_20 = orientation_02 * p_block->i_inv_00[p_index];
-        body_inv_21 = orientation_12 * p_block->i_inv_11[p_index];
-        body_inv_22 = orientation_22 * p_block->i_inv_22[p_index];
+        body_inv_20 = orientation_02 * rigid_body->i_inv_00[r_index];
+        body_inv_21 = orientation_12 * rigid_body->i_inv_11[r_index];
+        body_inv_22 = orientation_22 * rigid_body->i_inv_22[r_index];
         
         // final i_inv matrix
-        i_inv_00  = orientation_00 * body_inv_00;
-        i_inv_00 += orientation_01 * body_inv_10;
-        i_inv_00 += orientation_02 * body_inv_20;
+        rigid_body->i_inv_00[r_index]  = orientation_00 * body_inv_00;
+        rigid_body->i_inv_00[r_index] += orientation_01 * body_inv_10;
+        rigid_body->i_inv_00[r_index] += orientation_02 * body_inv_20;
         
-        i_inv_01  = orientation_00 * body_inv_01;
-        i_inv_01 += orientation_01 * body_inv_11;
-        i_inv_01 += orientation_02 * body_inv_21;
+        rigid_body->i_inv_01[r_index]  = orientation_00 * body_inv_01;
+        rigid_body->i_inv_01[r_index] += orientation_01 * body_inv_11;
+        rigid_body->i_inv_01[r_index] += orientation_02 * body_inv_21;
         
-        i_inv_02  = orientation_00 * body_inv_02;
-        i_inv_02 += orientation_01 * body_inv_12;
-        i_inv_02 += orientation_02 * body_inv_22;
+        rigid_body->i_inv_02[r_index]  = orientation_00 * body_inv_02;
+        rigid_body->i_inv_02[r_index] += orientation_01 * body_inv_12;
+        rigid_body->i_inv_02[r_index] += orientation_02 * body_inv_22;
         
-        i_inv_10  = orientation_10 * body_inv_00;
-        i_inv_10 += orientation_11 * body_inv_10;
-        i_inv_10 += orientation_12 * body_inv_20;
+        rigid_body->i_inv_10[r_index]  = orientation_10 * body_inv_00;
+        rigid_body->i_inv_10[r_index] += orientation_11 * body_inv_10;
+        rigid_body->i_inv_10[r_index] += orientation_12 * body_inv_20;
         
-        i_inv_11  = orientation_10 * body_inv_01;
-        i_inv_11 += orientation_11 * body_inv_11;
-        i_inv_11 += orientation_12 * body_inv_21;
+        rigid_body->i_inv_11[r_index]  = orientation_10 * body_inv_01;
+        rigid_body->i_inv_11[r_index] += orientation_11 * body_inv_11;
+        rigid_body->i_inv_11[r_index] += orientation_12 * body_inv_21;
         
-        i_inv_12  = orientation_10 * body_inv_02;
-        i_inv_12 += orientation_11 * body_inv_12;
-        i_inv_12 += orientation_12 * body_inv_22;
+        rigid_body->i_inv_12[r_index]  = orientation_10 * body_inv_02;
+        rigid_body->i_inv_12[r_index] += orientation_11 * body_inv_12;
+        rigid_body->i_inv_12[r_index] += orientation_12 * body_inv_22;
         
-        i_inv_20  = orientation_20 * body_inv_00;
-        i_inv_20 += orientation_21 * body_inv_10;
-        i_inv_20 += orientation_22 * body_inv_20;
+        rigid_body->i_inv_20[r_index]  = orientation_20 * body_inv_00;
+        rigid_body->i_inv_20[r_index] += orientation_21 * body_inv_10;
+        rigid_body->i_inv_20[r_index] += orientation_22 * body_inv_20;
         
-        i_inv_21  = orientation_20 * body_inv_01;
-        i_inv_21 += orientation_21 * body_inv_11;
-        i_inv_21 += orientation_22 * body_inv_21;
+        rigid_body->i_inv_21[r_index]  = orientation_20 * body_inv_01;
+        rigid_body->i_inv_21[r_index] += orientation_21 * body_inv_11;
+        rigid_body->i_inv_21[r_index] += orientation_22 * body_inv_21;
         
-        i_inv_22  = orientation_20 * body_inv_02;
-        i_inv_22 += orientation_21 * body_inv_12;
-        i_inv_22 += orientation_22 * body_inv_22;
-        
-        p_block->i_inv_00[p_index] = i_inv_00;
-        p_block->i_inv_01[p_index] = i_inv_01;
-        p_block->i_inv_02[p_index] = i_inv_02;
-        
-        p_block->i_inv_10[p_index] = i_inv_10;
-        p_block->i_inv_11[p_index] = i_inv_11;
-        p_block->i_inv_12[p_index] = i_inv_12;
-        
-        p_block->i_inv_20[p_index] = i_inv_20;
-        p_block->i_inv_21[p_index] = i_inv_21;
-        p_block->i_inv_22[p_index] = i_inv_22;
+        rigid_body->i_inv_22[r_index]  = orientation_20 * body_inv_02;
+        rigid_body->i_inv_22[r_index] += orientation_21 * body_inv_12;
+        rigid_body->i_inv_22[r_index] += orientation_22 * body_inv_22;
     }
 }
 
-void physics_system_reset_forces(dm_ecs_system_manager* system, dm_context* context)
+void physics_system_update_entities_simd(dm_ecs_system_manager* system, dm_context* context)
 {
-    physics_system_manager* manager = system->system_data;
-    
-    const uint32_t p_id = manager->physics;
-    component_physics_block* master_p_block = dm_ecs_get_component_block(p_id, context);
-    
-    uint32_t p_index;
-    
-    component_physics_block* p_block;
-    
-    for(uint32_t i=0; i<system->entity_count; i++)
-    {
-        dm_ecs_system_entity_container entity = system->entity_containers[i];
-        
-        p_block = master_p_block + entity.block_indices[p_id];
-        p_index = entity.component_indices[p_id];
-        
-        p_block->force_x[p_index] = 0;
-        p_block->force_y[p_index] = 0;
-        p_block->force_z[p_index] = 0;
-        
-        p_block->torque_x[p_index] = 0;
-        p_block->torque_y[p_index] = 0;
-        p_block->torque_z[p_index] = 0;
-    }
 }

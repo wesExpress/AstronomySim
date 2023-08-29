@@ -1,6 +1,7 @@
 #include "debug_render_pass.h"
 
-#include "app/app.h"
+#include "../app/app.h"
+#include "dm.h"
 
 typedef struct debug_render_vertex_t
 {

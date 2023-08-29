@@ -6,16 +6,16 @@ SET DM_DIR=%SRC_DIR%\DarkMatter
 
 REM SET /A vulkan=0
 SET /A opengl=0
-SET /A debug=0
+SET /A debug=1
 SET /A simd_256=1
 
-SET c_filenames=%SRC_DIR%\app\app.c %SRC_DIR%\app\camera.c %SRC_DIR%\app\components.c %SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c %SRC_DIR%\rendering\imgui_render_pass.c %SRC_DIR%\systems\physics_system.c %SRC_DIR%\systems\gravity_system.c
+SET c_filenames=%SRC_DIR%\main.c %SRC_DIR%\app\app.c %SRC_DIR%\app\camera.c %SRC_DIR%\app\components.c %SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c %SRC_DIR%\rendering\imgui_render_pass.c %SRC_DIR%\systems\physics_system.c %SRC_DIR%\systems\gravity_system.c
 
-SET dm_filenames=%DM_DIR%\dm_impl.c %DM_DIR%\platform\dm_platform_win32.c %DM_DIR%\dm_physics.c
+SET dm_filenames=%DM_DIR%\platform\dm_platform_win32.c %DM_DIR%\dm_physics.c
 
 SET linker_flags=/link user32.lib gdi32.lib
 SET include_flags=/I%SRC_DIR% /I%DM_DIR% /I%DM_DIR%\lib
-SET compiler_flags=/arch:AVX2 /Wall /WL /TC /std:c99 /RTCsu
+SET compiler_flags=/arch:AVX512 /Wall /WL /TC /std:c99 /RTCsu
 
 IF /I "%simd_256%" EQU "1" (
 	SET defines="/DDM_SIMD_256"
