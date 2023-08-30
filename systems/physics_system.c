@@ -142,8 +142,8 @@ bool physics_system_run(void* s, void* d)
         
         // update
         dm_timer_start(&t, context);
-        //physics_system_update_entities(system, context);
-        physics_system_update_entities_simd(system, context);
+        physics_system_update_entities(system, context);
+        //physics_system_update_entities_simd(system, context);
         update_time += dm_timer_elapsed_ms(&t, context);
         
         manager->accum_time -= DM_PHYSICS_FIXED_DT;

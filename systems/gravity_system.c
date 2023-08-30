@@ -54,8 +54,8 @@ bool gravity_system_run(void* s, void* c)
     dm_timer t = { 0 };
     dm_timer_start(&t, context);
     
-    if(system->entity_count < DM_SIMD_N) naive_gravity(system, context);
-    else simd_gravity(system, context);
+    naive_gravity(system, context);
+    //else simd_gravity(system, context);
     
     imgui_draw_text_fmt(20,120, 0,1,0,1, context, "Gravity took: %0.3lf ms (%u entities)", dm_timer_elapsed_ms(&t, context), system->entity_count);
     
