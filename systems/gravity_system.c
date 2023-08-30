@@ -50,7 +50,6 @@ bool gravity_system_run(void* s, void* c)
 {
     dm_context* context = c;
     dm_ecs_system_manager* system = s;
-    gravity_system_manager* manager = system->system_data;
     
     dm_timer t = { 0 };
     dm_timer_start(&t, context);
@@ -175,9 +174,8 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
     
     const dm_mm_float grav_const = dm_mm_set1_ps(G);
     const dm_mm_float ones   = dm_mm_set1_ps(1.0f);
-    const dm_mm_float zeroes = dm_mm_set1_ps(0);
     
-    uint32_t i=0, j=0, k=0;
+    uint32_t i=0, j=0;
     uint32_t leftovers = 0;
     
     float pos_x[DM_ECS_MAX_ENTITIES], pos_y[DM_ECS_MAX_ENTITIES], pos_z[DM_ECS_MAX_ENTITIES];

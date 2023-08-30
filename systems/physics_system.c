@@ -425,11 +425,6 @@ void physics_system_broadphase_update_box_aabbs_simd(uint32_t box_count, float c
     float aabb_min_x[DM_ECS_MAX_ENTITIES], aabb_min_y[DM_ECS_MAX_ENTITIES], aabb_min_z[DM_ECS_MAX_ENTITIES];
     float aabb_max_x[DM_ECS_MAX_ENTITIES], aabb_max_y[DM_ECS_MAX_ENTITIES], aabb_max_z[DM_ECS_MAX_ENTITIES];
     
-    float pos_x_loader[DM_SIMD_N],pos_y_loader[DM_SIMD_N],pos_z_loader[DM_SIMD_N];
-    float rot_i_loader[DM_SIMD_N],rot_j_loader[DM_SIMD_N],rot_k_loader[DM_SIMD_N],rot_r_loader[DM_SIMD_N];
-    float aabb_min_x_loader[DM_SIMD_N],aabb_min_y_loader[DM_SIMD_N],aabb_min_z_loader[DM_SIMD_N];
-    float aabb_max_x_loader[DM_SIMD_N],aabb_max_y_loader[DM_SIMD_N],aabb_max_z_loader[DM_SIMD_N];
-    
     uint32_t i = 0;
     uint32_t t_index, c_index;
     

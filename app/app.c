@@ -74,10 +74,12 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     rot_k /= mag;
     rot_r /= mag;
     
+#if 0
     float vel_x = dm_random_float(context) * 2 - 1;
     float vel_y = dm_random_float(context) * 2 - 1;
     float vel_z = dm_random_float(context) * 2 - 1;
-    
+#endif
+
     float mass = dm_random_float(context) * 1e10;
     entity_add_kinematics(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, context);
     
