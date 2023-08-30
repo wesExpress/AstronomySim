@@ -1,7 +1,6 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#include "app_defines.h"
 #include "dm.h"
 
 typedef struct basic_camera_t

@@ -1,7 +1,6 @@
 #ifndef RENDER_PASS_H
 #define RENDER_PASS_H
 
-#include "../app/app_defines.h"
 #include "dm.h"
 
 bool render_pass_init(dm_context* context);

@@ -1,8 +1,6 @@
 #ifndef APP_H
 #define APP_H
 
-#include "app_defines.h"
-
 #include "camera.h"
 
 typedef struct component_ids_t
@@ -28,7 +26,7 @@ typedef struct application_data_t
     
     component_ids components;
     
-    dm_entity    entities[MAX_ENTITIES];
+    dm_entity    entities[DM_ECS_MAX_ENTITIES];
     uint32_t     entity_count;
     
     timer_draw_data draw_data;

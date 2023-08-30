@@ -18,7 +18,7 @@ void draw_path(application_data* app_data, dm_context* context)
 {
     const dm_ecs_id t_id = app_data->components.transform;
     const component_transform* transform = dm_ecs_get_component_block(t_id, context);
-    const dm_entity entity = app_data->entities[0];
+    const dm_entity entity = app_data->entities[1];
     const uint32_t index   = dm_ecs_entity_get_component_index(entity, t_id, context);
     if(index==DM_ECS_INVALID_ENTITY) return;
     
@@ -79,7 +79,7 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     float vel_y = dm_random_float(context) * 2 - 1;
     float vel_z = dm_random_float(context) * 2 - 1;
 #endif
-
+    
     float mass = dm_random_float(context) * 1e10;
     entity_add_kinematics(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, context);
     
@@ -145,8 +145,8 @@ bool dm_application_init(dm_context* context)
     camera_init(cam_pos, cam_forward, 0.01f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), 10.0f, 1.0f, &app_data->camera); 
     
     // entities
-#if 0
-    for(uint32_t i=0; i<MAX_ENTITIES; i++)
+#if 1
+    for(uint32_t i=0; i<DM_ECS_MAX_ENTITIES; i++)
     {
         app_data->entities[app_data->entity_count++] = create_entity(app_data, context);
     }

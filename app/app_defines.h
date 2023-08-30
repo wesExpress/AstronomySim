@@ -1,9 +1,0 @@
-#ifndef APP_DEFINES_H
-#define APP_DEFINES_H
-
-#define MAX_ENTITIES        512
-#ifndef DM_ECS_MAX_ENTITIES
-#define DM_ECS_MAX_ENTITIES MAX_ENTITIES
-#endif
-
-#endif //APP_DEFINES_H

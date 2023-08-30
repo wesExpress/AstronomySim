@@ -1,7 +1,6 @@
 #ifndef IMGUI_RENDER_PASS_H
 #define IMGUI_RENDER_PASS_H
 
-#include "../app/app.h"
 #include "dm.h"
 
 bool imgui_render_pass_init(dm_context* context);

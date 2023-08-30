@@ -1,7 +1,6 @@
 #ifndef GRAVITY_SYSTEM_H
 #define GRAVITY_SYSTEM_H
 
-#include "../app/app_defines.h"
 #include "dm.h"
 
 bool gravity_system_init(dm_ecs_id t_id, dm_ecs_id p_id, dm_context* context);

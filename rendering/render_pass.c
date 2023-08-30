@@ -2,6 +2,7 @@
 #include "debug_render_pass.h"
 #include "imgui_render_pass.h"
 
+#include "app/app.h"
 #include "app/components.h"
 
 typedef struct vertex_t
@@ -21,7 +22,7 @@ typedef struct uniform_t
     float view_proj[M4];
 } uniform;
 
-#define MAX_ENTITIES_PER_FRAME MAX_ENTITIES
+#define MAX_ENTITIES_PER_FRAME DM_ECS_MAX_ENTITIES
 typedef struct render_pass_data_t
 {
     dm_render_handle vb, instb, ib, shader, pipe, uni;
@@ -180,7 +181,7 @@ bool render_pass_render(dm_context* context)
         dm_entity entity = pass_data->entities[i];
         t_index = dm_ecs_entity_get_component_index(entity, t_id, context);
         if(t_index==DM_ECS_INVALID_ENTITY) break;
-
+        
         pos[0] = transform->pos_x[t_index]; 
         pos[1] = transform->pos_y[t_index]; 
         pos[2] = transform->pos_z[t_index];

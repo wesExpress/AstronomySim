@@ -1,7 +1,6 @@
 #ifndef COMPONENTS_H
 #define COMPONENTS_H
 
-#include "app_defines.h"
 #include "dm.h"
 
 // transform

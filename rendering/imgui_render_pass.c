@@ -1,5 +1,7 @@
 #include "imgui_render_pass.h"
 
+#include "../app/app.h"
+
 #include "stb_truetype/stb_truetype.h"
 
 #include <stdarg.h>
