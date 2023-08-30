@@ -1,6 +1,5 @@
 #include "app.h"
 
-#define DM_IMPLEMENTATION
 #include "dm.h"
 
 #include "camera.h"
@@ -22,7 +21,7 @@ void draw_path(application_data* app_data, dm_context* context)
     const dm_entity entity = app_data->entities[0];
     const uint32_t index   = dm_ecs_entity_get_component_index(entity, t_id, context);
     if(index==DM_ECS_INVALID_ENTITY) return;
-
+    
     timer_draw_data* draw_data = &app_data->draw_data;
     
     if(dm_timer_elapsed(&draw_data->draw_timer, context) >= TIME_LIM)
@@ -80,7 +79,7 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     float vel_z = dm_random_float(context) * 2 - 1;
     
     float mass = dm_random_float(context) * 1e10;
-    entity_add_kinematics(entity, app_data->components.physics, mass, vel_x,vel_y,vel_z, 0,0.1f, context);
+    entity_add_kinematics(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, context);
     
     if(dm_random_float(context) > 1)
     {
@@ -144,7 +143,7 @@ bool dm_application_init(dm_context* context)
     camera_init(cam_pos, cam_forward, 0.01f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), 10.0f, 1.0f, &app_data->camera); 
     
     // entities
-#if 1
+#if 0
     for(uint32_t i=0; i<MAX_ENTITIES; i++)
     {
         app_data->entities[app_data->entity_count++] = create_entity(app_data, context);
@@ -154,21 +153,23 @@ bool dm_application_init(dm_context* context)
     
     float mass = 1e10f;
     entity_add_transform(entity, app_data->components.transform, 0,0,0, 1,1,1, 0,0,0,1, context);
-    entity_add_box_collider(entity, app_data->components.collision, 0,0,0, 1,1,1, context);
-    entity_add_kinematics_box_rigid_body(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, -0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f, context);
+    entity_add_collider_box(entity, app_data->components.collision, 0,0,0, 1,1,1, context);
+    entity_add_kinematics(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, context);
+    entity_add_rigid_body_box(entity, app_data->components.rigid_body, mass,  -0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f, context);
     app_data->entities[app_data->entity_count++] = entity;
     
     // orbiter
     entity = dm_ecs_create_entity(context);
     float radius = 3;
     entity_add_transform(entity, app_data->components.transform, radius,0,0, 0.1f,0.1f,0.1f, 0,0,0,1, context);
-    entity_add_box_collider(entity, app_data->components.collision, 0,0,0, 1,1,1, context);
-    entity_add_kinematics_box_rigid_body(entity, app_data->components.physics, 1, 0,0,0, 0,0.1f, -0.05f,-0.05f,-0.05f,0.05f,0.05f,0.05f, context);
+    entity_add_collider_box(entity, app_data->components.collision, 0,0,0, 1,1,1, context);
+    entity_add_kinematics(entity, app_data->components.physics, 1, 0,0,0, 0,0.1f, context);
+    entity_add_rigid_body_box(entity, app_data->components.rigid_body, mass, -0.05f,-0.05f,-0.05f,0.05f,0.05f,0.05f, context);
     
     float vc = 6.67e-11f * mass / radius;
     vc = dm_sqrtf(vc);
     
-    entity_add_velocity(entity, app_data->components.physics, 0,0,vc, context);
+    entity_apply_velocity(entity, app_data->components.physics, 0,0,vc, context);
     
     app_data->entities[app_data->entity_count++] = entity;
 #endif

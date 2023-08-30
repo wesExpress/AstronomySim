@@ -143,8 +143,8 @@ void entity_add_collider_sphere(dm_entity entity, dm_ecs_id c_id, float center_x
 void entity_add_rigid_body_box(dm_entity entity, dm_ecs_id r_id, float mass, float min_x, float min_y, float min_z, float max_x, float max_y, float max_z, dm_context* context);
 void entity_add_rigid_body_sphere(dm_entity entity, dm_ecs_id r_id, float mass, float radius, dm_context* context);
 
-void entity_apply_velocity(dm_entity, dm_ecs_id p_id, float v_x, float v_y, float v_z, dm_context* context);
-void entity_apply_angular_velocity(dm_entity, dm_ecs_id p_id, float w_x, float w_y, float w_z, dm_context* context);
-void entity_apply_force(dm_entity, dm_ecs_id p_id, float f_x, float f_y, float f_z, dm_context* context);
+void entity_apply_velocity(dm_entity entity, dm_ecs_id p_id, float v_x, float v_y, float v_z, dm_context* context);
+void entity_apply_angular_velocity(dm_entity entity, dm_ecs_id p_id, float w_x, float w_y, float w_z, dm_context* context);
+void entity_apply_force(dm_entity entity, dm_ecs_id p_id, float f_x, float f_y, float f_z, dm_context* context);
 
 #endif //COMPONENTS_H

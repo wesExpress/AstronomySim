@@ -1,6 +1,5 @@
 #include "components.h"
 #include "app.h"
-#include "dm.h"
 
 void entity_add_transform(dm_entity entity, dm_ecs_id t_id, float pos_x,float pos_y,float pos_z, float scale_x,float scale_y,float scale_z, float rot_i,float rot_j,float rot_k,float rot_r, dm_context* context)
 {
@@ -24,7 +23,7 @@ void entity_add_transform(dm_entity entity, dm_ecs_id t_id, float pos_x,float po
     transform->rot_k[index] = rot_k;
     transform->rot_r[index] = rot_r;
     
-    dm_ecs_iterate_component_block(t_id, context);
+    dm_ecs_entity_add_component(entity, t_id, context);
 }
 
 void entity_add_kinematics(dm_entity entity, dm_ecs_id p_id, float mass, float vel_x, float vel_y, float vel_z, float damping_v, float damping_w, dm_context* context)
@@ -49,7 +48,7 @@ void entity_add_kinematics(dm_entity entity, dm_ecs_id p_id, float mass, float v
     // default for now
     physics->movement_type[index] = PHYSICS_MOVEMENT_KINEMATIC;
     
-    dm_ecs_iterate_component_block(p_id, context);
+    dm_ecs_entity_add_component(entity, p_id, context);
 }
 
 void entity_add_collider_box(dm_entity entity, dm_ecs_id c_id, float center_x,float center_y,float center_z, float scale_x,float scale_y,float scale_z, dm_context* context)
@@ -103,7 +102,7 @@ void entity_add_collider_box(dm_entity entity, dm_ecs_id c_id, float center_x,fl
     collision->shape[index] = DM_COLLISION_SHAPE_BOX;
     collision->flag[index]  = COLLISION_FLAG_NO;
     
-    dm_ecs_iterate_component_block(c_id, context);
+    dm_ecs_entity_add_component(entity, c_id, context);
 }
 
 void entity_add_collider_sphere(dm_entity entity, dm_ecs_id c_id, float center_x,float center_y,float center_z, float radius, dm_context* context)
@@ -148,7 +147,7 @@ void entity_add_collider_sphere(dm_entity entity, dm_ecs_id c_id, float center_x
     collision->shape[index] = DM_COLLISION_SHAPE_SPHERE;
     collision->flag[index]  = COLLISION_FLAG_NO;
     
-    dm_ecs_iterate_component_block(c_id, context);
+    dm_ecs_entity_add_component(entity, c_id, context);
 }
 
 void entity_add_rigid_body_box(dm_entity entity, dm_ecs_id r_id, float mass, float min_x, float min_y, float min_z, float max_x, float max_y, float max_z, dm_context* context)
@@ -186,7 +185,7 @@ void entity_add_rigid_body_box(dm_entity entity, dm_ecs_id r_id, float mass, flo
     rigid_body->i_inv_11[index] = rigid_body->i_body_inv_11[index];
     rigid_body->i_inv_22[index] = rigid_body->i_body_inv_22[index];
     
-    dm_ecs_iterate_component_block(r_id, context);
+    dm_ecs_entity_add_component(entity, r_id, context);
 }
 
 void entity_add_rigid_body_sphere(dm_entity entity, dm_ecs_id r_id, float mass, float radius, dm_context* context)
@@ -213,13 +212,13 @@ void entity_add_rigid_body_sphere(dm_entity entity, dm_ecs_id r_id, float mass, 
     rigid_body->i_inv_11[index] = rigid_body->i_body_inv_11[index];
     rigid_body->i_inv_22[index] = rigid_body->i_body_inv_22[index];
     
-    dm_ecs_iterate_component_block(r_id, context);
+    dm_ecs_entity_add_component(entity, r_id, context);
 }
 
 /************
 HELPER FUNCS
 **************/
-void entity_add_velocity(dm_entity entity, dm_ecs_id p_id, float v_x, float v_y, float v_z, dm_context* context)
+void entity_apply_velocity(dm_entity entity, dm_ecs_id p_id, float v_x, float v_y, float v_z, dm_context* context)
 {
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
     component_physics* physics = context->ecs_manager.components[p_id].data;
@@ -232,7 +231,7 @@ void entity_add_velocity(dm_entity entity, dm_ecs_id p_id, float v_x, float v_y,
     physics->vel_z[comp_index] += v_z;
 }
 
-void entity_add_angular_velocity(dm_entity entity, dm_ecs_id p_id, float w_x, float w_y, float w_z, dm_context* context)
+void entity_apply_angular_velocity(dm_entity entity, dm_ecs_id p_id, float w_x, float w_y, float w_z, dm_context* context)
 {
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
     component_physics* physics = context->ecs_manager.components[p_id].data;
@@ -245,7 +244,7 @@ void entity_add_angular_velocity(dm_entity entity, dm_ecs_id p_id, float w_x, fl
     physics->w_z[comp_index] += w_z;
 }
 
-void entity_add_force(dm_entity entity, dm_ecs_id p_id, float f_x, float f_y, float f_z, dm_context* context)
+void entity_apply_force(dm_entity entity, dm_ecs_id p_id, float f_x, float f_y, float f_z, dm_context* context)
 {
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
     component_physics* physics = context->ecs_manager.components[p_id].data;
