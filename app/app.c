@@ -80,7 +80,7 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     float vel_z = dm_random_float(context) * 2 - 1;
 #endif
     
-    float mass = dm_random_float(context) * 1e10;
+    float mass = dm_random_float(context) * 1e6;
     entity_add_kinematics(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, context);
     
     if(dm_random_float(context) > 1)
@@ -142,7 +142,7 @@ bool dm_application_init(dm_context* context)
     float cam_forward[] = { 1,0,1 };
     dm_vec3_norm(cam_forward, cam_forward);
     
-    camera_init(cam_pos, cam_forward, 0.01f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), 10.0f, 1.0f, &app_data->camera); 
+    camera_init(cam_pos, cam_forward, 0.01f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), 30.0f, 1.0f, &app_data->camera); 
     
     // entities
 #if 1

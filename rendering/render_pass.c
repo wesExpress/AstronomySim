@@ -166,9 +166,11 @@ bool render_pass_render(dm_context* context)
     render_pass_data* pass_data = app_data->render_pass_data;
     
     const dm_ecs_id t_id = app_data->components.transform;
+    const dm_ecs_id c_id = app_data->components.collision;
     
     component_transform* transform = dm_ecs_get_component_block(t_id, context);
-    uint32_t t_index; 
+    component_collision* collision = dm_ecs_get_component_block(c_id, context);
+    uint32_t t_index, c_index; 
     
     float obj_rm[M4];
     
@@ -180,7 +182,7 @@ bool render_pass_render(dm_context* context)
     {
         dm_entity entity = pass_data->entities[i];
         t_index = dm_ecs_entity_get_component_index(entity, t_id, context);
-        if(t_index==DM_ECS_INVALID_ENTITY) break;
+        c_index = dm_ecs_entity_get_component_index(entity, c_id, context);
         
         pos[0] = transform->pos_x[t_index]; 
         pos[1] = transform->pos_y[t_index]; 
@@ -206,6 +208,36 @@ bool render_pass_render(dm_context* context)
         dm_mat4_transpose(inst->model, inst->model);
 #endif
         
+        float c[4];
+        if(collision->flag[c_index]==COLLISION_FLAG_POSSIBLE)
+        {
+            c[0] = 1;
+            c[1] = 1;
+            c[2] = 0;
+            c[3] = 1;
+        }
+        else if(collision->flag[c_index]==COLLISION_FLAG_YES)
+        {
+            c[0] = 1;
+            c[1] = 0;
+            c[2] = 0;
+            c[3] = 1;
+        }
+        else
+        {
+            c[0] = 1;
+            c[1] = 1;
+            c[2] = 1;
+            c[3] = 1;
+        }
+        
+        float dim[3];
+        dim[0] = collision->aabb_global_max_x[c_index] - collision->aabb_global_min_x[c_index];
+        dim[1] = collision->aabb_global_max_y[c_index] - collision->aabb_global_min_y[c_index];
+        dim[2] = collision->aabb_global_max_z[c_index] - collision->aabb_global_min_z[c_index];
+        
+        debug_render_aabb(pos, dim, c, context);
+        
         inst->color[0] = 1;
         inst->color[1] = 1;
         inst->color[2] = 1;
@@ -229,7 +261,7 @@ bool render_pass_render(dm_context* context)
     dm_render_command_bind_shader(pass_data->shader, context);
     dm_render_command_bind_pipeline(pass_data->pipe, context);
     dm_render_command_bind_texture(pass_data->tex, 0, context);
-    //dm_render_command_toggle_wireframe(true, context);
+    dm_render_command_toggle_wireframe(true, context);
     dm_render_command_bind_buffer(pass_data->vb, 0, context);
     dm_render_command_bind_buffer(pass_data->instb, 1, context);
     dm_render_command_update_buffer(pass_data->instb, pass_data->insts, sizeof(pass_data->insts), 0, context);

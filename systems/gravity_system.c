@@ -7,14 +7,23 @@
 
 #define G 6.6743e-11f
 
+typedef struct gravity_system_cache_t
+{
+    float pos_x[DM_ECS_MAX_ENTITIES], pos_y[DM_ECS_MAX_ENTITIES], pos_z[DM_ECS_MAX_ENTITIES];
+    float force_x[DM_ECS_MAX_ENTITIES], force_y[DM_ECS_MAX_ENTITIES], force_z[DM_ECS_MAX_ENTITIES];
+    float mass[DM_ECS_MAX_ENTITIES];
+} gravity_system_cache;
+
 typedef struct gravity_system_manager_t
 {
     dm_ecs_id transform, physics;
     bool      simd;
+    
+    gravity_system_cache cache;
 } gravity_system_manager;
 
-void naive_gravity(dm_ecs_system_manager* system, dm_context* context);
-void simd_gravity(dm_ecs_system_manager* system, dm_context* context);
+void naive_gravity(dm_ecs_system* system);
+void simd_gravity(dm_ecs_system*  system, dm_context* context);
 
 /************
 SYSTEM FUNCS
@@ -26,10 +35,10 @@ bool gravity_system_init(dm_ecs_id t_id, dm_ecs_id p_id, dm_context* context)
     dm_ecs_system_timing timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
     
     dm_ecs_id id;
-    id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, gravity_system_run, gravity_system_shutdown, context);
+    id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, gravity_system_run, gravity_system_shutdown, gravity_system_insert, context);
     if(id==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not initialize graity system."); return false; }
     
-    dm_ecs_system_manager* gravity_system = &context->ecs_manager.systems[timing][id];
+    dm_ecs_system* gravity_system = &context->ecs_manager.systems[timing][id];
     
     gravity_system->system_data = dm_alloc(sizeof(gravity_system_manager));
     gravity_system_manager* manager = gravity_system->system_data;
@@ -46,16 +55,66 @@ void gravity_system_shutdown(void* s, void* c)
 {
 }
 
+void gravity_system_insert(const uint32_t entity_index, void* s, void* c)
+{
+    dm_context*             context = c;
+    dm_ecs_system*          system  = s;
+    gravity_system_manager* manager = system->system_data;
+    
+    const uint32_t i = system->entity_count;
+    
+    const dm_ecs_id t_id = manager->transform;
+    const dm_ecs_id p_id = manager->physics;
+    
+    const component_transform* transform = dm_ecs_get_component_block(t_id, context);
+    const component_physics*   physics   = dm_ecs_get_component_block(p_id, context);
+    
+    const uint32_t t_index = system->entity_indices[i][t_id];
+    const uint32_t p_index = system->entity_indices[i][p_id];
+    
+    manager->cache.pos_x[i] = transform->pos_x[t_index];
+    manager->cache.pos_y[i] = transform->pos_y[t_index];
+    manager->cache.pos_z[i] = transform->pos_z[t_index];
+    
+    manager->cache.force_x[i] = physics->force_x[p_index];
+    manager->cache.force_y[i] = physics->force_y[p_index];
+    manager->cache.force_z[i] = physics->force_z[p_index];
+    
+    manager->cache.mass[i] = physics->mass[p_index];
+}
+
+void gravity_system_update_values(dm_ecs_system* system, dm_context* context)
+{
+    gravity_system_manager* manager = system->system_data;
+    
+    const dm_ecs_id p_id = manager->physics;
+    
+    component_physics*   physics   = dm_ecs_get_component_block(p_id, context);
+    
+    uint32_t p_index;
+    
+    for(uint32_t i=0; i<system->entity_count; i++)
+    {
+        p_index = system->entity_indices[i][p_id];
+        
+        physics->force_x[p_index] = manager->cache.force_x[i];
+        physics->force_y[p_index] = manager->cache.force_y[i];
+        physics->force_z[p_index] = manager->cache.force_z[i];
+    }
+}
+
 bool gravity_system_run(void* s, void* c)
 {
     dm_context* context = c;
-    dm_ecs_system_manager* system = s;
+    dm_ecs_system* system = s;
     
     dm_timer t = { 0 };
     dm_timer_start(&t, context);
     
-    naive_gravity(system, context);
-    //else simd_gravity(system, context);
+    //naive_gravity(system);
+    simd_gravity(system, context);
+    
+    gravity_system_update_values(system, context);
     
     imgui_draw_text_fmt(20,120, 0,1,0,1, context, "Gravity took: %0.3lf ms (%u entities)", dm_timer_elapsed_ms(&t, context), system->entity_count);
     
@@ -65,22 +124,16 @@ bool gravity_system_run(void* s, void* c)
 /************
 NAIVE GRAITY
 **************/
-void naive_gravity(dm_ecs_system_manager* system, dm_context* context)
+void naive_gravity(dm_ecs_system* system)
 {
     gravity_system_manager* manager = system->system_data;
-    
-    const dm_ecs_id t_id = manager->transform;
-    const dm_ecs_id p_id = manager->physics;
-    
-    component_transform* transform = dm_ecs_get_component_block(t_id, context);
-    component_physics*   physics   = dm_ecs_get_component_block(p_id, context);
-    
-    uint32_t t_a, p_a;
-    uint32_t t_b, p_b;
     
     float mass_a, mass_b;
     float pos_a_x, pos_a_y, pos_a_z;
     float pos_b_x, pos_b_y, pos_b_z;
+    
+    float force_a_x, force_a_y, force_a_z;
+    float force_b_x, force_b_y, force_b_z;
     
     float dir_x, dir_y, dir_z;
     float dis2, grav;
@@ -89,26 +142,28 @@ void naive_gravity(dm_ecs_system_manager* system, dm_context* context)
     uint32_t i=0,j=0;
     for(; i<system->entity_count; i++)
     {
-        t_a = system->entity_indices[i][t_id];
-        p_a = system->entity_indices[i][p_id];
+        pos_a_x = manager->cache.pos_x[i];
+        pos_a_y = manager->cache.pos_y[i];
+        pos_a_z = manager->cache.pos_z[i];
         
-        pos_a_x = transform->pos_x[t_a];
-        pos_a_y = transform->pos_y[t_a];
-        pos_a_z = transform->pos_z[t_a];
+        force_a_x = manager->cache.force_x[i];
+        force_a_y = manager->cache.force_y[i];
+        force_a_z = manager->cache.force_z[i];
         
-        mass_a = physics->mass[p_a];
+        mass_a = manager->cache.mass[i];
         
         j = i + 1;
         for(; j<system->entity_count; j++)
         {
-            t_b = system->entity_indices[j][t_id];
-            p_b = system->entity_indices[j][p_id];
+            pos_b_x = manager->cache.pos_x[j];
+            pos_b_y = manager->cache.pos_y[j];
+            pos_b_z = manager->cache.pos_z[j];
             
-            pos_b_x = transform->pos_x[t_b];
-            pos_b_y = transform->pos_y[t_b];
-            pos_b_z = transform->pos_z[t_b];
+            force_b_x = manager->cache.force_x[j];
+            force_b_y = manager->cache.force_y[j];
+            force_b_z = manager->cache.force_z[j];
             
-            mass_b = physics->mass[p_b];
+            mass_b = manager->cache.mass[j];
             
             // force calculation
             dir_x = pos_b_x - pos_a_x;
@@ -135,14 +190,14 @@ void naive_gravity(dm_ecs_system_manager* system, dm_context* context)
             local_f_z = dir_z * grav;
             
             // a gets force, b gets negative!
-            physics->force_x[p_a] += local_f_x;
-            physics->force_x[p_b] -= local_f_x;
+            manager->cache.force_x[i] += local_f_x;
+            manager->cache.force_x[j] -= local_f_x;
             
-            physics->force_y[p_a] += local_f_y;
-            physics->force_y[p_b] -= local_f_y;
+            manager->cache.force_y[i] += local_f_y;
+            manager->cache.force_y[j] -= local_f_y;
             
-            physics->force_z[p_a] += local_f_z;
-            physics->force_z[p_b] -= local_f_z;
+            manager->cache.force_z[i] += local_f_z;
+            manager->cache.force_z[j] -= local_f_z;
         }
     }
 }
@@ -150,17 +205,19 @@ void naive_gravity(dm_ecs_system_manager* system, dm_context* context)
 /************
 SIMD GRAVITY
 **************/
-void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
+void simd_gravity(dm_ecs_system* system, dm_context* context)
 {
     gravity_system_manager* manager = system->system_data;
     
-    const dm_ecs_id t_id = manager->transform;
-    const dm_ecs_id p_id = manager->physics;
+    float* pos_x = manager->cache.pos_x;
+    float* pos_y = manager->cache.pos_y;
+    float* pos_z = manager->cache.pos_z;
     
-    component_transform* transform = dm_ecs_get_component_block(t_id, context);
-    component_physics*   physics   = dm_ecs_get_component_block(p_id, context);
+    float* force_x = manager->cache.force_x;
+    float* force_y = manager->cache.force_y;
+    float* force_z = manager->cache.force_z;
     
-    uint32_t t_a, p_a;
+    float* mass = manager->cache.mass;
     
     dm_mm_float mass_i, mass_j;
     dm_mm_float pos_i_x, pos_i_y, pos_i_z;
@@ -177,26 +234,6 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
     
     uint32_t i=0, j=0;
     uint32_t leftovers = 0;
-    
-    float pos_x[DM_ECS_MAX_ENTITIES], pos_y[DM_ECS_MAX_ENTITIES], pos_z[DM_ECS_MAX_ENTITIES];
-    float force_x[DM_ECS_MAX_ENTITIES], force_y[DM_ECS_MAX_ENTITIES], force_z[DM_ECS_MAX_ENTITIES];
-    float mass[DM_ECS_MAX_ENTITIES];
-    
-    for(; i<system->entity_count; i++)
-    {
-        t_a = system->entity_indices[i][t_id];
-        p_a = system->entity_indices[i][p_id];
-        
-        pos_x[i] = transform->pos_x[t_a];
-        pos_y[i] = transform->pos_y[t_a];
-        pos_z[i] = transform->pos_z[t_a];
-        
-        force_x[i] = physics->force_x[p_a];
-        force_y[i] = physics->force_y[p_a];
-        force_z[i] = physics->force_z[p_a];
-        
-        mass[i] = physics->mass[p_a];
-    }
     
     i = 0;
     for(; i<system->entity_count; i++)
@@ -336,15 +373,5 @@ void simd_gravity(dm_ecs_system_manager* system, dm_context* context)
         force_x[i] += dm_mm_sum_elements(force_i_x);
         force_y[i] += dm_mm_sum_elements(force_i_y);
         force_z[i] += dm_mm_sum_elements(force_i_z);
-    }
-    
-    i=0;
-    for(; i<system->entity_count; i++)
-    {
-        p_a = system->entity_indices[i][p_id];
-        
-        physics->force_x[p_a] = force_x[i];
-        physics->force_y[p_a] = force_y[i];
-        physics->force_z[p_a] = force_z[i];
     }
 }
