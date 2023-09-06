@@ -19,19 +19,30 @@ typedef struct physics_system_cache_t
     component_rigid_body rigid_body;
 } physics_system_cache;
 
+typedef struct physics_system_collision_pair_t
+{
+    uint32_t entity_a, entity_b;
+} physics_system_collision_pair;
+
 typedef struct physics_system_broadphase_data_t
 {
     float center_sum[3];
     float center_sq_sum[3];
     
     uint32_t sort_axis;
-    uint32_t num_checks;
+    uint32_t num_checks, num_possible_collisions;
+    
+    uint32_t sweep_indices[DM_ECS_MAX_ENTITIES];
+    uint32_t sphere_indices[DM_ECS_MAX_ENTITIES], box_indices[DM_ECS_MAX_ENTITIES];
+    
+    physics_system_collision_pair possible_collisions[DM_ECS_MAX_ENTITIES];
 } physics_system_broadphase_data;
 
-typedef struct physics_system_collision_pair_t
+typedef struct physics_system_narrowphase_data_t
 {
-    uint32_t entity_a, entity_b;
-} physics_system_collision_pair;
+    uint32_t            manifold_count;
+    dm_contact_manifold manifolds[DM_ECS_MAX_ENTITIES];
+} physics_system_narrowphase_data;
 
 typedef enum physics_system_flag_t
 {
@@ -39,31 +50,18 @@ typedef enum physics_system_flag_t
     DM_PHYSICS_FLAG_NO_COLLISIONS = 1 << 1,
 } physics_system_flag;
 
-#define PHYSICS_SYSTEM_DYNAMIC_CAPACITY      16
-#define PHYSICS_SYSTEM_DYNAMIC_CAPACITY      16
-#define PHYSICS_SYSTEM_DYNAMIC_LOAD_FACTOR   0.75f
-#define PHYSICS_SYSTEM_DYNAMIC_RESIZE_FACTOR 2
 typedef struct physics_system_manager_t
 {
     double              accum_time, simulation_time;
     physics_system_flag flags;
     
-    physics_system_broadphase_data broadphase_data;
-    
-    uint32_t entity_count, entity_capacity;
-    
     dm_ecs_id transform, collision, physics, rigid_body;
+    uint32_t entity_count;
     
-    uint32_t sweep_indices[DM_ECS_MAX_ENTITIES];
-    uint32_t sphere_indices[DM_ECS_MAX_ENTITIES], box_indices[DM_ECS_MAX_ENTITIES];
-    
-    uint32_t num_possible_collisions;
-    uint32_t num_manifolds;
+    physics_system_broadphase_data  broadphase_data;
+    physics_system_narrowphase_data narrowphase_data;
     
     physics_system_cache cache;
-    
-    physics_system_collision_pair possible_collisions[DM_ECS_MAX_ENTITIES];
-    dm_contact_manifold           manifolds[DM_ECS_MAX_ENTITIES];
 } physics_system_manager;
 
 bool physics_system_broadphase(dm_ecs_system* system, dm_context* context);
@@ -351,7 +349,7 @@ bool physics_system_run(void* s, void* d)
         
         // update
         dm_timer_start(&t, context);
-        //physics_system_update_entities(system);
+        physics_system_update_entities(system);
         //physics_system_update_entities_simd(system);
         update_time += dm_timer_elapsed_ms(&t, context);
         
@@ -365,8 +363,8 @@ bool physics_system_run(void* s, void* d)
     float iter_f_inv = 1 / (float)iters;
     
     imgui_draw_text_fmt(20,20, 1,1,0,1, context, "Physics broadphase average: %0.3lf ms (%u checks)", broad_time * iter_f_inv, manager->broadphase_data.num_checks);
-    imgui_draw_text_fmt(20,40, 1,1,0,1, context, "Physics narrowphase average: %0.3lf ms (%u checks)", narrow_time * iter_f_inv, manager->num_possible_collisions);
-    imgui_draw_text_fmt(20,60, 1,1,0,1, context, "Physics collision resolution average: %0.3lf ms (%u manifolds)", collision_time * iter_f_inv, manager->num_manifolds);
+    imgui_draw_text_fmt(20,40, 1,1,0,1, context, "Physics narrowphase average: %0.3lf ms (%u checks)", narrow_time * iter_f_inv, manager->broadphase_data.num_possible_collisions);
+    imgui_draw_text_fmt(20,60, 1,1,0,1, context, "Physics collision resolution average: %0.3lf ms (%u manifolds)", collision_time * iter_f_inv, manager->narrowphase_data.manifold_count);
     imgui_draw_text_fmt(20,80, 1,1,0,1, context, "Updating entities average: %0.3lf ms", update_time * iter_f_inv);
     imgui_draw_text_fmt(20,100, 1,0,1,1, context, "Physics took: %0.3lf ms, %u iterations", total_time, iters);
     
@@ -395,7 +393,7 @@ int physics_system_broadphase_sort(void* c, const void* a, const void* b)
     //return a_min < b_min;
 }
 
-void physics_system_broadphase_update_sphere_aabbs(uint32_t sphere_count, float center_sum[3], float center_sq_sum[3], dm_ecs_system* system)
+void physics_system_broadphase_update_sphere_aabbs(uint32_t sphere_count, dm_ecs_system* system)
 {
     physics_system_manager* manager = system->system_data;
     
@@ -411,8 +409,8 @@ void physics_system_broadphase_update_sphere_aabbs(uint32_t sphere_count, float 
     
     for(uint32_t i=0; i<sphere_count; i++)
     {
-        t_index = system->entity_indices[manager->sphere_indices[i]][t_id];
-        c_index = system->entity_indices[manager->sphere_indices[i]][c_id];
+        t_index = system->entity_indices[manager->broadphase_data.sphere_indices[i]][t_id];
+        c_index = system->entity_indices[manager->broadphase_data.sphere_indices[i]][c_id];
         
         collision->aabb_global_min_x[c_index] = collision->aabb_local_min_x[c_index] + transform->pos_x[t_index];
         collision->aabb_global_min_y[c_index] = collision->aabb_local_min_y[c_index] + transform->pos_y[t_index];
@@ -436,7 +434,7 @@ void physics_system_broadphase_update_sphere_aabbs(uint32_t sphere_count, float 
     }
 }
 
-void physics_system_broadphase_update_box_aabbs(uint32_t box_count, float center_sum[3], float center_sq_sum[3], dm_ecs_system* system)
+void physics_system_broadphase_update_box_aabbs(uint32_t box_count,  dm_ecs_system* system)
 {
     physics_system_manager* manager = system->system_data;
     
@@ -462,8 +460,8 @@ void physics_system_broadphase_update_box_aabbs(uint32_t box_count, float center
     
     for(uint32_t i=0; i<box_count; i++)
     {
-        t_index = system->entity_indices[manager->box_indices[i]][t_id];
-        c_index = system->entity_indices[manager->box_indices[i]][c_id];
+        t_index = system->entity_indices[manager->broadphase_data.box_indices[i]][t_id];
+        c_index = system->entity_indices[manager->broadphase_data.box_indices[i]][c_id];
         
         quat[0] = transform->rot_i[t_index];
         quat[1] = transform->rot_j[t_index];
@@ -581,30 +579,27 @@ int physics_system_broadphase_get_variance_axis(dm_ecs_system* system)
 {
     physics_system_manager* manager = system->system_data;
     
-    float center_sum[3]    = { 0 };
-    float center_sq_sum[3] = { 0 };
-    
     int axis = 0;
-    
-    uint32_t sphere_count=0, box_count=0;
     
     const dm_ecs_id c_id = manager->collision;
     
     component_collision* collision = &manager->cache.collision;
     
+    uint32_t box_count=0,sphere_count=0;
+    
     for(uint32_t i=0; i<system->entity_count; i++)
     {
-        manager->sweep_indices[i] = i;
+        manager->broadphase_data.sweep_indices[i] = i;
         collision->flag[system->entity_indices[i][c_id]] = COLLISION_FLAG_NO;
         
         switch(collision->shape[system->entity_indices[i][c_id]])
         {
             case DM_COLLISION_SHAPE_SPHERE: 
-            manager->sphere_indices[sphere_count++] = i;
+            manager->broadphase_data.sphere_indices[sphere_count++] = i;
             break;
             
             case DM_COLLISION_SHAPE_BOX: 
-            manager->box_indices[box_count++] = i;
+            manager->broadphase_data.box_indices[box_count++] = i;
             break;
             
             default:
@@ -612,8 +607,8 @@ int physics_system_broadphase_get_variance_axis(dm_ecs_system* system)
         }
     }
     
-    if(sphere_count) physics_system_broadphase_update_sphere_aabbs(sphere_count, center_sum, center_sq_sum, system);
-    if(box_count)    physics_system_broadphase_update_box_aabbs(box_count, center_sum, center_sq_sum, system);
+    if(sphere_count) physics_system_broadphase_update_sphere_aabbs(sphere_count, system);
+    if(box_count)    physics_system_broadphase_update_box_aabbs(box_count, system);
     
     const float scale = 1.0f / system->entity_count;
     
@@ -642,18 +637,18 @@ void physics_system_broadphase_sort_sweep(uint32_t count, float* min_array, floa
 {
     physics_system_manager* manager = system->system_data;
     manager->broadphase_data.num_checks = 0;
-    manager->num_possible_collisions = 0;
+    manager->broadphase_data.num_possible_collisions = 0;
     
     const dm_ecs_id c_id = manager->collision;
     
     component_collision* collision = &manager->cache.collision;
     
 #ifdef DM_PLATFORM_WIN32
-    qsort_s(manager->sweep_indices, count, sizeof(uint32_t), physics_system_broadphase_sort, min_array);
+    qsort_s(manager->broadphase_data.sweep_indices, count, sizeof(uint32_t), physics_system_broadphase_sort, min_array);
 #elif defined(DM_PLATFORM_LINUX)
-    qsort_r(manager->sweep_indices, count, sizeof(uint32_t), physics_system_broadphase_sort, min_array);
+    qsort_r(manager->broadphase_data.sweep_indices, count, sizeof(uint32_t), physics_system_broadphase_sort, min_array);
 #elif defined(DM_PLATFORM_APPLE)
-    qsort_r(manager->sweep_indices, count, sizeof(uint32_t), min_array, physics_system_broadphase_sort);
+    qsort_r(manager->broadphase_data.sweep_indices, count, sizeof(uint32_t), min_array, physics_system_broadphase_sort);
 #endif
     
     // sweep
@@ -661,41 +656,30 @@ void physics_system_broadphase_sort_sweep(uint32_t count, float* min_array, floa
     
     bool x_check, y_check, z_check;
     
-    float a_max[3];
+    float a_max[3], a_min[3];
     float b_max[3], b_min[3];
     
     uint32_t entity_a, entity_b;
     
     uint32_t i,j;
     
-    float p_a[3], p_b[3];
-    
-    static uint32_t draw_index = 0;
-    
-    if(dm_input_key_just_pressed(DM_KEY_M, context)) draw_index++;
-    else if(dm_input_key_just_pressed(DM_KEY_N, context)) draw_index--;
-    
-    draw_index = DM_CLAMP(draw_index, 0, count);
-    
     for(i=0; i<count; i++)
     {
-        entity_a = manager->sweep_indices[i];
+        entity_a = manager->broadphase_data.sweep_indices[i];
         
         a_max[0] = collision->aabb_global_max_x[entity_a];
         a_max[1] = collision->aabb_global_max_y[entity_a];
         a_max[2] = collision->aabb_global_max_z[entity_a];
         
-        p_a[0] = manager->cache.transform.pos_x[entity_a];
-        p_a[1] = manager->cache.transform.pos_y[entity_a];
-        p_a[2] = manager->cache.transform.pos_z[entity_a];
-        
-        if(i==draw_index) debug_render_bilboard(p_a, 10.f,10.f, (float[]){ 1,0,0,1 }, context);
+        a_min[0] = collision->aabb_global_min_x[entity_a];
+        a_min[1] = collision->aabb_global_min_y[entity_a];
+        a_min[2] = collision->aabb_global_min_z[entity_a];
         
         max_i = max_array[entity_a];
         
         for(j=i+1; j<count; j++)
         {
-            entity_b = manager->sweep_indices[j];
+            entity_b = manager->broadphase_data.sweep_indices[j];
             
             b_max[0] = collision->aabb_global_max_x[entity_b];
             b_max[1] = collision->aabb_global_max_y[entity_b];
@@ -705,30 +689,24 @@ void physics_system_broadphase_sort_sweep(uint32_t count, float* min_array, floa
             b_min[1] = collision->aabb_global_min_y[entity_b];
             b_min[2] = collision->aabb_global_min_z[entity_b];
             
-            p_b[0] = manager->cache.transform.pos_x[entity_b];
-            p_b[1] = manager->cache.transform.pos_y[entity_b];
-            p_b[2] = manager->cache.transform.pos_z[entity_b];
-            
-            if(i==draw_index) debug_render_bilboard(p_b, 10.f,10.f, (float[]){ 0,1 - (float)(j-i) / (float)20, 0,(float)(j-i)/(float)20 }, context);
-            
             min_j = min_array[entity_b];
             
             if(min_j > max_i) break;
             
             manager->broadphase_data.num_checks++;
             
-            x_check = a_max[0] <= b_max[0] && a_max[0] >= b_min[0];
-            y_check = a_max[1] <= b_max[1] && a_max[1] >= b_min[1];
-            z_check = a_max[2] <= b_max[2] && a_max[2] >= b_min[2];
+            x_check = (a_min[0] <= b_max[0]) && (a_max[0] >= b_min[0]);
+            y_check = (a_min[1] <= b_max[1]) && (a_max[1] >= b_min[1]);
+            z_check = (a_min[2] <= b_max[2]) && (a_max[2] >= b_min[2]);
             
             if(!x_check || !y_check || !z_check) continue;
             
             collision->flag[entity_a] = COLLISION_FLAG_POSSIBLE;
             collision->flag[entity_b] = COLLISION_FLAG_POSSIBLE;
             
-            manager->possible_collisions[manager->num_possible_collisions].entity_a = entity_a;
-            manager->possible_collisions[manager->num_possible_collisions].entity_b = entity_b;
-            manager->num_possible_collisions++;
+            manager->broadphase_data.possible_collisions[manager->broadphase_data.num_possible_collisions].entity_a = entity_a;
+            manager->broadphase_data.possible_collisions[manager->broadphase_data.num_possible_collisions].entity_b = entity_b;
+            manager->broadphase_data.num_possible_collisions++;
         }
     }
 }
@@ -782,7 +760,7 @@ bool physics_system_narrowphase(dm_ecs_system* system)
 {
     physics_system_manager* manager = system->system_data;
     
-    manager->num_manifolds = 0;
+    manager->narrowphase_data.manifold_count = 0;
     
     float              pos[2][3], rots[2][4], cens[2][3], internals[2][6], vels[2][3], ws[2][3];
     dm_collision_shape shapes[2];
@@ -804,9 +782,9 @@ bool physics_system_narrowphase(dm_ecs_system* system)
     component_physics*    physics    = &manager->cache.physics;
     component_rigid_body* rigid_body = &manager->cache.rigid_body;
     
-    for(uint32_t i=0; i<manager->num_possible_collisions; i++)
+    for(uint32_t i=0; i<manager->broadphase_data.num_possible_collisions; i++)
     {
-        collision_pair = manager->possible_collisions[i];
+        collision_pair = manager->broadphase_data.possible_collisions[i];
         
         entity_a = collision_pair.entity_a;
         entity_b = collision_pair.entity_b;
@@ -869,7 +847,7 @@ bool physics_system_narrowphase(dm_ecs_system* system)
         
         assert(simplex.size==4);
         
-        manifold = &manager->manifolds[manager->num_manifolds++];
+        manifold = &manager->narrowphase_data.manifolds[manager->narrowphase_data.manifold_count++];
         *manifold = (dm_contact_manifold){ 0 };
         
         collision->flag[entity_a] = COLLISION_FLAG_YES;
@@ -919,9 +897,9 @@ void physics_system_solve_constraints(physics_system_manager* manager)
 {
     for(uint32_t iter=0; iter<PHYSICS_SYSTEM_CONSTRAINT_ITER; iter++)
     {
-        for(uint32_t m=0; m<manager->num_manifolds; m++)
+        for(uint32_t m=0; m<manager->narrowphase_data.manifold_count; m++)
         {
-            dm_physics_apply_constraints(&manager->manifolds[m]);
+            dm_physics_apply_constraints(&manager->narrowphase_data.manifolds[m]);
         }
     }
 }

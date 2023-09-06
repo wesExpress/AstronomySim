@@ -7,7 +7,7 @@ void entity_add_transform(dm_entity entity, dm_ecs_id t_id, float pos_x,float po
     
     uint32_t index;
     component_transform* transform = dm_ecs_get_component_block(t_id, context);
-    dm_ecs_get_component_count(t_id, &index, context);
+    dm_ecs_get_component_insert_index(t_id, &index, context);
     if(index==DM_ECS_INVALID_ENTITY) return;
     
     transform->pos_x[index] = pos_x;
@@ -32,7 +32,7 @@ void entity_add_kinematics(dm_entity entity, dm_ecs_id p_id, float mass, float v
     
     uint32_t index;
     component_physics* physics = dm_ecs_get_component_block(p_id, context);
-    dm_ecs_get_component_count(p_id, &index, context);
+    dm_ecs_get_component_insert_index(p_id, &index, context);
     if(index==DM_ECS_INVALID_ENTITY) return;
     
     physics->vel_x[index] = vel_x;
@@ -57,7 +57,7 @@ void entity_add_collider_box(dm_entity entity, dm_ecs_id c_id, float center_x,fl
     
     uint32_t index;
     component_collision* collision = dm_ecs_get_component_block(c_id, context);
-    dm_ecs_get_component_count(c_id, &index, context);
+    dm_ecs_get_component_insert_index(c_id, &index, context);
     if(index==DM_ECS_INVALID_ENTITY) return;
     
     scale_x *= 0.5f;
@@ -111,7 +111,7 @@ void entity_add_collider_sphere(dm_entity entity, dm_ecs_id c_id, float center_x
     
     uint32_t index;
     component_collision* collision = dm_ecs_get_component_block(c_id, context);
-    dm_ecs_get_component_count(c_id, &index, context);
+    dm_ecs_get_component_insert_index(c_id, &index, context);
     if(index==DM_ECS_INVALID_ENTITY) return;
     
     float min_x = center_x - radius;
@@ -156,7 +156,7 @@ void entity_add_rigid_body_box(dm_entity entity, dm_ecs_id r_id, float mass, flo
     
     uint32_t index;
     component_rigid_body* rigid_body = dm_ecs_get_component_block(r_id, context);
-    dm_ecs_get_component_count(r_id, &index, context);
+    dm_ecs_get_component_insert_index(r_id, &index, context);
     if(index==DM_ECS_INVALID_ENTITY) return;
     
     float i_body_00, i_body_11, i_body_22;
@@ -194,7 +194,7 @@ void entity_add_rigid_body_sphere(dm_entity entity, dm_ecs_id r_id, float mass, 
     
     uint32_t index;
     component_rigid_body* rigid_body = dm_ecs_get_component_block(r_id, context);
-    dm_ecs_get_component_count(r_id, &index, context);
+    dm_ecs_get_component_insert_index(r_id, &index, context);
     if(index==DM_ECS_INVALID_ENTITY) return;
     
     const float scalar = 2.0f * 0.2f * mass * radius * radius;

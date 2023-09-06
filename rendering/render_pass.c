@@ -236,7 +236,7 @@ bool render_pass_render(dm_context* context)
         dim[1] = collision->aabb_global_max_y[c_index] - collision->aabb_global_min_y[c_index];
         dim[2] = collision->aabb_global_max_z[c_index] - collision->aabb_global_min_z[c_index];
         
-        debug_render_aabb(pos, dim, c, context);
+        //debug_render_aabb(pos, dim, c, context);
         
         inst->color[0] = 1;
         inst->color[1] = 1;
@@ -261,7 +261,7 @@ bool render_pass_render(dm_context* context)
     dm_render_command_bind_shader(pass_data->shader, context);
     dm_render_command_bind_pipeline(pass_data->pipe, context);
     dm_render_command_bind_texture(pass_data->tex, 0, context);
-    dm_render_command_toggle_wireframe(true, context);
+    //dm_render_command_toggle_wireframe(true, context);
     dm_render_command_bind_buffer(pass_data->vb, 0, context);
     dm_render_command_bind_buffer(pass_data->instb, 1, context);
     dm_render_command_update_buffer(pass_data->instb, pass_data->insts, sizeof(pass_data->insts), 0, context);
