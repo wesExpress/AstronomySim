@@ -105,7 +105,7 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     
     entity_add_transform(entity, app_data->components.transform, pos_x,pos_y,pos_z, scale_x,scale_y,scale_z, rot_i,rot_j,rot_k,rot_r, context);
     
-    entity_apply_angular_velocity(entity, app_data->components.physics, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
+    //entity_apply_angular_velocity(entity, app_data->components.physics, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
     
     return entity;
 }

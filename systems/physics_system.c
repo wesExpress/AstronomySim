@@ -9,7 +9,7 @@
 #include <float.h>
 #include <assert.h>
 
-#define PHYSICS_SYSTEM_CONSTRAINT_ITER   10
+#define PHYSICS_SYSTEM_CONSTRAINT_ITER 10
 
 typedef struct physics_system_cache_t
 {
@@ -24,6 +24,21 @@ typedef struct physics_system_collision_pair_t
     uint32_t entity_a, entity_b;
 } physics_system_collision_pair;
 
+typedef struct physics_system_broadphase_multi_th_data_t
+{
+    uint32_t  max_count, thread_id, start_id;
+    size_t    thread_count;
+    
+    uint32_t*            indices;
+    component_collision* collision;
+    
+    float* min_array;
+    float* max_array;
+    
+    uint32_t                      possible_collision_count;
+    physics_system_collision_pair possible_collisions[DM_ECS_MAX_ENTITIES];
+} physics_system_broadphase_multi_th_data;
+
 typedef struct physics_system_broadphase_data_t
 {
     float center_sum[3];
@@ -31,6 +46,8 @@ typedef struct physics_system_broadphase_data_t
     
     uint32_t sort_axis;
     uint32_t num_checks, num_possible_collisions;
+    
+    physics_system_broadphase_multi_th_data sweep_mt_data[DM_MAX_THREAD_COUNT];
     
     uint32_t sweep_indices[DM_ECS_MAX_ENTITIES];
     uint32_t sphere_indices[DM_ECS_MAX_ENTITIES], box_indices[DM_ECS_MAX_ENTITIES];
@@ -62,6 +79,8 @@ typedef struct physics_system_manager_t
     physics_system_narrowphase_data narrowphase_data;
     
     physics_system_cache cache;
+    
+    dm_threadpool threadpool;
 } physics_system_manager;
 
 bool physics_system_broadphase(dm_ecs_system* system, dm_context* context);
@@ -92,11 +111,17 @@ bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_ecs_
     manager->physics    = p_id;
     manager->rigid_body = r_id;
     
+    if(!dm_threadpool_create("physics_system", 4, &manager->threadpool)) return false;
+    
     return true;
 }
 
 void physics_system_shutdown(void* s, void* c)
 {
+    dm_ecs_system* system = s;
+    physics_system_manager* manager = system->system_data;
+    
+    dm_threadpool_destroy(&manager->threadpool);
 }
 
 void physics_system_insert(const uint32_t entity_index, void* s, void* c)
@@ -633,25 +658,12 @@ int physics_system_broadphase_get_variance_axis(dm_ecs_system* system)
     return axis;
 }
 
-void physics_system_broadphase_sort_sweep(uint32_t count, float* min_array, float* max_array, dm_ecs_system* system, dm_context* context)
+void physics_system_broadphase_sweep(uint32_t count, float* min_array, float* max_array, physics_system_manager* manager)
 {
-    physics_system_manager* manager = system->system_data;
-    manager->broadphase_data.num_checks = 0;
-    manager->broadphase_data.num_possible_collisions = 0;
-    
     const dm_ecs_id c_id = manager->collision;
     
     component_collision* collision = &manager->cache.collision;
     
-#ifdef DM_PLATFORM_WIN32
-    qsort_s(manager->broadphase_data.sweep_indices, count, sizeof(uint32_t), physics_system_broadphase_sort, min_array);
-#elif defined(DM_PLATFORM_LINUX)
-    qsort_r(manager->broadphase_data.sweep_indices, count, sizeof(uint32_t), physics_system_broadphase_sort, min_array);
-#elif defined(DM_PLATFORM_APPLE)
-    qsort_r(manager->broadphase_data.sweep_indices, count, sizeof(uint32_t), min_array, physics_system_broadphase_sort);
-#endif
-    
-    // sweep
     float max_i, min_j;
     
     bool x_check, y_check, z_check;
@@ -709,6 +721,138 @@ void physics_system_broadphase_sort_sweep(uint32_t count, float* min_array, floa
             manager->broadphase_data.num_possible_collisions++;
         }
     }
+}
+
+void* physics_system_broadphase_sweep_multi_th(void* args)
+{
+    //uint32_t num_threads = dm_get_available_processor_count(context);
+    //for(uint32_t
+    physics_system_broadphase_multi_th_data* data = args;
+    
+    component_collision* collision = data->collision;
+    uint32_t*            indices   = data->indices;
+    
+    uint32_t i,j;
+    uint32_t entity_a, entity_b;
+    
+    const uint32_t end_id = (data->thread_id + 1) * data->thread_count;
+    
+    float max_i, min_j;
+    
+    bool x_check, y_check, z_check;
+    
+    float a_max[3], a_min[3];
+    float b_max[3], b_min[3];
+    
+    for(i=data->start_id; i < end_id; i++)
+    {
+        entity_a = indices[i];
+        
+        a_max[0] = collision->aabb_global_max_x[entity_a];
+        a_max[1] = collision->aabb_global_max_y[entity_a];
+        a_max[2] = collision->aabb_global_max_z[entity_a];
+        
+        a_min[0] = collision->aabb_global_min_x[entity_a];
+        a_min[1] = collision->aabb_global_min_y[entity_a];
+        a_min[2] = collision->aabb_global_min_z[entity_a];
+        
+        max_i = data->max_array[entity_a];
+        
+        j = i + 1;
+        for(; j<data->max_count; j++)
+        {
+            entity_b = indices[j];
+            
+            b_max[0] = collision->aabb_global_max_x[entity_b];
+            b_max[1] = collision->aabb_global_max_y[entity_b];
+            b_max[2] = collision->aabb_global_max_z[entity_b];
+            
+            b_min[0] = collision->aabb_global_min_x[entity_b];
+            b_min[1] = collision->aabb_global_min_y[entity_b];
+            b_min[2] = collision->aabb_global_min_z[entity_b];
+            
+            min_j = data->min_array[entity_b];
+            
+            if(min_j > max_i) break;
+            
+            x_check = (a_min[0] <= b_max[0]) && (a_max[0] >= b_min[0]);
+            y_check = (a_min[1] <= b_max[1]) && (a_max[1] >= b_min[1]);
+            z_check = (a_min[2] <= b_max[2]) && (a_max[2] >= b_min[2]);
+            
+            if(!x_check || !y_check || !z_check) continue;
+            
+            collision->flag[entity_a] = COLLISION_FLAG_POSSIBLE;
+            collision->flag[entity_b] = COLLISION_FLAG_POSSIBLE;
+            
+            data->possible_collisions[data->possible_collision_count].entity_a = entity_a;
+            data->possible_collisions[data->possible_collision_count].entity_b = entity_b;
+            data->possible_collision_count++;
+        }
+    }
+    
+    return NULL;
+}
+
+bool physics_system_broadphase_sort_sweep(uint32_t count, float* min_array, float* max_array, dm_ecs_system* system, dm_context* context)
+{
+    physics_system_manager* manager = system->system_data;
+    manager->broadphase_data.num_checks = 0;
+    manager->broadphase_data.num_possible_collisions = 0;
+    
+    // sort
+#ifdef DM_PLATFORM_WIN32
+    qsort_s(manager->broadphase_data.sweep_indices, count, sizeof(uint32_t), physics_system_broadphase_sort, min_array);
+#elif defined(DM_PLATFORM_LINUX)
+    qsort_r(manager->broadphase_data.sweep_indices, count, sizeof(uint32_t), physics_system_broadphase_sort, min_array);
+#elif defined(DM_PLATFORM_APPLE)
+    qsort_r(manager->broadphase_data.sweep_indices, count, sizeof(uint32_t), min_array, physics_system_broadphase_sort);
+#endif
+    
+    // sweep
+#if 0 
+    physics_system_broadphase_sweep(count, min_array, max_array, manager);
+#else
+    physics_system_broadphase_multi_th_data* data = NULL;
+    
+    for(uint32_t i=0; i<manager->threadpool.thread_count; i++)
+    {
+        data = &manager->broadphase_data.sweep_mt_data[i];
+        
+        data->max_count = count;
+        data->thread_count = count / manager->threadpool.thread_count;
+        data->thread_id = i;
+        data->start_id = i * data->thread_count;
+        
+        data->possible_collision_count = 0;
+        data->min_array = min_array;
+        data->max_array = max_array;
+        
+        data->indices = manager->broadphase_data.sweep_indices;
+        data->collision = &manager->cache.collision;
+        
+        dm_thread_task task = {
+            .func=physics_system_broadphase_sweep_multi_th,
+            .args=&manager->broadphase_data.sweep_mt_data[i]
+        };
+        
+        manager->threadpool.total_task_count++;
+        
+        dm_threadpool_submit_task(&task, &manager->threadpool);
+    }
+    
+    dm_threadpool_wait_for_completion(&manager->threadpool);
+    
+    for(uint32_t i=0; i<manager->threadpool.thread_count; i++)
+    {
+        physics_system_broadphase_multi_th_data* data = &manager->broadphase_data.sweep_mt_data[i];
+        for(uint32_t j=0; j<data->possible_collision_count; j++)
+        {
+            manager->broadphase_data.possible_collisions[manager->broadphase_data.num_possible_collisions++] = data->possible_collisions[j]; 
+        }
+    }
+#endif
+    
+    return true;
 }
 
 // uses simple sort and sweep based on objects' aabbs
