@@ -674,8 +674,6 @@ int physics_system_broadphase_get_variance_axis(dm_ecs_system* system)
 
 void physics_system_broadphase_sweep_naive(uint32_t count, float* min_array, float* max_array, physics_system_manager* manager)
 {
-    const dm_ecs_id c_id = manager->collision;
-    
     component_collision* collision = &manager->cache.collision;
     
     float max_i, min_j;
@@ -737,7 +735,7 @@ void physics_system_broadphase_sweep_naive(uint32_t count, float* min_array, flo
     }
 }
 
-
+#ifndef DM_PLATFORM_APPLE
 void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array, float* max_array, physics_system_manager* manager)
 {
     physics_system_broadphase_data* broadphase_data = &manager->broadphase_data;
@@ -848,6 +846,116 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
         if(a_possible) collision->flag[entity_a] = COLLISION_FLAG_POSSIBLE;
     }
 }
+#else
+void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array, float* max_array, physics_system_manager* manager)
+{
+    physics_system_broadphase_data* broadphase_data = &manager->broadphase_data;
+    physics_system_aabb_sort* aabbs_sorted = &broadphase_data->aabbs_sorted;
+    
+    component_collision* collision = &manager->cache.collision;
+    
+    uint32_t i,j;
+    uint32_t entity_a, entity_b;
+    
+    dm_mm_float a_min_x, a_min_y, a_min_z;
+    dm_mm_float a_max_x, a_max_y, a_max_z;
+    dm_mm_float b_min_x, b_min_y, b_min_z;
+    dm_mm_float b_max_x, b_max_y, b_max_z;
+    
+    dm_mm_float max_i, min_j;
+    
+    dm_mm_float x_check, y_check, z_check;
+    dm_mm_float break_cond, intersect_mask;
+    
+#define N DM_SIMD_FLOAT_N
+    
+    bool  a_possible = false;
+    float b_possible[N] = { 0 };
+    
+    const dm_mm_float ones = dm_mm_set1_ps(1);
+    
+    for(i=0; i < count; i++)
+    {
+        entity_a = broadphase_data->sweep_indices[i];
+        
+        a_min_x = dm_mm_set1_ps(aabbs_sorted->min_x[i]);
+        a_min_y = dm_mm_set1_ps(aabbs_sorted->min_y[i]);
+        a_min_z = dm_mm_set1_ps(aabbs_sorted->min_z[i]);
+        
+        a_max_x = dm_mm_set1_ps(aabbs_sorted->max_x[i]);
+        a_max_y = dm_mm_set1_ps(aabbs_sorted->max_y[i]);
+        a_max_z = dm_mm_set1_ps(aabbs_sorted->max_z[i]);
+        
+        max_i = dm_mm_set1_ps(max_array[i]);
+        
+        a_possible = false;
+        
+        j = i + 1;
+        
+        for(; (count-j)>=N; j+=N)
+        {
+            dm_memzero(b_possible, sizeof(b_possible));
+            
+            b_min_x = dm_mm_load_ps(aabbs_sorted->min_x + j);
+            b_min_y = dm_mm_load_ps(aabbs_sorted->min_y + j);
+            b_min_z = dm_mm_load_ps(aabbs_sorted->min_z + j);
+            
+            b_max_x = dm_mm_load_ps(aabbs_sorted->max_x + j);
+            b_max_y = dm_mm_load_ps(aabbs_sorted->max_y + j);
+            b_max_z = dm_mm_load_ps(aabbs_sorted->max_z + j);
+            
+            min_j = dm_mm_load_ps(min_array + j);
+            
+            // break check
+            // if (min_j > max_i)
+            break_cond = dm_mm_gt_ps(min_j, max_i);
+            break_cond = dm_mm_and_ps(break_cond, ones);
+            
+            // if ALL elements are 1, everything is beyond i, so break
+            if(dm_mm_any_zero(break_cond)==0) break;
+            
+            // intersection checks
+            x_check = dm_mm_leq_ps(a_min_x, b_max_x);
+            x_check = dm_mm_and_ps(x_check, dm_mm_geq_ps(a_max_x, b_min_x));
+            y_check = dm_mm_leq_ps(a_min_y, b_max_y);
+            y_check = dm_mm_and_ps(y_check, dm_mm_geq_ps(a_max_y, b_min_y));
+            z_check = dm_mm_leq_ps(a_min_z, b_max_z);
+            z_check = dm_mm_and_ps(z_check, dm_mm_geq_ps(a_max_z, b_min_z));
+            
+            // each element will be:
+            // 1 if intersecting
+            // 0 if not
+            intersect_mask = dm_mm_and_ps(x_check, y_check);
+            intersect_mask = dm_mm_and_ps(intersect_mask, z_check);
+            intersect_mask = dm_mm_and_ps(intersect_mask, ones);
+            
+            // if ALL elements are 0, nothing is intersecting
+            if(dm_mm_any_non_zero(intersect_mask)==0) continue;
+            
+            a_possible = true;
+            dm_mm_store_ps(b_possible, intersect_mask);
+            
+            for(uint32_t k=0; k<N; k++)
+            {
+                if(b_possible[k]==0) continue;
+                
+                entity_b = broadphase_data->sweep_indices[j+k];
+                
+                collision->flag[entity_b] = COLLISION_FLAG_POSSIBLE;
+                
+                broadphase_data->possible_collisions[broadphase_data->num_possible_collisions].entity_a = entity_a;
+                broadphase_data->possible_collisions[broadphase_data->num_possible_collisions].entity_b = entity_b;
+                manager->broadphase_data.num_possible_collisions++;
+            }
+            
+            // finally, we need to break if ANY of the j's are beyond
+            if(dm_mm_any_non_zero(break_cond)) break;
+        }
+        
+        if(a_possible) collision->flag[entity_a] = COLLISION_FLAG_POSSIBLE;
+    }
+}
+#endif
 
 void* physics_system_broadphase_sweep_multi_th(void* args)
 {
@@ -925,6 +1033,7 @@ void* physics_system_broadphase_sweep_multi_th(void* args)
     return NULL;
 }
 
+#ifndef DM_PLATFORM_APPLE
 void* physics_system_broadphase_sweep_multi_th_simd(void* args)
 {
     physics_system_broadphase_multi_th_data* data = args;
@@ -1038,6 +1147,117 @@ void* physics_system_broadphase_sweep_multi_th_simd(void* args)
     
     return NULL;
 }
+#else
+void* physics_system_broadphase_sweep_multi_th_simd(void* args)
+{
+    physics_system_broadphase_multi_th_data* data = args;
+    
+    physics_system_aabb_sort* aabbs_sorted = data->aabbs_sorted;
+    uint32_t*            indices   = data->indices;
+    
+    uint32_t i,j;
+    uint32_t entity_a;
+    
+    const uint32_t end_id = (data->thread_id + 1) * data->thread_count;
+    
+    dm_mm_float a_min_x, a_min_y, a_min_z;
+    dm_mm_float a_max_x, a_max_y, a_max_z;
+    dm_mm_float b_min_x, b_min_y, b_min_z;
+    dm_mm_float b_max_x, b_max_y, b_max_z;
+    
+    dm_mm_float max_i, min_j;
+    
+    dm_mm_float x_check, y_check, z_check;
+    dm_mm_float break_cond, intersect_mask;
+    
+#define N DM_SIMD_FLOAT_N
+    bool a_possible = false;
+    float b_possible[N] = { 0 };
+    
+    const dm_mm_float ones = dm_mm_set1_ps(1);
+    
+    for(i=data->start_id; i < end_id; i++)
+    {
+        entity_a = indices[i];
+        
+        a_min_x = dm_mm_set1_ps(aabbs_sorted->min_x[i]);
+        a_min_y = dm_mm_set1_ps(aabbs_sorted->min_y[i]);
+        a_min_z = dm_mm_set1_ps(aabbs_sorted->min_z[i]);
+        
+        a_max_x = dm_mm_set1_ps(aabbs_sorted->max_x[i]);
+        a_max_y = dm_mm_set1_ps(aabbs_sorted->max_y[i]);
+        a_max_z = dm_mm_set1_ps(aabbs_sorted->max_z[i]);
+        
+        max_i = dm_mm_set1_ps(data->max_array[i]);
+        
+        a_possible = false;
+        
+        j = i + 1;
+        
+        for(; (data->max_count-j)>=N; j+=N)
+        {
+            dm_memzero(b_possible, sizeof(b_possible));
+            
+            b_min_x = dm_mm_load_ps(aabbs_sorted->min_x + j);
+            b_min_y = dm_mm_load_ps(aabbs_sorted->min_y + j);
+            b_min_z = dm_mm_load_ps(aabbs_sorted->min_z + j);
+            
+            b_max_x = dm_mm_load_ps(aabbs_sorted->max_x + j);
+            b_max_y = dm_mm_load_ps(aabbs_sorted->max_y + j);
+            b_max_z = dm_mm_load_ps(aabbs_sorted->max_z + j);
+            
+            min_j = dm_mm_load_ps(data->min_array + j);
+            
+            // break check
+            // if (min_j > max_i)
+            break_cond = dm_mm_gt_ps(min_j, max_i);
+            break_cond = dm_mm_and_ps(break_cond, ones);
+            
+            // if ALL elements are 1, everything is beyond i, so break
+            if(dm_mm_any_zero(break_cond)==0) break;
+            
+            // intersection checks
+            x_check = dm_mm_leq_ps(a_min_x, b_max_x);
+            x_check = dm_mm_and_ps(x_check, dm_mm_geq_ps(a_max_x, b_min_x));
+            y_check = dm_mm_leq_ps(a_min_y, b_max_y);
+            y_check = dm_mm_and_ps(y_check, dm_mm_geq_ps(a_max_y, b_min_y));
+            z_check = dm_mm_leq_ps(a_min_z, b_max_z);
+            z_check = dm_mm_and_ps(z_check, dm_mm_geq_ps(a_max_z, b_min_z));
+            
+            // each element will be:
+            // 1 if intersecting
+            // 0 if not
+            intersect_mask = dm_mm_and_ps(x_check, y_check);
+            intersect_mask = dm_mm_and_ps(intersect_mask, z_check);
+            intersect_mask = dm_mm_and_ps(intersect_mask, ones);
+            
+            // if ALL elements are 0, nothing is intersecting
+            if(dm_mm_any_non_zero(intersect_mask)==0) continue;
+            
+            a_possible = true;
+            dm_mm_store_ps(b_possible, intersect_mask);
+            
+            for(uint32_t k=0; k<N; k++)
+            {
+                if(b_possible[k]==0) continue;
+                
+                data->flag[data->indices[j+k]] = COLLISION_FLAG_POSSIBLE;
+                
+                data->possible_collisions[data->possible_collision_count].entity_a = entity_a;
+                data->possible_collisions[data->possible_collision_count].entity_b = indices[j+k];
+                data->possible_collision_count++;
+            }
+            
+            // finally, we need to break if ANY of the j's are beyond
+            if(dm_mm_any_non_zero(break_cond)) break;
+        }
+        
+        if(a_possible) data->flag[entity_a] = COLLISION_FLAG_POSSIBLE;
+    }
+    
+    return NULL;
+}
+#endif
 
 void physics_system_broadphase_sort(uint32_t count, float* min_array, physics_system_manager* manager)
 {
@@ -1207,11 +1427,6 @@ bool physics_system_narrowphase(dm_ecs_system* system)
     dm_contact_manifold* manifold;
     
     dm_simplex simplex;
-    
-    const dm_ecs_id t_id = manager->transform;
-    const dm_ecs_id c_id = manager->collision;
-    const dm_ecs_id p_id = manager->physics;
-    const dm_ecs_id r_id = manager->rigid_body;
     
     component_transform*  transform  = &manager->cache.transform;
     component_collision*  collision  = &manager->cache.collision;
@@ -1541,6 +1756,7 @@ void physics_system_update_entities(dm_ecs_system* system)
     }
 }
 
+#if 0
 void physics_system_update_entities_simd(dm_ecs_system* system)
 {
     physics_system_manager* manager = system->system_data;
@@ -2087,3 +2303,4 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
         dm_mm256_store_ps(rigid_body->i_inv_22 + i, i_inv_22);
     }
 }
+#endif
