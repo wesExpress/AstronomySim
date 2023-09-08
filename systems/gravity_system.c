@@ -219,18 +219,18 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
     
     float* mass = manager->cache.mass;
     
-    dm_mm_float mass_i, mass_j;
-    dm_mm_float pos_i_x, pos_i_y, pos_i_z;
-    dm_mm_float pos_j_x, pos_j_y, pos_j_z;
+    dm_mm256_float mass_i, mass_j;
+    dm_mm256_float pos_i_x, pos_i_y, pos_i_z;
+    dm_mm256_float pos_j_x, pos_j_y, pos_j_z;
     
-    dm_mm_float local_x, local_y, local_z;
-    dm_mm_float force_i_x, force_i_y, force_i_z;
-    dm_mm_float force_j_x, force_j_y, force_j_z;
-    dm_mm_float dir_x, dir_y, dir_z;
-    dm_mm_float grav, dis2;
+    dm_mm256_float local_x, local_y, local_z;
+    dm_mm256_float force_i_x, force_i_y, force_i_z;
+    dm_mm256_float force_j_x, force_j_y, force_j_z;
+    dm_mm256_float dir_x, dir_y, dir_z;
+    dm_mm256_float grav, dis2;
     
-    const dm_mm_float grav_const = dm_mm_set1_ps(G);
-    const dm_mm_float ones   = dm_mm_set1_ps(1.0f);
+    const dm_mm256_float grav_const = dm_mm256_set1_ps(G);
+    const dm_mm256_float ones   = dm_mm256_set1_ps(1.0f);
     
     uint32_t i=0, j=0;
     uint32_t leftovers = 0;
@@ -239,139 +239,139 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
     for(; i<system->entity_count; i++)
     {
         // load in entity_i data
-        pos_i_x = dm_mm_set1_ps(pos_x[i]);
-        pos_i_y = dm_mm_set1_ps(pos_y[i]);
-        pos_i_z = dm_mm_set1_ps(pos_z[i]);
+        pos_i_x = dm_mm256_set1_ps(pos_x[i]);
+        pos_i_y = dm_mm256_set1_ps(pos_y[i]);
+        pos_i_z = dm_mm256_set1_ps(pos_z[i]);
         
-        force_i_x = dm_mm_set1_ps(0);
-        force_i_y = dm_mm_set1_ps(0);
-        force_i_z = dm_mm_set1_ps(0);
+        force_i_x = dm_mm256_set1_ps(0);
+        force_i_y = dm_mm256_set1_ps(0);
+        force_i_z = dm_mm256_set1_ps(0);
         
-        mass_i = dm_mm_set1_ps(mass[i]);
+        mass_i = dm_mm256_set1_ps(mass[i]);
         
         j = i+1;
-        for(; (system->entity_count-j)>=DM_SIMD_N; j+=DM_SIMD_N)
+        for(; (system->entity_count-j)>=DM_SIMD256_FLOAT_N; j+=DM_SIMD256_FLOAT_N)
         {
-            pos_j_x = dm_mm_load_ps(pos_x + j);
-            pos_j_y = dm_mm_load_ps(pos_y + j);
-            pos_j_z = dm_mm_load_ps(pos_z + j);
+            pos_j_x = dm_mm256_load_ps(pos_x + j);
+            pos_j_y = dm_mm256_load_ps(pos_y + j);
+            pos_j_z = dm_mm256_load_ps(pos_z + j);
             
-            force_j_x = dm_mm_load_ps(force_x + j);
-            force_j_y = dm_mm_load_ps(force_y + j);
-            force_j_z = dm_mm_load_ps(force_z + j);
+            force_j_x = dm_mm256_load_ps(force_x + j);
+            force_j_y = dm_mm256_load_ps(force_y + j);
+            force_j_z = dm_mm256_load_ps(force_z + j);
             
-            mass_j = dm_mm_load_ps(mass + j);
+            mass_j = dm_mm256_load_ps(mass + j);
             
             // rij = pos_j - pos_i
-            dir_x = dm_mm_sub_ps(pos_j_x, pos_i_x);
-            dir_y = dm_mm_sub_ps(pos_j_y, pos_i_y);
-            dir_z = dm_mm_sub_ps(pos_j_z, pos_i_z);
+            dir_x = dm_mm256_sub_ps(pos_j_x, pos_i_x);
+            dir_y = dm_mm256_sub_ps(pos_j_y, pos_i_y);
+            dir_z = dm_mm256_sub_ps(pos_j_z, pos_i_z);
             
             // r^2 = sep_x * sep_x + sep_y * sep_y + sep_z * sep_z
-            dis2 = dm_mm_mul_ps(dir_x, dir_x);
-            dis2 = dm_mm_fmadd_ps(dir_y, dir_y, dis2);
-            dis2 = dm_mm_fmadd_ps(dir_z, dir_z, dis2);
+            dis2 = dm_mm256_mul_ps(dir_x, dir_x);
+            dis2 = dm_mm256_fmadd_ps(dir_y, dir_y, dis2);
+            dis2 = dm_mm256_fmadd_ps(dir_z, dir_z, dis2);
             
             // G mi * mj 
-            grav = dm_mm_mul_ps(grav_const, mass_i);
-            grav = dm_mm_mul_ps(grav, mass_j);
-            grav = dm_mm_div_ps(grav, dis2);
+            grav = dm_mm256_mul_ps(grav_const, mass_i);
+            grav = dm_mm256_mul_ps(grav, mass_j);
+            grav = dm_mm256_div_ps(grav, dis2);
             
-            dis2 = dm_mm_sqrt_ps(dis2);
-            dis2 = dm_mm_div_ps(ones, dis2);
+            dis2 = dm_mm256_sqrt_ps(dis2);
+            dis2 = dm_mm256_div_ps(ones, dis2);
             
-            dir_x = dm_mm_mul_ps(dir_x, dis2);
-            dir_y = dm_mm_mul_ps(dir_y, dis2);
-            dir_z = dm_mm_mul_ps(dir_z, dis2);
+            dir_x = dm_mm256_mul_ps(dir_x, dis2);
+            dir_y = dm_mm256_mul_ps(dir_y, dis2);
+            dir_z = dm_mm256_mul_ps(dir_z, dis2);
             
             // local force
-            local_x = dm_mm_mul_ps(grav, dir_x);
-            local_y = dm_mm_mul_ps(grav, dir_y);
-            local_z = dm_mm_mul_ps(grav, dir_z);
+            local_x = dm_mm256_mul_ps(grav, dir_x);
+            local_y = dm_mm256_mul_ps(grav, dir_y);
+            local_z = dm_mm256_mul_ps(grav, dir_z);
             
             // entity i has all j forces acting on it
             // j entities have negative local force
-            force_i_x = dm_mm_add_ps(force_i_x, local_x);
-            force_i_y = dm_mm_add_ps(force_i_y, local_y);
-            force_i_z = dm_mm_add_ps(force_i_z, local_z);
+            force_i_x = dm_mm256_add_ps(force_i_x, local_x);
+            force_i_y = dm_mm256_add_ps(force_i_y, local_y);
+            force_i_z = dm_mm256_add_ps(force_i_z, local_z);
             
-            force_j_x = dm_mm_sub_ps(force_j_x, local_x);
-            force_j_y = dm_mm_sub_ps(force_j_y, local_y);
-            force_j_z = dm_mm_sub_ps(force_j_z, local_z);
+            force_j_x = dm_mm256_sub_ps(force_j_x, local_x);
+            force_j_y = dm_mm256_sub_ps(force_j_y, local_y);
+            force_j_z = dm_mm256_sub_ps(force_j_z, local_z);
             
-            dm_mm_store_ps(force_x + j, force_j_x);
-            dm_mm_store_ps(force_y + j, force_j_y);
-            dm_mm_store_ps(force_z + j, force_j_z);
+            dm_mm256_store_ps(force_x + j, force_j_x);
+            dm_mm256_store_ps(force_y + j, force_j_y);
+            dm_mm256_store_ps(force_z + j, force_j_z);
         }
         
         // we probably have a partial pass to do
         leftovers = system->entity_count - j;
-        if(leftovers>=DM_SIMD_N) continue;
+        if(leftovers>=DM_SIMD256_FLOAT_N) continue;
         if(leftovers==0) continue;
         
-        pos_j_x = dm_mm_set1_ps(0);
-        pos_j_y = dm_mm_set1_ps(0);
-        pos_j_z = dm_mm_set1_ps(0);
+        pos_j_x = dm_mm256_set1_ps(0);
+        pos_j_y = dm_mm256_set1_ps(0);
+        pos_j_z = dm_mm256_set1_ps(0);
         
-        force_j_x = dm_mm_set1_ps(0);
-        force_j_y = dm_mm_set1_ps(0);
-        force_j_z = dm_mm_set1_ps(0);
+        force_j_x = dm_mm256_set1_ps(0);
+        force_j_y = dm_mm256_set1_ps(0);
+        force_j_z = dm_mm256_set1_ps(0);
         
-        mass_j = dm_mm_set1_ps(0);
+        mass_j = dm_mm256_set1_ps(0);
         
-        pos_j_x = dm_mm_load_ps(pos_x + j);
-        pos_j_y = dm_mm_load_ps(pos_y + j);
-        pos_j_z = dm_mm_load_ps(pos_z + j);
+        pos_j_x = dm_mm256_load_ps(pos_x + j);
+        pos_j_y = dm_mm256_load_ps(pos_y + j);
+        pos_j_z = dm_mm256_load_ps(pos_z + j);
         
-        force_j_x = dm_mm_load_ps(force_x + j);
-        force_j_y = dm_mm_load_ps(force_y + j);
-        force_j_z = dm_mm_load_ps(force_z + j);
+        force_j_x = dm_mm256_load_ps(force_x + j);
+        force_j_y = dm_mm256_load_ps(force_y + j);
+        force_j_z = dm_mm256_load_ps(force_z + j);
         
-        mass_j = dm_mm_load_ps(mass + j);
+        mass_j = dm_mm256_load_ps(mass + j);
         
         // rij = pos_j - pos_i
-        dir_x = dm_mm_sub_ps(pos_j_x, pos_i_x);
-        dir_y = dm_mm_sub_ps(pos_j_y, pos_i_y);
-        dir_z = dm_mm_sub_ps(pos_j_z, pos_i_z);
+        dir_x = dm_mm256_sub_ps(pos_j_x, pos_i_x);
+        dir_y = dm_mm256_sub_ps(pos_j_y, pos_i_y);
+        dir_z = dm_mm256_sub_ps(pos_j_z, pos_i_z);
         
         // r^2 = sep_x * sep_x + sep_y * sep_y + sep_z * sep_z
-        dis2 = dm_mm_mul_ps(dir_x, dir_x);
-        dis2 = dm_mm_fmadd_ps(dir_y, dir_y, dis2);
-        dis2 = dm_mm_fmadd_ps(dir_z, dir_z, dis2);
+        dis2 = dm_mm256_mul_ps(dir_x, dir_x);
+        dis2 = dm_mm256_fmadd_ps(dir_y, dir_y, dis2);
+        dis2 = dm_mm256_fmadd_ps(dir_z, dir_z, dis2);
         
         // G mi * mj / (r^2)^(3/2)
-        grav = dm_mm_mul_ps(grav_const, mass_i);
-        grav = dm_mm_mul_ps(grav, mass_j);
-        grav = dm_mm_div_ps(grav, dis2);
+        grav = dm_mm256_mul_ps(grav_const, mass_i);
+        grav = dm_mm256_mul_ps(grav, mass_j);
+        grav = dm_mm256_div_ps(grav, dis2);
         
-        dis2 = dm_mm_sqrt_ps(dis2);
-        dis2 = dm_mm_div_ps(ones, dis2);
+        dis2 = dm_mm256_sqrt_ps(dis2);
+        dis2 = dm_mm256_div_ps(ones, dis2);
         
-        dir_x = dm_mm_mul_ps(dir_x, dis2);
-        dir_y = dm_mm_mul_ps(dir_y, dis2);
-        dir_z = dm_mm_mul_ps(dir_z, dis2);
+        dir_x = dm_mm256_mul_ps(dir_x, dis2);
+        dir_y = dm_mm256_mul_ps(dir_y, dis2);
+        dir_z = dm_mm256_mul_ps(dir_z, dis2);
         
         // local force
-        local_x = dm_mm_mul_ps(grav, dir_x);
-        local_y = dm_mm_mul_ps(grav, dir_y);
-        local_z = dm_mm_mul_ps(grav, dir_z);
+        local_x = dm_mm256_mul_ps(grav, dir_x);
+        local_y = dm_mm256_mul_ps(grav, dir_y);
+        local_z = dm_mm256_mul_ps(grav, dir_z);
         
         // entity i has all j forces acting on it
         // j entities have negative local force
-        force_i_x = dm_mm_add_ps(force_i_x, local_x);
-        force_i_y = dm_mm_add_ps(force_i_y, local_y);
-        force_i_z = dm_mm_add_ps(force_i_z, local_z);
+        force_i_x = dm_mm256_add_ps(force_i_x, local_x);
+        force_i_y = dm_mm256_add_ps(force_i_y, local_y);
+        force_i_z = dm_mm256_add_ps(force_i_z, local_z);
         
-        force_j_x = dm_mm_sub_ps(force_j_x, local_x);
-        force_j_y = dm_mm_sub_ps(force_j_y, local_y);
-        force_j_z = dm_mm_sub_ps(force_j_z, local_z);
+        force_j_x = dm_mm256_sub_ps(force_j_x, local_x);
+        force_j_y = dm_mm256_sub_ps(force_j_y, local_y);
+        force_j_z = dm_mm256_sub_ps(force_j_z, local_z);
         
-        dm_mm_store_ps(force_x + j, force_j_x);
-        dm_mm_store_ps(force_y + j, force_j_y);
-        dm_mm_store_ps(force_z + j, force_j_z);
+        dm_mm256_store_ps(force_x + j, force_j_x);
+        dm_mm256_store_ps(force_y + j, force_j_y);
+        dm_mm256_store_ps(force_z + j, force_j_z);
         
-        force_x[i] += dm_mm_sum_elements(force_i_x);
-        force_y[i] += dm_mm_sum_elements(force_i_y);
-        force_z[i] += dm_mm_sum_elements(force_i_z);
+        force_x[i] += dm_mm256_sum_elements(force_i_x);
+        force_y[i] += dm_mm256_sum_elements(force_i_y);
+        force_z[i] += dm_mm256_sum_elements(force_i_z);
     }
 }
