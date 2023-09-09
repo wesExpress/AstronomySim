@@ -2,7 +2,7 @@
 
 set echo on
 output="AstronomySim"
-debug=0
+debug=1
 
 SRC_DIR=$PWD
 DM_DIR=$SRC_DIR/DarkMatter

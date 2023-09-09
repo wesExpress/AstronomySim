@@ -6,7 +6,7 @@ struct vertex_in
 {
 	packed_float3 position;
 	packed_float2 tex_coords;
-    float4 color;
+    packed_float4 color;
 };
 
 struct vertex_out
@@ -28,9 +28,8 @@ struct proj_uniform
 
 vertex vertex_out vertex_main(
 	const device vertex_in* vertices [[buffer(0)]], 
-    constant proj_uniform& uni [[buffer(2)]],
-    uint vid [[vertex_id]],
-    uint instid [[instance_id]])
+    constant proj_uniform& uni [[buffer(1)]],
+    uint vid [[vertex_id]])
 {
 	vertex_out v_out;
     vertex_in v_in = vertices[vid];

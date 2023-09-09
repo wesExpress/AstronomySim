@@ -31,7 +31,7 @@ struct view_uniform
     float4x4 view_proj;
 };
 
-vertex vertex_out vertex_main(
+vertex vertex_out vertex_test_main(
 	const device vertex_in* vertices [[buffer(0)]], 
     const device vertex_inst* instance_data [[buffer(1)]], 
     constant view_uniform& uni [[buffer(2)]],
@@ -51,12 +51,11 @@ vertex vertex_out vertex_main(
 	return v_out;
 }
 
-fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], texture2d<float> obj_texture [[texture(0)]],  sampler samplr [[sampler(0)]])
+fragment fragment_out fragment_test_main(vertex_out v_in [[stage_in]], texture2d<float> obj_texture [[texture(0)]],  sampler samplr [[sampler(0)]])
 {
 	fragment_out out;
 
 	out.color = v_in.color * obj_texture.sample(samplr, v_in.tex_coords);
-	out.color = float4(1,1,1,1);
-
+	
 	return out;
 }

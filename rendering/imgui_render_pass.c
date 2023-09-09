@@ -37,7 +37,7 @@ typedef struct imgui_pass_data_t
     uint32_t text_count;
     
     imgui_pass_vertex text_vertices[IMGUI_PASS_MAX_INST_COUNT];
-    uint32_t text_vertex_count;
+    uint32_t text_vertex_count, num_glyphs;
 } imgui_pass_data;
 
 /************
@@ -149,6 +149,12 @@ bool imgui_render_pass_render(dm_context* context)
         imgui_draw_text_internal(pass_data->text_packets[i], context);
     }
     
+    dm_render_command_update_buffer(pass_data->instb, pass_data->text_vertices, pass_data->num_glyphs * sizeof(imgui_pass_vertex), 0, context);
+    dm_render_command_draw_arrays(0, pass_data->num_glyphs, context);
+    
+    pass_data->text_vertex_count = 0;
+    pass_data->num_glyphs = 0;
+    
 #ifdef DM_METAL
     dm_render_command_end_shader_encoding(pass_data->shader, context);
 #endif
@@ -237,6 +243,8 @@ void imgui_draw_text_internal(imgui_pass_text_data_packet text_packet, dm_contex
         runner++;
     }
     num_glyphs *= 6;
+    pass_data->num_glyphs += num_glyphs;
+    
     runner = text_packet.text;
     
     while(*runner)
@@ -316,9 +324,4 @@ void imgui_draw_text_internal(imgui_pass_text_data_packet text_packet, dm_contex
         
         runner++;
     }
-    
-    dm_render_command_update_buffer(pass_data->instb, pass_data->text_vertices, num_glyphs * sizeof(imgui_pass_vertex), 0, context);
-    dm_render_command_draw_arrays(0, num_glyphs, context);
-    
-    pass_data->text_vertex_count = 0;
 }

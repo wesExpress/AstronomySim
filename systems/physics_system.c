@@ -373,8 +373,9 @@ bool physics_system_run(void* s, void* d)
         {
             dm_timer_start(&t, context);
             if(!physics_system_broadphase(system, context)) return false;
-            //broad_time += dm_timer_elapsed_ms(&t, context);
-            DM_LOG_INFO("Broadphase: %0.3lf ms", dm_timer_elapsed_ms(&t, context));
+            broad_time += dm_timer_elapsed_ms(&t, context);
+            
+            //DM_LOG_INFO("Broadphase: %0.3lf ms", dm_timer_elapsed_ms(&t, context));
             // narrowphase
             dm_timer_start(&t, context);
             if(!physics_system_narrowphase(system)) return false;
@@ -399,13 +400,13 @@ bool physics_system_run(void* s, void* d)
     
     total_time = dm_timer_elapsed_ms(&full, context);
     
-#ifndef DM_METAL
+#if 1
     float iter_f_inv = 1 / (float)iters;
 
-    imgui_draw_text_fmt(20,20, 1,1,0,1, context, "Physics broadphase average: %0.3lf ms (%u checks)", broad_time * iter_f_inv, manager->broadphase_data.num_checks);
-    imgui_draw_text_fmt(20,40, 1,1,0,1, context, "Physics narrowphase average: %0.3lf ms (%u checks)", narrow_time * iter_f_inv, manager->broadphase_data.num_possible_collisions);
-    imgui_draw_text_fmt(20,60, 1,1,0,1, context, "Physics collision resolution average: %0.3lf ms (%u manifolds)", collision_time * iter_f_inv, manager->narrowphase_data.manifold_count);
-    imgui_draw_text_fmt(20,80, 1,1,0,1, context, "Updating entities average: %0.3lf ms", update_time * iter_f_inv);
+    imgui_draw_text_fmt(20,20,  1,1,0,1, context, "Physics broadphase average: %0.3lf ms (%u checks)", broad_time * iter_f_inv, manager->broadphase_data.num_checks);
+    imgui_draw_text_fmt(20,40,  1,1,0,1, context, "Physics narrowphase average: %0.3lf ms (%u checks)", narrow_time * iter_f_inv, manager->broadphase_data.num_possible_collisions);
+    imgui_draw_text_fmt(20,60,  1,1,0,1, context, "Physics collision resolution average: %0.3lf ms (%u manifolds)", collision_time * iter_f_inv, manager->narrowphase_data.manifold_count);
+    imgui_draw_text_fmt(20,80,  1,1,0,1, context, "Updating entities average: %0.3lf ms", update_time * iter_f_inv);
     imgui_draw_text_fmt(20,100, 1,0,1,1, context, "Physics took: %0.3lf ms, %u iterations", total_time, iters);
 #endif
 

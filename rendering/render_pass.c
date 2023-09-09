@@ -130,8 +130,8 @@ bool render_pass_init(dm_context* context)
         strcpy(shader_desc.vertex, "assets/shaders/test_vertex.fxc");
         strcpy(shader_desc.pixel, "assets/shaders/test_pixel.fxc");
 #else
-        strcpy(shader_desc.vertex, "vertex_main");
-        strcpy(shader_desc.pixel, "fragment_main");
+        strcpy(shader_desc.vertex, "vertex_test_main");
+        strcpy(shader_desc.pixel, "fragment_test_main");
         strcpy(shader_desc.master, "assets/shaders/test.metallib");
 #endif
         
