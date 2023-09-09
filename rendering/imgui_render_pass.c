@@ -149,6 +149,10 @@ bool imgui_render_pass_render(dm_context* context)
         imgui_draw_text_internal(pass_data->text_packets[i], context);
     }
     
+#ifdef DM_METAL
+    dm_render_command_end_shader_encoding(pass_data->shader, context);
+#endif
+
     pass_data->text_count = 0;
     
     return true;

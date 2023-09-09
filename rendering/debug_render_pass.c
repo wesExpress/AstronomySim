@@ -259,6 +259,10 @@ bool debug_render_pass_render(dm_context* context)
     if(pass_data->cube_count     && !debug_render_cubes(context))     return false;
     if(pass_data->bilboard_count && !debug_render_bilboards(context)) return false;
     
+#ifdef DM_METAL
+    dm_render_command_end_shader_encoding(pass_data->shader, context);
+#endif
+
     return true;
 }
 

@@ -15,15 +15,16 @@ set(SOURCES
 	systems/physics_system.c
 	systems/gravity_system.c    
 
-	dm_impl.c
-	dm_physics.c
+	DarkMatter/dm_impl.c
+	DarkMatter/dm_physics.c
     DarkMatter/platform/dm_platform_mac.m
     DarkMatter/rendering/dm_renderer_metal.m
 )
 add_executable(MacDebug ${SOURCES})
 target_include_directories(MacDebug
     PUBLIC
-        lib/
+		DarkMatter/
+        DarkMatter/lib/
 )
 
 find_library(APPLE_FWK_COCOA Cocoa REQUIRED)

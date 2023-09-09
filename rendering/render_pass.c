@@ -2,8 +2,8 @@
 #include "debug_render_pass.h"
 #include "imgui_render_pass.h"
 
-#include "app/app.h"
-#include "app/components.h"
+#include "../app/app.h"
+#include "../app/components.h"
 
 typedef struct vertex_t
 {
@@ -208,6 +208,7 @@ bool render_pass_render(dm_context* context)
         dm_mat4_transpose(inst->model, inst->model);
 #endif
         
+#if 0
         float c[4];
         if(collision->flag[c_index]==COLLISION_FLAG_POSSIBLE)
         {
@@ -236,8 +237,9 @@ bool render_pass_render(dm_context* context)
         dim[1] = collision->aabb_global_max_y[c_index] - collision->aabb_global_min_y[c_index];
         dim[2] = collision->aabb_global_max_z[c_index] - collision->aabb_global_min_z[c_index];
         
-        //debug_render_aabb(pos, dim, c, context);
-        
+        debug_render_aabb(pos, dim, c, context);
+#endif
+
         inst->color[0] = 1;
         inst->color[1] = 1;
         inst->color[2] = 1;
@@ -269,7 +271,10 @@ bool render_pass_render(dm_context* context)
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
     dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
-    
+#ifdef DM_METAL
+    dm_render_command_end_shader_encoding(pass_data->shader, context);
+#endif
+
     // reset counts back to 0
     pass_data->entity_count = 0;
     pass_data->instance_count = 0;

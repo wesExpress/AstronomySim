@@ -5,12 +5,12 @@
 #include "camera.h"
 
 #include "components.h"
-#include "systems/physics_system.h"
-#include "systems/gravity_system.h"
+#include "../systems/physics_system.h"
+#include "../systems/gravity_system.h"
 
-#include "rendering/render_pass.h"
-#include "rendering/debug_render_pass.h"
-#include "rendering/imgui_render_pass.h"
+#include "../rendering/render_pass.h"
+#include "../rendering/debug_render_pass.h"
+#include "../rendering/imgui_render_pass.h"
 
 #define WORLD_SIZE 150
 #define TIME_LIM 1.0f
@@ -203,10 +203,12 @@ bool dm_application_update(dm_context* context)
         render_pass_submit_entity(app_data->entities[i], context);
     }
     
-    draw_path(app_data, context);
+    //draw_path(app_data, context);
     
+#ifndef DM_METAL
     imgui_draw_text_fmt(DM_SCREEN_WIDTH(context)-100,20, 0,1,0,1, context, "FPS: %0.2f", 1.0f / context->delta);
-    
+#endif
+
     return true;
 }
 

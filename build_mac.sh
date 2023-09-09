@@ -1,8 +1,8 @@
 #!/bin/bash
 
 set echo on
-output="app"
-debug=1
+output="AstronomySim"
+debug=0
 
 SRC_DIR=$PWD
 DM_DIR=$SRC_DIR/DarkMatter
@@ -20,6 +20,7 @@ if ((debug)); then
 	defines="-DDM_DEBUG $defines"
 	compiler_flags="-O0 $compiler_flags"
 else
+	defines="-DDM_RELEASE $defines"
 	compiler_flags="-O3 $compiler_flags"
 fi
 
@@ -49,5 +50,10 @@ for file in *.metal; do
 	mv $output_metallib $SRC_DIR/build/assets/shaders
 done
 
-#xcrun -sdk macosx metal -gline-tables-only -MO $SRC_DIR/test.metal -c -o $SRC_DIR/build/assets/shaders/test.air
-#xcrun -sdk macosx metallib $SRC_DIR/build/assets/shaders/test.air -o $SRC_DIR/build/assets/shaders/test.metallib
+cd ../..
+
+mkdir -p $SRC_DIR/build/assets/textures
+cp "assets/textures/default_texture.png" $SRC_DIR/build/assets/textures
+
+mkdir -p $SRC_DIR/build/assets/fonts
+cp "assets/fonts/Chicago.ttf" $SRC_DIR/build/assets/fonts

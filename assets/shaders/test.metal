@@ -11,7 +11,7 @@ struct vertex_in
 struct vertex_inst
 {
 	float4x4 model;
-	float4 color;
+	float4   color;
 };
 
 struct vertex_out
@@ -56,6 +56,7 @@ fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], texture2d<floa
 	fragment_out out;
 
 	out.color = v_in.color * obj_texture.sample(samplr, v_in.tex_coords);
+	out.color = float4(1,1,1,1);
 
 	return out;
 }

@@ -1,9 +1,9 @@
 #include "gravity_system.h"
 
-#include "app/components.h"
+#include "../app/components.h"
 
-#include "rendering/debug_render_pass.h"
-#include "rendering/imgui_render_pass.h"
+#include "../rendering/debug_render_pass.h"
+#include "../rendering/imgui_render_pass.h"
 
 #define G 6.6743e-11f
 
@@ -116,8 +116,10 @@ bool gravity_system_run(void* s, void* c)
     
     gravity_system_update_values(system, context);
     
+#ifndef DM_METAL
     imgui_draw_text_fmt(20,120, 0,1,0,1, context, "Gravity took: %0.3lf ms (%u entities)", dm_timer_elapsed_ms(&t, context), system->entity_count);
-    
+#endif
+
     return true;
 }
 
