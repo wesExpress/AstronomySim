@@ -3,6 +3,9 @@
 
 #include "dm.h"
 
+#define PHYSICS_SYSTEM_CONSTRAINT_ITER    10
+#define PHYSICS_SYSTEM_MAX_MANIFOLD_COUNT 1000
+
 bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_ecs_id r_id, dm_context* context);
 void physics_system_shutdown(void* s, void* c);
 bool physics_system_run(void* s, void* c);

@@ -12,7 +12,7 @@
 #include "../rendering/debug_render_pass.h"
 #include "../rendering/imgui_render_pass.h"
 
-#define WORLD_SIZE 150
+#define WORLD_SIZE 175
 #define TIME_LIM 1.0f
 void draw_path(application_data* app_data, dm_context* context)
 {
@@ -136,7 +136,7 @@ bool dm_application_init(dm_context* context)
     
     // systems
     if(!physics_system_init(app_data->components.transform, app_data->components.collision, app_data->components.physics, app_data->components.rigid_body, context)) return false;
-    //if(!gravity_system_init(app_data->components.transform, app_data->components.physics, context)) { DM_LOG_FATAL("Could not initialize gravity system"); return false; }
+    if(!gravity_system_init(app_data->components.transform, app_data->components.physics, context)) { DM_LOG_FATAL("Could not initialize gravity system"); return false; }
     
     // camera
     const float cam_pos[] = { -5,0,-5 };
@@ -180,7 +180,7 @@ bool dm_application_update(dm_context* context)
     draw_path(app_data, context);
     
     imgui_draw_text_fmt(DM_SCREEN_WIDTH(context)-100,20, 0,1,0,1, context, "FPS: %0.2f", 1.0f / context->delta);
-
+    
     return true;
 }
 
