@@ -23,9 +23,10 @@ typedef struct uniform_t
 } uniform;
 
 #define MAX_ENTITIES_PER_FRAME DM_ECS_MAX_ENTITIES
+#define MAX_MESH_COUNT 10
 typedef struct render_pass_data_t
 {
-    dm_render_handle vb, instb, ib, shader, pipe, uni;
+    dm_render_handle vb, instb[MAX_MESH_COUNT], ib, shader, pipe, uni;
     dm_render_handle tex;
     
     uint32_t         entity_count, instance_count;
@@ -111,7 +112,10 @@ bool render_pass_init(dm_context* context)
         
         // resources
         if(!dm_renderer_create_static_vertex_buffer(vertices, sizeof(vertices), sizeof(vertex), &pass_data->vb, context)) return false;
-        if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(inst_vertex) * MAX_ENTITIES_PER_FRAME, sizeof(inst_vertex), &pass_data->instb, context)) return false;
+        for(uint32_t i=0; i<MAX_MESH_COUNT; i++)
+        {
+            if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(inst_vertex) * MAX_ENTITIES_PER_FRAME, sizeof(inst_vertex), &pass_data->instb[i], context)) return false;
+        }
         if(!dm_renderer_create_static_index_buffer(indices, sizeof(indices), &pass_data->ib, context)) return false;
         if(!dm_renderer_create_uniform(sizeof(uniform), DM_UNIFORM_STAGE_VERTEX, &pass_data->uni, context)) return false;
         
@@ -125,7 +129,7 @@ bool render_pass_init(dm_context* context)
         
         shader_desc.vb_count = 2;
         shader_desc.vb[0] = pass_data->vb;
-        shader_desc.vb[1] = pass_data->instb;
+        shader_desc.vb[1] = pass_data->instb[0];
 #elif defined(DM_DIRECTX)
         strcpy(shader_desc.vertex, "assets/shaders/test_vertex.fxc");
         strcpy(shader_desc.pixel, "assets/shaders/test_pixel.fxc");
@@ -257,23 +261,17 @@ bool render_pass_render(dm_context* context)
 #endif
     
     // render
-    dm_render_command_set_default_viewport(context);
-    dm_render_command_clear(0.1f,0.3f,0.5f,1,context);
-    
     dm_render_command_bind_shader(pass_data->shader, context);
     dm_render_command_bind_pipeline(pass_data->pipe, context);
     dm_render_command_bind_texture(pass_data->tex, 0, context);
     //dm_render_command_toggle_wireframe(true, context);
     dm_render_command_bind_buffer(pass_data->vb, 0, context);
-    dm_render_command_bind_buffer(pass_data->instb, 1, context);
-    dm_render_command_update_buffer(pass_data->instb, pass_data->insts, sizeof(pass_data->insts), 0, context);
+    dm_render_command_bind_buffer(pass_data->instb[0], 1, context);
+    dm_render_command_update_buffer(pass_data->instb[0], pass_data->insts, sizeof(pass_data->insts), 0, context);
     dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_VERTEX, 0, context);
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
     dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
-#ifdef DM_METAL
-    dm_render_command_end_shader_encoding(pass_data->shader, context);
-#endif
 
     // reset counts back to 0
     pass_data->entity_count = 0;

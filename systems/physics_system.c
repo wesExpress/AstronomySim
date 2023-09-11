@@ -125,8 +125,9 @@ bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_ecs_
     manager->physics    = p_id;
     manager->rigid_body = r_id;
     
-    //if(!dm_threadpool_create("physics_system", 4, &manager->threadpool)) return false;
+    if(dm_threadpool_create("physics_system", 4, &manager->threadpool)) return true;
     
+    DM_LOG_FATAL("Could not initialize physics system");
     return true;
 }
 
@@ -135,7 +136,7 @@ void physics_system_shutdown(void* s, void* c)
     dm_ecs_system* system = s;
     physics_system_manager* manager = system->system_data;
     
-    //dm_threadpool_destroy(&manager->threadpool);
+    dm_threadpool_destroy(&manager->threadpool);
 }
 
 void physics_system_insert(const uint32_t entity_index, void* s, void* c)
@@ -364,7 +365,7 @@ bool physics_system_run(void* s, void* d)
     
     dm_timer_start(&full, context);
     
-    //while(manager->accum_time >= DM_PHYSICS_FIXED_DT)
+    while(manager->accum_time >= DM_PHYSICS_FIXED_DT)
     {
         iters++;
         
@@ -400,7 +401,6 @@ bool physics_system_run(void* s, void* d)
     
     total_time = dm_timer_elapsed_ms(&full, context);
     
-#if 1
     float iter_f_inv = 1 / (float)iters;
 
     imgui_draw_text_fmt(20,20,  1,1,0,1, context, "Physics broadphase average: %0.3lf ms (%u checks)", broad_time * iter_f_inv, manager->broadphase_data.num_checks);
@@ -408,7 +408,6 @@ bool physics_system_run(void* s, void* d)
     imgui_draw_text_fmt(20,60,  1,1,0,1, context, "Physics collision resolution average: %0.3lf ms (%u manifolds)", collision_time * iter_f_inv, manager->narrowphase_data.manifold_count);
     imgui_draw_text_fmt(20,80,  1,1,0,1, context, "Updating entities average: %0.3lf ms", update_time * iter_f_inv);
     imgui_draw_text_fmt(20,100, 1,0,1,1, context, "Physics took: %0.3lf ms, %u iterations", total_time, iters);
-#endif
 
     return true;
 }
@@ -868,7 +867,7 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
             break_cond = dm_mm_and_ps(break_cond, ones);
             
             // if ALL elements are 1, everything is beyond i, so break
-            if(dm_mm_any_zero(break_cond)==0) break;
+            if(!dm_mm_any_zero(break_cond)) break;
             
             // intersection checks
             x_check = dm_mm_leq_ps(a_min_x, b_max_x);
@@ -919,8 +918,6 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
 
 void* physics_system_broadphase_sweep_multi_th(void* args)
 {
-    //uint32_t num_threads = dm_get_available_processor_count(context);
-    //for(uint32_t
     physics_system_broadphase_multi_th_data* data = args;
     
     physics_system_aabb_sort* aabbs_sorted = data->aabbs_sorted;
@@ -987,7 +984,7 @@ void* physics_system_broadphase_sweep_multi_th(void* args)
             data->possible_collision_count++;
         }
         
-        data->flag[entity_a] = COLLISION_FLAG_POSSIBLE;
+        if(a_possible) data->flag[entity_a] = COLLISION_FLAG_POSSIBLE;
     }
     
     return NULL;
@@ -1128,7 +1125,7 @@ void* physics_system_broadphase_sweep_multi_th_simd(void* args)
             break_cond = dm_mm_and_ps(break_cond, ones);
             
             // if ALL elements are 1, everything is beyond i, so break
-            if(dm_mm_any_zero(break_cond)==0) break;
+            if(!dm_mm_any_zero(break_cond)) break;
             
             // intersection checks
             x_check = dm_mm_leq_ps(a_min_x, b_max_x);
@@ -1214,7 +1211,7 @@ bool physics_system_broadphase_sweep(uint32_t count, float* min_array, float* ma
     
     // sweep
     // if we don't have that many objects, no need to engage multiple threads
-    if(1)
+    if(0)
     {
         //physics_system_broadphase_sweep_naive(count, min_array, max_array, manager);
         physics_system_broadphase_sweep_naive_simd(count, min_array, max_array, manager);
@@ -1276,7 +1273,7 @@ bool physics_system_broadphase(dm_ecs_system* system, dm_context* context)
     manager->broadphase_data.sort_axis = physics_system_broadphase_get_variance_axis(system);
     component_collision* collision = &manager->cache.collision;
     
-    float* min, *max;
+    float* min=NULL, *max=NULL;
     
     switch(manager->broadphase_data.sort_axis)
     {
@@ -1291,6 +1288,10 @@ bool physics_system_broadphase(dm_ecs_system* system, dm_context* context)
         case 2: 
         min = collision->aabb_global_min_z;
         break;
+            
+        default:
+        DM_LOG_FATAL("Invalid sort axis");
+        return false;
     }
     
     // sort indices and aabbs
@@ -1312,6 +1313,10 @@ bool physics_system_broadphase(dm_ecs_system* system, dm_context* context)
         min = manager->broadphase_data.aabbs_sorted.min_z;
         max = manager->broadphase_data.aabbs_sorted.max_z;
         break;
+            
+        default:
+        DM_LOG_FATAL("Invalid sort axis");
+        return false;
     }
     
     // sweep
@@ -1505,9 +1510,8 @@ void physics_system_update_entities(dm_ecs_system* system)
     const static float half_dt = 0.5f * DM_PHYSICS_FIXED_DT;
     
     uint32_t i=0;
-    
-    i=0;
-    for(i=0; i<system->entity_count; i++)
+
+    for(; i<system->entity_count; i++)
     {
         // integrate position
         transform->pos_x[i] += physics->vel_x[i] * DM_PHYSICS_FIXED_DT;

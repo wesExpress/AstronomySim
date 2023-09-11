@@ -154,10 +154,6 @@ bool imgui_render_pass_render(dm_context* context)
     
     pass_data->text_vertex_count = 0;
     pass_data->num_glyphs = 0;
-    
-#ifdef DM_METAL
-    dm_render_command_end_shader_encoding(pass_data->shader, context);
-#endif
 
     pass_data->text_count = 0;
     

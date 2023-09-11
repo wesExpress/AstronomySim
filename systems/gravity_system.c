@@ -134,9 +134,6 @@ void naive_gravity(dm_ecs_system* system)
     float pos_a_x, pos_a_y, pos_a_z;
     float pos_b_x, pos_b_y, pos_b_z;
     
-    float force_a_x, force_a_y, force_a_z;
-    float force_b_x, force_b_y, force_b_z;
-    
     float dir_x, dir_y, dir_z;
     float dis2, grav;
     float local_f_x, local_f_y, local_f_z;
@@ -148,10 +145,6 @@ void naive_gravity(dm_ecs_system* system)
         pos_a_y = manager->cache.pos_y[i];
         pos_a_z = manager->cache.pos_z[i];
         
-        force_a_x = manager->cache.force_x[i];
-        force_a_y = manager->cache.force_y[i];
-        force_a_z = manager->cache.force_z[i];
-        
         mass_a = manager->cache.mass[i];
         
         j = i + 1;
@@ -160,10 +153,6 @@ void naive_gravity(dm_ecs_system* system)
             pos_b_x = manager->cache.pos_x[j];
             pos_b_y = manager->cache.pos_y[j];
             pos_b_z = manager->cache.pos_z[j];
-            
-            force_b_x = manager->cache.force_x[j];
-            force_b_y = manager->cache.force_y[j];
-            force_b_z = manager->cache.force_z[j];
             
             mass_b = manager->cache.mass[j];
             
