@@ -1332,7 +1332,6 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
     dm_mm256_float twos    = dm_mm256_set1_ps(2);
     dm_mm256_float zeroes  = dm_mm256_set1_ps(0);
     
-    
 #elif defined(DM_SIMD_ARM)
     dm_mm_float pos_x, pos_y, pos_z;
     dm_mm_float rot_i, rot_j, rot_k, rot_r;
@@ -1675,7 +1674,7 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
         new_rot_i = dm_mm_sub_ps(new_rot_i, dm_mm_mul_ps(w_z, rot_j));
         new_rot_i = dm_mm_fmadd_ps(new_rot_i, half_dt, rot_i);
         
-        new_rot_j = dm_mm_sub_ps(zeroes, dm_mm256_mul_ps(w_x, rot_k));
+        new_rot_j = dm_mm_sub_ps(zeroes, dm_mm_mul_ps(w_x, rot_k));
         new_rot_j = dm_mm_fmadd_ps(w_y, rot_r, new_rot_j);
         new_rot_j = dm_mm_fmadd_ps(w_z, rot_i, new_rot_j);
         new_rot_j = dm_mm_fmadd_ps(new_rot_i, half_dt, rot_j);

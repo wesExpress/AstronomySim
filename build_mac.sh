@@ -26,7 +26,7 @@ fi
 
 include_flags="-I$SRC_DIR -I$DM_DIR -I$DM_DIR/lib/"
 
-linker_flags="-g -framework Cocoa -lobjc -framework QuartzCore -framework CoreFoundation -framework Metal"
+linker_flags="-framework Cocoa -lobjc -framework QuartzCore -framework CoreFoundation -framework Metal"
 
 echo "Building $output..."
 gcc $c_files $dm_files $objc_files $compiler_flags -o $output $defines $include_flags $linker_flags
