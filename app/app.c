@@ -12,7 +12,7 @@
 #include "../rendering/debug_render_pass.h"
 #include "../rendering/imgui_render_pass.h"
 
-#define WORLD_SIZE 175
+#define WORLD_SIZE 150
 #define TIME_LIM 1.0f
 void draw_path(application_data* app_data, dm_context* context)
 {
@@ -80,8 +80,7 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     float vel_z = dm_random_float(context) * 2 - 1;
 #endif
     
-    //float mass = dm_random_float(context) * 1e6;
-    float mass = DM_MIN(scale_x, DM_MIN(scale_y, scale_z)) * 1e6f;
+    float mass = DM_MIN(scale_x, DM_MIN(scale_y, scale_z)) * 1e2f;
     entity_add_kinematics(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, context);
     
     if(dm_random_float(context) > 1)
@@ -133,10 +132,11 @@ bool dm_application_init(dm_context* context)
     if(!register_physics(&app_data->components.physics, context))       return false;
     if(!register_collision(&app_data->components.collision, context))   return false;
     if(!register_rigid_body(&app_data->components.rigid_body, context)) return false;
+    if(!register_mesh(&app_data->components.mesh, context))             return false;
     
     // systems
     if(!physics_system_init(app_data->components.transform, app_data->components.collision, app_data->components.physics, app_data->components.rigid_body, context)) return false;
-    if(!gravity_system_init(app_data->components.transform, app_data->components.physics, context)) { DM_LOG_FATAL("Could not initialize gravity system"); return false; }
+    //if(!gravity_system_init(app_data->components.transform, app_data->components.physics, context)) { DM_LOG_FATAL("Could not initialize gravity system"); return false; }
     
     // camera
     const float cam_pos[] = { -5,0,-5 };

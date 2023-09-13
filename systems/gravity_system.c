@@ -123,7 +123,7 @@ bool gravity_system_run(void* s, void* c)
     gravity_system_update_values(system, context);
     
     imgui_draw_text_fmt(20,120, 0,1,0,1, context, "Gravity took: %0.3lf ms (%u entities)", dm_timer_elapsed_ms(&t, context), system->entity_count);
-
+    
     return true;
 }
 
@@ -241,7 +241,7 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
     const dm_mm_float grav_const = dm_mm_set1_ps(G);
     const dm_mm_float ones       = dm_mm_set1_ps(1.0f);
 #endif
-
+    
     uint32_t i=0, j=0;
     
     for(; i<system->entity_count; i++)
@@ -268,7 +268,7 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
         
         mass_i = dm_mm_set1_ps(mass[i]);
 #endif
-
+        
         j = i+1;
         for(; j<system->entity_count; j+=GRAV_SYSTEM_N)
         {
@@ -376,7 +376,7 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
             dm_mm_store_ps(force_z + j, force_j_z);
 #endif
         }
-
+        
 #ifdef DM_SIMD_x86
         force_x[i] += dm_mm256_sum_elements(force_i_x);
         force_y[i] += dm_mm256_sum_elements(force_i_y);

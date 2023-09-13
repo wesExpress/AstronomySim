@@ -9,17 +9,20 @@ typedef struct vertex_t
 {
     float pos[N3];
     float tex_coords[N2];
+    float normal[N3];
 } vertex;
 
 typedef struct inst_vertex_t
 {
-    float model[M4];
+    float obj_model[M4];
+    float obj_normal[M4];
     float color[N4];
 } inst_vertex;
 
 typedef struct uniform_t
 {
     float view_proj[M4];
+    float view_pos[N3];
 } uniform;
 
 #define MAX_ENTITIES_PER_FRAME DM_ECS_MAX_ENTITIES
@@ -45,40 +48,40 @@ bool render_pass_init(dm_context* context)
         // cube
         vertex vertices[] = {
             // front face
-            { { -0.5f,-0.5f, 0.5f }, { 0,0 } },
-            { {  0.5f,-0.5f, 0.5f }, { 1,0 } },
-            { {  0.5f, 0.5f, 0.5f }, { 1,1 } },
-            { { -0.5f, 0.5f, 0.5f }, { 0,1 } },
+            { { -0.5f,-0.5f, 0.5f }, { 0,0 }, { 0,0,1 } },
+            { {  0.5f,-0.5f, 0.5f }, { 1,0 }, { 0,0,1 } },
+            { {  0.5f, 0.5f, 0.5f }, { 1,1 }, { 0,0,1 } },
+            { { -0.5f, 0.5f, 0.5f }, { 0,1 }, { 0,0,1 } },
             
             // back face
-            { {  0.5f,-0.5f,-0.5f }, { 0,0 } }, 
-            { { -0.5f,-0.5f,-0.5f }, { 1,0 } },
-            { { -0.5f, 0.5f,-0.5f }, { 1,1 } },
-            { {  0.5f, 0.5f,-0.5f }, { 0,1 } },
+            { {  0.5f,-0.5f,-0.5f }, { 0,0 }, { 0,0,-1 } }, 
+            { { -0.5f,-0.5f,-0.5f }, { 1,0 }, { 0,0,-1 } },
+            { { -0.5f, 0.5f,-0.5f }, { 1,1 }, { 0,0,-1 } },
+            { {  0.5f, 0.5f,-0.5f }, { 0,1 }, { 0,0,-1 } },
             
             // right
-            { {  0.5f,-0.5f, 0.5f }, { 0,0 } },
-            { {  0.5f,-0.5f,-0.5f }, { 1,0 } },
-            { {  0.5f, 0.5f,-0.5f }, { 1,1 } },
-            { {  0.5f, 0.5f, 0.5f }, { 0,1 } },
+            { {  0.5f,-0.5f, 0.5f }, { 0,0 }, { 1,0,0 } },
+            { {  0.5f,-0.5f,-0.5f }, { 1,0 }, { 1,0,0 } },
+            { {  0.5f, 0.5f,-0.5f }, { 1,1 }, { 1,0,0 } },
+            { {  0.5f, 0.5f, 0.5f }, { 0,1 }, { 1,0,0 } },
             
             // left
-            { { -0.5f, 0.5f, 0.5f }, { 0,0 } },
-            { { -0.5f, 0.5f,-0.5f }, { 1,0 } },
-            { { -0.5f,-0.5f,-0.5f }, { 1,1 } },
-            { { -0.5f,-0.5f, 0.5f }, { 0,1 } },
+            { { -0.5f, 0.5f, 0.5f }, { 0,0 }, { -1,0,0 } },
+            { { -0.5f, 0.5f,-0.5f }, { 1,0 }, { -1,0,0 } },
+            { { -0.5f,-0.5f,-0.5f }, { 1,1 }, { -1,0,0 } },
+            { { -0.5f,-0.5f, 0.5f }, { 0,1 }, { -1,0,0 } },
             
             // bottom
-            { { -0.5f,-0.5f,-0.5f }, { 0,0 } },
-            { {  0.5f,-0.5f,-0.5f }, { 1,0 } },
-            { {  0.5f,-0.5f, 0.5f }, { 1,1 } },
-            { { -0.5f,-0.5f, 0.5f }, { 0,1 } },
+            { { -0.5f,-0.5f,-0.5f }, { 0,0 }, { 0,-1,0 } },
+            { {  0.5f,-0.5f,-0.5f }, { 1,0 }, { 0,-1,0 } },
+            { {  0.5f,-0.5f, 0.5f }, { 1,1 }, { 0,-1,0 } },
+            { { -0.5f,-0.5f, 0.5f }, { 0,1 }, { 0,-1,0 } },
             
             // top
-            { { -0.5f, 0.5f, 0.5f }, { 0,0 } },
-            { {  0.5f, 0.5f, 0.5f }, { 1,0 } },
-            { {  0.5f, 0.5f,-0.5f }, { 1,1 } },
-            { { -0.5f, 0.5f,-0.5f }, { 0,1 } },
+            { { -0.5f, 0.5f, 0.5f }, { 0,0 }, { 0,1,0 } },
+            { {  0.5f, 0.5f, 0.5f }, { 1,0 }, { 0,1,0 } },
+            { {  0.5f, 0.5f,-0.5f }, { 1,1 }, { 0,1,0 } },
+            { { -0.5f, 0.5f,-0.5f }, { 0,1 }, { 0,1,0 } },
         };
         
         uint32_t indices[] = {
@@ -104,7 +107,9 @@ bool render_pass_init(dm_context* context)
         dm_vertex_attrib_desc attrib_descs[] = {
             { .name="POSITION", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, pos), .count=3, .index=0, .normalized=false },
             { .name="TEXCOORDS", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, tex_coords), .count=2, .index=0, .normalized=false },
-            { .name="MODEL", .data_t=DM_VERTEX_DATA_T_MATRIX_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, model), .count=4, .index=0, .normalized=false},
+            { .name="NORMAL", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, normal), .count=3, .index=0, .normalized=false },
+            { .name="OBJ_MODEL", .data_t=DM_VERTEX_DATA_T_MATRIX_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, obj_model), .count=4, .index=0, .normalized=false},
+            { .name="OBJ_NORM", .data_t=DM_VERTEX_DATA_T_MATRIX_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, obj_normal), .count=4, .index=0, .normalized=false},
             { .name="COLOR", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, color), .count=4, .index=0, .normalized=false }
         };
         
@@ -173,8 +178,7 @@ bool render_pass_render(dm_context* context)
     const dm_ecs_id c_id = app_data->components.collision;
     
     component_transform* transform = dm_ecs_get_component_block(t_id, context);
-    component_collision* collision = dm_ecs_get_component_block(c_id, context);
-    uint32_t t_index, c_index; 
+    uint32_t t_index;
     
     float obj_rm[M4];
     
@@ -186,7 +190,6 @@ bool render_pass_render(dm_context* context)
     {
         dm_entity entity = pass_data->entities[i];
         t_index = dm_ecs_entity_get_component_index(entity, t_id, context);
-        c_index = dm_ecs_entity_get_component_index(entity, c_id, context);
         
         pos[0] = transform->pos_x[t_index]; 
         pos[1] = transform->pos_y[t_index]; 
@@ -205,45 +208,16 @@ bool render_pass_render(dm_context* context)
         
         dm_mat4_rotate_from_quat(rot, obj_rm);
         
-        dm_mat_scale_make(scale, inst->model);
-        dm_mat4_mul_mat4(inst->model, obj_rm, inst->model);
-        dm_mat_translate(inst->model, pos, inst->model);
+        dm_mat_scale_make(scale, inst->obj_model);
+        dm_mat4_mul_mat4(inst->obj_model, obj_rm, inst->obj_model);
+        dm_mat_translate(inst->obj_model, pos, inst->obj_model);
 #ifdef DM_DIRECTX
-        dm_mat4_transpose(inst->model, inst->model);
+        dm_mat4_transpose(inst->obj_model, inst->obj_model);
 #endif
         
-#if 0
-        float c[4];
-        if(collision->flag[c_index]==COLLISION_FLAG_POSSIBLE)
-        {
-            c[0] = 1;
-            c[1] = 1;
-            c[2] = 0;
-            c[3] = 1;
-        }
-        else if(collision->flag[c_index]==COLLISION_FLAG_YES)
-        {
-            c[0] = 1;
-            c[1] = 0;
-            c[2] = 0;
-            c[3] = 1;
-        }
-        else
-        {
-            c[0] = 1;
-            c[1] = 1;
-            c[2] = 1;
-            c[3] = 1;
-        }
+        dm_mat4_inverse(inst->obj_model, inst->obj_normal);
+        dm_mat4_transpose(inst->obj_normal, inst->obj_normal);
         
-        float dim[3];
-        dim[0] = collision->aabb_global_max_x[c_index] - collision->aabb_global_min_x[c_index];
-        dim[1] = collision->aabb_global_max_y[c_index] - collision->aabb_global_min_y[c_index];
-        dim[2] = collision->aabb_global_max_z[c_index] - collision->aabb_global_min_z[c_index];
-        
-        debug_render_aabb(pos, dim, c, context);
-#endif
-
         inst->color[0] = 1;
         inst->color[1] = 1;
         inst->color[2] = 1;
@@ -260,6 +234,8 @@ bool render_pass_render(dm_context* context)
     dm_mat4_transpose(uni.view_proj, uni.view_proj);
 #endif
     
+    DM_VEC3_COPY(uni.view_pos, app_data->camera.pos);
+    
     // render
     dm_render_command_bind_shader(pass_data->shader, context);
     dm_render_command_bind_pipeline(pass_data->pipe, context);
@@ -272,7 +248,7 @@ bool render_pass_render(dm_context* context)
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
     dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
-
+    
     // reset counts back to 0
     pass_data->entity_count = 0;
     pass_data->instance_count = 0;

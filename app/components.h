@@ -129,11 +129,18 @@ typedef struct component_rigid_body_t
     float i_inv_22[DM_ECS_MAX_ENTITIES];
 } component_rigid_body;
 
+// mesh
+typedef struct component_mesh_t
+{
+    uint32_t mesh_id[DM_ECS_MAX_ENTITIES];
+} component_mesh;
+
 // funcs
 bool register_transform(dm_ecs_id* id, dm_context* context);
 bool register_physics(dm_ecs_id* id, dm_context* context);
 bool register_collision(dm_ecs_id* id, dm_context* context);
 bool register_rigid_body(dm_ecs_id* id, dm_context* context);
+bool register_mesh(dm_ecs_id* id, dm_context* context);
 
 void entity_add_transform(dm_entity entity, dm_ecs_id t_id, float pos_x,float pos_y,float pos_z, float scale_x,float scale_y,float scale_z, float rot_i,float rot_j,float rot_k,float rot_r, dm_context* context);
 void entity_add_kinematics(dm_entity entity, dm_ecs_id p_id, float mass, float vel_x, float vel_y, float vel_z, float damping_v, float damping_w, dm_context* context);
@@ -141,6 +148,7 @@ void entity_add_collider_box(dm_entity entity, dm_ecs_id c_id, float center_x,fl
 void entity_add_collider_sphere(dm_entity entity, dm_ecs_id c_id, float center_x,float center_y,float center_z, float radius, dm_context* context);
 void entity_add_rigid_body_box(dm_entity entity, dm_ecs_id r_id, float mass, float min_x, float min_y, float min_z, float max_x, float max_y, float max_z, dm_context* context);
 void entity_add_rigid_body_sphere(dm_entity entity, dm_ecs_id r_id, float mass, float radius, dm_context* context);
+void entity_add_mesh(dm_entity entity, uint32_t mesh_id, uint32_t mesh, dm_context* context);
 
 void entity_apply_velocity(dm_entity entity, dm_ecs_id p_id, float v_x, float v_y, float v_z, dm_context* context);
 void entity_apply_angular_velocity(dm_entity entity, dm_ecs_id p_id, float w_x, float w_y, float w_z, dm_context* context);

@@ -9,6 +9,7 @@ typedef struct component_ids_t
     dm_ecs_id collision;
     dm_ecs_id physics;
     dm_ecs_id rigid_body;
+    dm_ecs_id mesh;
 } component_ids;
 
 #define DRAW_LEN 100

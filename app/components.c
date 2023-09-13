@@ -215,6 +215,20 @@ void entity_add_rigid_body_sphere(dm_entity entity, dm_ecs_id r_id, float mass, 
     dm_ecs_entity_add_component(entity, r_id, context);
 }
 
+void entity_add_mesh(dm_entity entity, uint32_t m_id, uint32_t mesh, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
+    
+    uint32_t index;
+    component_mesh* mesh_component = dm_ecs_get_component_block(m_id, context);
+    dm_ecs_get_component_insert_index(m_id, &index, context);
+    if(index==DM_ECS_INVALID_ENTITY) return;
+    
+    mesh_component->mesh_id[index] = mesh;
+    
+    dm_ecs_entity_add_component(entity, m_id, context);
+}
+
 /************
 HELPER FUNCS
 **************/
@@ -293,5 +307,14 @@ bool register_rigid_body(dm_ecs_id* id, dm_context* context)
     if(*id!=DM_ECS_INVALID_ID) return true; 
     
     DM_LOG_FATAL("Could not register rigidbody component"); 
+    return false;
+}
+
+bool register_mesh(dm_ecs_id* id, dm_context* context)
+{
+    *id = dm_ecs_register_component(sizeof(component_mesh), context);
+    if(*id!=DM_ECS_INVALID_ID) return true; 
+    
+    DM_LOG_FATAL("Could not register mesh component"); 
     return false;
 }

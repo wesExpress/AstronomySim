@@ -133,22 +133,11 @@ void physics_system_insert(const uint32_t entity_index, void* s, void* c)
     
     const uint32_t i = system->entity_count;
     
-    const dm_ecs_id t_id = manager->transform;
-    const dm_ecs_id p_id = manager->physics;
-    const dm_ecs_id r_id = manager->rigid_body;
-    const dm_ecs_id c_id = manager->collision;
-    
-    const component_transform*  transform  = dm_ecs_get_component_block(t_id, context);
-    const component_physics*    physics    = dm_ecs_get_component_block(p_id, context);
-    const component_collision*  collision  = dm_ecs_get_component_block(c_id, context);
-    const component_rigid_body* rigid_body = dm_ecs_get_component_block(r_id, context);
-    
-    const uint32_t t_index = system->entity_indices[i][t_id];
-    const uint32_t p_index = system->entity_indices[i][p_id]; 
-    const uint32_t c_index = system->entity_indices[i][c_id]; 
-    const uint32_t r_index = system->entity_indices[i][r_id];
-    
     // transform
+    const dm_ecs_id t_id = manager->transform;
+    const component_transform*  transform  = dm_ecs_get_component_block(t_id, context);
+    const uint32_t t_index = system->entity_indices[i][t_id];
+    
     manager->cache.transform.pos_x[i] = transform->pos_x[t_index];
     manager->cache.transform.pos_y[i] = transform->pos_y[t_index];
     manager->cache.transform.pos_z[i] = transform->pos_z[t_index];
@@ -163,6 +152,10 @@ void physics_system_insert(const uint32_t entity_index, void* s, void* c)
     manager->cache.transform.rot_r[i] = transform->rot_r[t_index];
     
     // physics
+    const dm_ecs_id p_id = manager->physics;
+    const component_physics*    physics    = dm_ecs_get_component_block(p_id, context);
+    const uint32_t p_index = system->entity_indices[i][p_id]; 
+    
     manager->cache.physics.vel_x[i] = physics->vel_x[p_index];
     manager->cache.physics.vel_y[i] = physics->vel_y[p_index];
     manager->cache.physics.vel_z[i] = physics->vel_z[p_index];
@@ -192,6 +185,10 @@ void physics_system_insert(const uint32_t entity_index, void* s, void* c)
     manager->cache.physics.movement_type[i] = physics->movement_type[p_index];
     
     // collision
+    const dm_ecs_id c_id = manager->collision;
+    const component_collision*  collision  = dm_ecs_get_component_block(c_id, context);
+    const uint32_t c_index = system->entity_indices[i][c_id]; 
+    
     manager->cache.collision.aabb_local_min_x[i] = collision->aabb_local_min_x[c_index];
     manager->cache.collision.aabb_local_min_y[i] = collision->aabb_local_min_y[c_index];
     manager->cache.collision.aabb_local_min_z[i] = collision->aabb_local_min_z[c_index];
@@ -223,6 +220,10 @@ void physics_system_insert(const uint32_t entity_index, void* s, void* c)
     manager->cache.collision.flag[i] = collision->flag[c_index];
     
     // rigid body
+    const dm_ecs_id r_id = manager->rigid_body;
+    const component_rigid_body* rigid_body = dm_ecs_get_component_block(r_id, context);
+    const uint32_t r_index = system->entity_indices[i][r_id];
+    
     manager->cache.rigid_body.i_body_00[i] = rigid_body->i_body_00[r_index];
     manager->cache.rigid_body.i_body_11[i] = rigid_body->i_body_11[r_index];
     manager->cache.rigid_body.i_body_22[i] = rigid_body->i_body_22[r_index];
@@ -351,12 +352,9 @@ bool physics_system_run(void* s, void* d)
     
     dm_timer_start(&full, context);
     
-    // use multi threaded functions only if we really need to
-    // (aka high entity counts)
     while(manager->accum_time >= DM_PHYSICS_FIXED_DT)
     {
-        iters++;
-        
+        if(iters > PHYSICS_SYSTEM_MAX_SUB_STEPS) break;
         // broadphase
         if(!(manager->flags & DM_PHYSICS_FLAG_NO_COLLISIONS))
         {
@@ -377,11 +375,13 @@ bool physics_system_run(void* s, void* d)
         
         // update
         dm_timer_start(&t, context);
-        physics_system_update_entities(system);
-        //physics_system_update_entities_simd(system);
+        //physics_system_update_entities(system);
+        physics_system_update_entities_simd(system);
         update_time += dm_timer_elapsed_ms(&t, context);
         
         manager->accum_time -= DM_PHYSICS_FIXED_DT;
+        
+        iters++;
     }
     
     physics_system_update_values(system, context);
@@ -697,8 +697,7 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
     
     const dm_mm_float ones = dm_mm_set1_ps(1);
 #endif
-    bool  a_possible = false;
-    float b_possible[PHYSICS_SIMD_N] = { 0 };
+    float possible[PHYSICS_SIMD_N] = { 0 };
     
     for(i=0; i<count; i++)
     {
@@ -725,13 +724,12 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
         
         max_i = dm_mm_set1_ps(max_array[i]);
 #endif
-        a_possible = false;
         
         j = i + 1;
         
         for(; j<count; j+=PHYSICS_SIMD_N)
         {
-            dm_memzero(b_possible, sizeof(b_possible));
+            dm_memzero(possible, sizeof(possible));
             
 #ifdef DM_SIMD_x86
             b_min_x = dm_mm256_load_ps(aabbs_sorted->min_x + j);
@@ -770,8 +768,7 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
             // if ALL elements are 0, nothing is intersecting
             if(dm_mm256_any_non_zero(intersect_mask)==0) continue;
             
-            a_possible = true;
-            dm_mm256_store_ps(b_possible, intersect_mask);
+            dm_mm256_store_ps(possible, intersect_mask);
 #elif defined(DM_SIMD_ARM)
             b_min_x = dm_mm_load_ps(aabbs_sorted->min_x + j);
             b_min_y = dm_mm_load_ps(aabbs_sorted->min_y + j);
@@ -810,16 +807,14 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
             if(dm_mm_any_non_zero(intersect_mask)==0) continue;
             
             a_possible = true;
-            dm_mm_store_ps(b_possible, intersect_mask);
+            dm_mm_store_ps(possible, intersect_mask);
 #endif
             
             for(uint32_t k=0; k<PHYSICS_SIMD_N; k++)
             {
-                if(b_possible[k]==0) continue;
+                if(possible[k]==0) continue;
                 
                 entity_b = broadphase_data->sweep_indices[j+k];
-                
-                collision->flag[entity_b] = COLLISION_FLAG_POSSIBLE;
                 
                 broadphase_data->possible_collisions[broadphase_data->num_possible_collisions].entity_a = entity_a;
                 broadphase_data->possible_collisions[broadphase_data->num_possible_collisions].entity_b = entity_b;
@@ -833,8 +828,6 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
             if(dm_mm_any_non_zero(break_cond)) break;
 #endif
         }
-        
-        if(a_possible) collision->flag[entity_a] = COLLISION_FLAG_POSSIBLE;
     }
 }
 
@@ -976,6 +969,9 @@ bool physics_system_narrowphase(dm_ecs_system* system)
         
         entity_a = collision_pair.entity_a;
         entity_b = collision_pair.entity_b;
+        
+        collision->flag[entity_a] = COLLISION_FLAG_POSSIBLE;
+        collision->flag[entity_b] = COLLISION_FLAG_POSSIBLE;
         
         // entity a
         pos[0][0]       = transform->pos_x[entity_a];
@@ -1356,11 +1352,11 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
     dm_mm_float body_inv_10, body_inv_11, body_inv_12;
     dm_mm_float body_inv_20, body_inv_21, body_inv_22;
     
-    dm_mm_float dt      = dm_mm_set1_ps(DM_PHYSICS_FIXED_DT);
-    dm_mm_float half_dt = dm_mm_set1_ps(0.5f * DM_PHYSICS_FIXED_DT);
-    dm_mm_float ones    = dm_mm_set1_ps(1);
-    dm_mm_float twos    = dm_mm_set1_ps(2);
-    dm_mm_float zeroes  = dm_mm_set1_ps(0);
+    const dm_mm_float dt      = dm_mm_set1_ps(DM_PHYSICS_FIXED_DT);
+    const dm_mm_float half_dt = dm_mm_set1_ps(0.5f * DM_PHYSICS_FIXED_DT);
+    const dm_mm_float ones    = dm_mm_set1_ps(1);
+    const dm_mm_float twos    = dm_mm_set1_ps(2);
+    const dm_mm_float zeroes  = dm_mm_set1_ps(0);
 #endif
     
     uint32_t i=0;
@@ -1448,7 +1444,7 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
         new_rot_j = dm_mm256_sub_ps(zeroes, dm_mm256_mul_ps(w_x, rot_k));
         new_rot_j = dm_mm256_fmadd_ps(w_y, rot_r, new_rot_j);
         new_rot_j = dm_mm256_fmadd_ps(w_z, rot_i, new_rot_j);
-        new_rot_j = dm_mm256_fmadd_ps(new_rot_i, half_dt, rot_j);
+        new_rot_j = dm_mm256_fmadd_ps(new_rot_j, half_dt, rot_j);
         
         new_rot_k = dm_mm256_mul_ps(w_x, rot_j);
         new_rot_k = dm_mm256_sub_ps(new_rot_k, dm_mm256_mul_ps(w_y, rot_i));
