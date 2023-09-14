@@ -7,7 +7,7 @@ SET DM_DIR=%SRC_DIR%\DarkMatter
 REM SET /A vulkan=0
 SET /A opengl=0
 SET /A debug=0
-SET /A physics_mt=0
+SET /A physics_mt=1
 
 SET c_filenames=%SRC_DIR%\main.c %SRC_DIR%\app\app.c %SRC_DIR%\app\camera.c %SRC_DIR%\app\components.c %SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c %SRC_DIR%\rendering\imgui_render_pass.c %SRC_DIR%\systems\gravity_system.c
 

@@ -9,12 +9,6 @@
 #include <float.h>
 #include <assert.h>
 
-#ifdef DM_SIMD_x86
-#define PHYSICS_SIMD_N DM_SIMD256_FLOAT_N
-#elif defined(DM_SIMD_ARM)
-#define PHYSICS_SIMD_N DM_SIMD_FLOAT_N
-#endif
-
 typedef struct physics_system_aabb_sort_t
 {
     float min_x[DM_ECS_MAX_ENTITIES];
@@ -703,7 +697,7 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
     {
         entity_a = broadphase_data->sweep_indices[i];
         
-#ifndef DM_PLATFORM_APPLE
+#ifdef DM_SIMD_x86
         a_min_x = dm_mm256_set1_ps(aabbs_sorted->min_x[i]);
         a_min_y = dm_mm256_set1_ps(aabbs_sorted->min_y[i]);
         a_min_z = dm_mm256_set1_ps(aabbs_sorted->min_z[i]);
@@ -713,7 +707,7 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
         a_max_z = dm_mm256_set1_ps(aabbs_sorted->max_z[i]);
         
         max_i = dm_mm256_set1_ps(max_array[i]);
-#else
+#elif defined(DM_SIMD_ARM)
         a_min_x = dm_mm_set1_ps(aabbs_sorted->min_x[i]);
         a_min_y = dm_mm_set1_ps(aabbs_sorted->min_y[i]);
         a_min_z = dm_mm_set1_ps(aabbs_sorted->min_z[i]);
@@ -729,8 +723,6 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
         
         for(; j<count; j+=PHYSICS_SIMD_N)
         {
-            dm_memzero(possible, sizeof(possible));
-            
 #ifdef DM_SIMD_x86
             b_min_x = dm_mm256_load_ps(aabbs_sorted->min_x + j);
             b_min_y = dm_mm256_load_ps(aabbs_sorted->min_y + j);
@@ -806,7 +798,6 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
             // if ALL elements are 0, nothing is intersecting
             if(dm_mm_any_non_zero(intersect_mask)==0) continue;
             
-            a_possible = true;
             dm_mm_store_ps(possible, intersect_mask);
 #endif
             
@@ -975,52 +966,56 @@ bool physics_system_narrowphase(dm_ecs_system* system)
         
         // entity a
         pos[0][0]       = transform->pos_x[entity_a];
-        pos[0][1]       = transform->pos_y[entity_a];
-        pos[0][2]       = transform->pos_z[entity_a];
-        rots[0][0]      = transform->rot_i[entity_a];
-        rots[0][1]      = transform->rot_j[entity_a];
-        rots[0][2]      = transform->rot_k[entity_a];
-        rots[0][3]      = transform->rot_r[entity_a];
-        cens[0][0]      = collision->center_x[entity_a];
-        cens[0][1]      = collision->center_y[entity_a];
-        cens[0][2]      = collision->center_z[entity_a];
-        internals[0][0] = collision->internal_0[entity_a];
-        internals[0][1] = collision->internal_1[entity_a];
-        internals[0][2] = collision->internal_2[entity_a];
-        internals[0][3] = collision->internal_3[entity_a];
-        internals[0][4] = collision->internal_4[entity_a];
-        internals[0][5] = collision->internal_5[entity_a];
-        shapes[0]       = collision->shape[entity_a];
-        vels[0][0]      = physics->vel_x[entity_a];
-        vels[0][1]      = physics->vel_y[entity_a];
-        vels[0][2]      = physics->vel_z[entity_a];
-        ws[0][0]        = physics->w_x[entity_a];
-        ws[0][1]        = physics->w_y[entity_a];
-        ws[0][2]        = physics->w_z[entity_a];
-        
-        // entity b
         pos[1][0]       = transform->pos_x[entity_b];
+        pos[0][1]       = transform->pos_y[entity_a];
         pos[1][1]       = transform->pos_y[entity_b];
+        pos[0][2]       = transform->pos_z[entity_a];
         pos[1][2]       = transform->pos_z[entity_b];
+        
+        rots[0][0]      = transform->rot_i[entity_a];
         rots[1][0]      = transform->rot_i[entity_b];
+        rots[0][1]      = transform->rot_j[entity_a];
         rots[1][1]      = transform->rot_j[entity_b];
+        rots[0][2]      = transform->rot_k[entity_a];
         rots[1][2]      = transform->rot_k[entity_b];
+        rots[0][3]      = transform->rot_r[entity_a];
         rots[1][3]      = transform->rot_r[entity_b];
+        
+        cens[0][0]      = collision->center_x[entity_a];
         cens[1][0]      = collision->center_x[entity_b];
+        cens[0][1]      = collision->center_y[entity_a];
         cens[1][1]      = collision->center_y[entity_b];
+        cens[0][2]      = collision->center_z[entity_a];
         cens[1][2]      = collision->center_z[entity_b];
+        
+        internals[0][0] = collision->internal_0[entity_a];
         internals[1][0] = collision->internal_0[entity_b];
+        internals[0][1] = collision->internal_1[entity_a];
         internals[1][1] = collision->internal_1[entity_b];
+        internals[0][2] = collision->internal_2[entity_a];
         internals[1][2] = collision->internal_2[entity_b];
+        internals[0][3] = collision->internal_3[entity_a];
         internals[1][3] = collision->internal_3[entity_b];
+        internals[0][4] = collision->internal_4[entity_a];
         internals[1][4] = collision->internal_4[entity_b];
+        internals[0][5] = collision->internal_5[entity_a];
         internals[1][5] = collision->internal_5[entity_b];
+        
+        shapes[0]       = collision->shape[entity_a];
         shapes[1]       = collision->shape[entity_b];
+        
+        vels[0][0]      = physics->vel_x[entity_a];
         vels[1][0]      = physics->vel_x[entity_b];
+        vels[0][1]      = physics->vel_y[entity_a];
         vels[1][1]      = physics->vel_y[entity_b];
+        vels[0][2]      = physics->vel_z[entity_a];
         vels[1][2]      = physics->vel_z[entity_b];
+        
+        ws[0][0]        = physics->w_x[entity_a];
         ws[1][0]        = physics->w_x[entity_b];
+        ws[0][1]        = physics->w_y[entity_a];
         ws[1][1]        = physics->w_y[entity_b];
+        ws[0][2]        = physics->w_z[entity_a];
         ws[1][2]        = physics->w_z[entity_b];
         
         //////
@@ -1035,37 +1030,39 @@ bool physics_system_narrowphase(dm_ecs_system* system)
         manifold = &manager->narrowphase_data.manifolds[manager->narrowphase_data.manifold_count++];
         *manifold = (dm_contact_manifold){ 0 };
         
-        
         collision->flag[entity_a] = COLLISION_FLAG_YES;
-        
-        manifold->contact_data[0].vel_x         = &physics->vel_x[entity_b];
-        manifold->contact_data[0].vel_y         = &physics->vel_y[entity_a];
-        manifold->contact_data[0].vel_z         = &physics->vel_z[entity_a];
-        manifold->contact_data[0].w_x           = &physics->w_x[entity_a];
-        manifold->contact_data[0].w_y           = &physics->w_y[entity_a];
-        manifold->contact_data[0].w_z           = &physics->w_z[entity_a];
-        manifold->contact_data[0].mass          = physics->mass[entity_a];
-        manifold->contact_data[0].inv_mass      = physics->inv_mass[entity_a];
-        manifold->contact_data[0].v_damp        = physics->damping_v[entity_a];
-        manifold->contact_data[0].w_damp        = physics->damping_w[entity_a];
-        manifold->contact_data[0].i_body_inv_00 = rigid_body->i_body_inv_00[entity_a];
-        manifold->contact_data[0].i_body_inv_11 = rigid_body->i_body_inv_11[entity_a];
-        manifold->contact_data[0].i_body_inv_22 = rigid_body->i_body_inv_22[entity_a];
-        
         collision->flag[entity_b] = COLLISION_FLAG_YES;
         
+        manifold->contact_data[0].vel_x         = &physics->vel_x[entity_b];
         manifold->contact_data[1].vel_x         = &physics->vel_x[entity_b];
+        manifold->contact_data[0].vel_y         = &physics->vel_y[entity_a];
         manifold->contact_data[1].vel_y         = &physics->vel_y[entity_b];
+        manifold->contact_data[0].vel_z         = &physics->vel_z[entity_a];
         manifold->contact_data[1].vel_z         = &physics->vel_z[entity_b];
+        
+        manifold->contact_data[0].w_x           = &physics->w_x[entity_a];
         manifold->contact_data[1].w_x           = &physics->w_x[entity_b];
+        manifold->contact_data[0].w_y           = &physics->w_y[entity_a];
         manifold->contact_data[1].w_y           = &physics->w_y[entity_b];
+        manifold->contact_data[0].w_z           = &physics->w_z[entity_a];
         manifold->contact_data[1].w_z           = &physics->w_z[entity_b];
+        
+        manifold->contact_data[0].mass          = physics->mass[entity_a];
         manifold->contact_data[1].mass          = physics->mass[entity_b];
+        
+        manifold->contact_data[0].inv_mass      = physics->inv_mass[entity_a];
         manifold->contact_data[1].inv_mass      = physics->inv_mass[entity_b];
+        
+        manifold->contact_data[0].v_damp        = physics->damping_v[entity_a];
         manifold->contact_data[1].v_damp        = physics->damping_v[entity_b];
+        manifold->contact_data[0].w_damp        = physics->damping_w[entity_a];
         manifold->contact_data[1].w_damp        = physics->damping_w[entity_b];
+        
+        manifold->contact_data[0].i_body_inv_00 = rigid_body->i_body_inv_00[entity_a];
         manifold->contact_data[1].i_body_inv_00 = rigid_body->i_body_inv_00[entity_b];
+        manifold->contact_data[0].i_body_inv_11 = rigid_body->i_body_inv_11[entity_a];
         manifold->contact_data[1].i_body_inv_11 = rigid_body->i_body_inv_11[entity_b];
+        manifold->contact_data[0].i_body_inv_22 = rigid_body->i_body_inv_22[entity_a];
         manifold->contact_data[1].i_body_inv_22 = rigid_body->i_body_inv_22[entity_b];
         
         if(!dm_physics_collide_entities(pos, rots, cens, internals, vels, ws, shapes, &simplex, manifold)) return false;
