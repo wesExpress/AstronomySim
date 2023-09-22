@@ -78,7 +78,7 @@ typedef struct physics_system_manager_t
 } physics_system_manager;
 
 bool physics_system_broadphase(dm_ecs_system* system, dm_context* context);
-bool physics_system_narrowphase(dm_ecs_system* system);
+bool physics_system_narrowphase(dm_ecs_system* system, dm_context* context);
 void physics_system_solve_constraints(physics_system_manager* manager);
 void physics_system_update_entities(dm_ecs_system* system);
 void physics_system_update_entities_simd(dm_ecs_system* system);
@@ -338,11 +338,8 @@ bool physics_system_run(void* s, void* d)
     
     uint32_t iters = 0;
     
-    if(dm_input_key_just_pressed(DM_KEY_C, context))
-    {
-        if(manager->flags & DM_PHYSICS_FLAG_NO_COLLISIONS) manager->flags &= ~DM_PHYSICS_FLAG_NO_COLLISIONS;
-        else manager->flags |= DM_PHYSICS_FLAG_NO_COLLISIONS;
-    }
+    if(dm_input_key_just_pressed(DM_KEY_C, context)) manager->flags ^= DM_PHYSICS_FLAG_NO_COLLISIONS;
+    if(dm_input_key_just_pressed(DM_KEY_P, context)) manager->flags ^= DM_PHYSICS_FLAG_PAUSED;
     
     dm_timer_start(&full, context);
     
@@ -358,19 +355,19 @@ bool physics_system_run(void* s, void* d)
             
             // narrowphase
             dm_timer_start(&t, context);
-            if(!physics_system_narrowphase(system)) return false;
+            if(!physics_system_narrowphase(system, context)) return false;
             narrow_time += dm_timer_elapsed_ms(&t, context);
             
             // collision resolution
             dm_timer_start(&t, context);
-            physics_system_solve_constraints(manager);
+            if(!(manager->flags & DM_PHYSICS_FLAG_PAUSED)) physics_system_solve_constraints(manager);
             collision_time += dm_timer_elapsed_ms(&t, context);
         }
         
         // update
         dm_timer_start(&t, context);
         //physics_system_update_entities(system);
-        physics_system_update_entities_simd(system);
+        if(!(manager->flags & DM_PHYSICS_FLAG_PAUSED)) physics_system_update_entities_simd(system);
         update_time += dm_timer_elapsed_ms(&t, context);
         
         manager->accum_time -= DM_PHYSICS_FIXED_DT;
@@ -456,7 +453,7 @@ void physics_system_broadphase_update_sphere_aabbs(uint32_t sphere_count, dm_ecs
     }
 }
 
-void physics_system_broadphase_update_box_aabbs(uint32_t box_count,  dm_ecs_system* system)
+void physics_system_broadphase_update_box_aabbs(uint32_t box_count, dm_ecs_system* system, dm_context* context)
 {
     physics_system_manager* manager = system->system_data;
     
@@ -597,7 +594,7 @@ void physics_system_broadphase_update_box_aabbs(uint32_t box_count,  dm_ecs_syst
     }
 }
 
-int physics_system_broadphase_get_variance_axis(dm_ecs_system* system)
+int physics_system_broadphase_get_variance_axis(dm_ecs_system* system, dm_context* context)
 {
     physics_system_manager* manager = system->system_data;
     
@@ -630,7 +627,7 @@ int physics_system_broadphase_get_variance_axis(dm_ecs_system* system)
     }
     
     if(sphere_count) physics_system_broadphase_update_sphere_aabbs(sphere_count, system);
-    if(box_count)    physics_system_broadphase_update_box_aabbs(box_count, system);
+    if(box_count)    physics_system_broadphase_update_box_aabbs(box_count, system, context);
     
     const float scale = 1.0f / system->entity_count;
     
@@ -803,6 +800,7 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
             
             for(uint32_t k=0; k<PHYSICS_SIMD_N; k++)
             {
+                if(j+k >= count) break;
                 if(possible[k]==0) continue;
                 
                 entity_b = broadphase_data->sweep_indices[j+k];
@@ -868,7 +866,7 @@ bool physics_system_broadphase(dm_ecs_system* system, dm_context* context)
     physics_system_manager* manager = system->system_data;
     
     // sort axis
-    manager->broadphase_data.sort_axis = physics_system_broadphase_get_variance_axis(system);
+    manager->broadphase_data.sort_axis = physics_system_broadphase_get_variance_axis(system, context);
     component_collision* collision = &manager->cache.collision;
     
     float* min=NULL, *max=NULL;
@@ -933,7 +931,7 @@ uses GJK to determine collisions
 then EPA to determine penetration vector
 then generates contact manifolds
 *************/
-bool physics_system_narrowphase(dm_ecs_system* system)
+bool physics_system_narrowphase(dm_ecs_system* system, dm_context* context)
 {
     physics_system_manager* manager = system->system_data;
     
@@ -1030,22 +1028,11 @@ bool physics_system_narrowphase(dm_ecs_system* system)
         manifold = &manager->narrowphase_data.manifolds[manager->narrowphase_data.manifold_count++];
         *manifold = (dm_contact_manifold){ 0 };
         
+        manifold->entity_a = entity_a;
+        manifold->entity_b = entity_b;
+        
         collision->flag[entity_a] = COLLISION_FLAG_YES;
         collision->flag[entity_b] = COLLISION_FLAG_YES;
-        
-        manifold->contact_data[0].vel_x         = &physics->vel_x[entity_b];
-        manifold->contact_data[1].vel_x         = &physics->vel_x[entity_b];
-        manifold->contact_data[0].vel_y         = &physics->vel_y[entity_a];
-        manifold->contact_data[1].vel_y         = &physics->vel_y[entity_b];
-        manifold->contact_data[0].vel_z         = &physics->vel_z[entity_a];
-        manifold->contact_data[1].vel_z         = &physics->vel_z[entity_b];
-        
-        manifold->contact_data[0].w_x           = &physics->w_x[entity_a];
-        manifold->contact_data[1].w_x           = &physics->w_x[entity_b];
-        manifold->contact_data[0].w_y           = &physics->w_y[entity_a];
-        manifold->contact_data[1].w_y           = &physics->w_y[entity_b];
-        manifold->contact_data[0].w_z           = &physics->w_z[entity_a];
-        manifold->contact_data[1].w_z           = &physics->w_z[entity_b];
         
         manifold->contact_data[0].mass          = physics->mass[entity_a];
         manifold->contact_data[1].mass          = physics->mass[entity_b];
@@ -1058,6 +1045,9 @@ bool physics_system_narrowphase(dm_ecs_system* system)
         manifold->contact_data[0].w_damp        = physics->damping_w[entity_a];
         manifold->contact_data[1].w_damp        = physics->damping_w[entity_b];
         
+        manifold->contact_data[0].movement_type = physics->movement_type[entity_a];
+        manifold->contact_data[1].movement_type = physics->movement_type[entity_b];
+        
         manifold->contact_data[0].i_body_inv_00 = rigid_body->i_body_inv_00[entity_a];
         manifold->contact_data[1].i_body_inv_00 = rigid_body->i_body_inv_00[entity_b];
         manifold->contact_data[0].i_body_inv_11 = rigid_body->i_body_inv_11[entity_a];
@@ -1066,6 +1056,65 @@ bool physics_system_narrowphase(dm_ecs_system* system)
         manifold->contact_data[1].i_body_inv_22 = rigid_body->i_body_inv_22[entity_b];
         
         if(!dm_physics_collide_entities(pos, rots, cens, internals, vels, ws, shapes, &simplex, manifold)) return false;
+        
+#ifdef DM_PHYSICS_DEBUG
+#if 0
+        for(uint32_t i=0; i<manifold->point_count; i++)
+        {
+            float d[N3];
+            debug_render_bilboard(manifold->points[i].global_pos[0], 0.1f,0.1f, (float[]){ 1,0,0,1 }, context);
+            
+            dm_vec3_add_vec3(manifold->points[i].global_pos[0], manifold->normal, d);
+            debug_render_arrow(manifold->points[i].global_pos[0], d, COLOR_RED, context);
+            
+            dm_vec3_add_vec3(manifold->points[i].global_pos[0], manifold->tangent_a, d);
+            debug_render_arrow(manifold->points[i].global_pos[0], d, COLOR_BLUE, context);
+            
+            dm_vec3_add_vec3(manifold->points[i].global_pos[0], manifold->tangent_b, d);
+            debug_render_arrow(manifold->points[i].global_pos[0], d, COLOR_GREEN, context);
+        }
+        
+        // clipped face
+        for(uint32_t i=0; i<manifold->clipped_point_count; i++)
+        {
+            debug_render_bilboard(manifold->clipped_face[i], 0.1f,0.1f, COLOR_WHITE, context);
+        }
+        
+        // face a
+        for(uint32_t i=0; i<manifold->face_count_a; i++)
+        {
+            debug_render_bilboard(manifold->face_a[i], 0.1f,0.1f, COLOR_MAGENTA, context);
+        }
+        for(uint32_t i=0; i<manifold->plane_count_a; i++)
+        {
+            int index = i - 1;
+            index = DM_MAX(index, 0);
+            
+            dm_plane plane = manifold->planes_a[i];
+            
+            float d[3];
+            dm_vec3_add_vec3(manifold->face_a[index], plane.normal, d);
+            debug_render_arrow(manifold->face_a[index], d, COLOR_MAGENTA, context);
+        }
+        
+        // face b
+        for(uint32_t i=0; i<manifold->face_count_b; i++)
+        {
+            debug_render_bilboard(manifold->face_b[i], 0.1f,0.1f, COLOR_YELLOW, context);
+        }
+        for(uint32_t i=0; i<manifold->plane_count_b; i++)
+        {
+            int index = i - 1;
+            index = DM_MAX(index, 0);
+            
+            dm_plane plane = manifold->planes_b[i];
+            
+            float d[3];
+            dm_vec3_add_vec3(manifold->face_b[index], plane.normal, d);
+            debug_render_arrow(manifold->face_b[index], d, COLOR_YELLOW, context);
+        }
+#endif
+#endif
     }
     
     return true;
@@ -1078,11 +1127,47 @@ using impulse solver
 **********************/
 void physics_system_solve_constraints(physics_system_manager* manager)
 {
+    component_physics* physics = &manager->cache.physics;
+    dm_contact_manifold* manifold = NULL;
+    
     for(uint32_t iter=0; iter<PHYSICS_SYSTEM_CONSTRAINT_ITER; iter++)
     {
         for(uint32_t m=0; m<manager->narrowphase_data.manifold_count; m++)
         {
-            dm_physics_apply_constraints(&manager->narrowphase_data.manifolds[m]);
+            manifold = &manager->narrowphase_data.manifolds[m];
+            
+            // set up velocities
+            manifold->contact_data[0].vel_x = physics->vel_x[manifold->entity_a];
+            manifold->contact_data[1].vel_x = physics->vel_x[manifold->entity_b];
+            manifold->contact_data[0].vel_y = physics->vel_y[manifold->entity_a];
+            manifold->contact_data[1].vel_y = physics->vel_y[manifold->entity_b];
+            manifold->contact_data[0].vel_z = physics->vel_z[manifold->entity_a];
+            manifold->contact_data[1].vel_z = physics->vel_z[manifold->entity_b];
+            
+            manifold->contact_data[0].w_x   = physics->w_x[manifold->entity_a];
+            manifold->contact_data[1].w_x   = physics->w_x[manifold->entity_b];
+            manifold->contact_data[0].w_y   = physics->w_y[manifold->entity_a];
+            manifold->contact_data[1].w_y   = physics->w_y[manifold->entity_b];
+            manifold->contact_data[0].w_z   = physics->w_z[manifold->entity_a];
+            manifold->contact_data[1].w_z   = physics->w_z[manifold->entity_b];
+            
+            // apply constraints
+            dm_physics_apply_constraints(manifold);
+            
+            // reset velocities
+            physics->vel_x[manifold->entity_a] = manifold->contact_data[0].vel_x;
+            physics->vel_x[manifold->entity_b] = manifold->contact_data[1].vel_x;
+            physics->vel_y[manifold->entity_a] = manifold->contact_data[0].vel_y;
+            physics->vel_y[manifold->entity_b] = manifold->contact_data[1].vel_y;
+            physics->vel_z[manifold->entity_a] = manifold->contact_data[0].vel_z;
+            physics->vel_z[manifold->entity_b] = manifold->contact_data[1].vel_z;
+            
+            physics->w_x[manifold->entity_a]   = manifold->contact_data[0].w_x;
+            physics->w_x[manifold->entity_b]   = manifold->contact_data[1].w_x;
+            physics->w_y[manifold->entity_a]   = manifold->contact_data[0].w_y;
+            physics->w_y[manifold->entity_b]   = manifold->contact_data[1].w_y;
+            physics->w_z[manifold->entity_a]   = manifold->contact_data[0].w_z;
+            physics->w_z[manifold->entity_b]   = manifold->contact_data[1].w_z;
         }
     }
 }

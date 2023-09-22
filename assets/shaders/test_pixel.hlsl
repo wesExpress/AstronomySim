@@ -16,7 +16,7 @@ cbuffer uni : register(b0)
 SamplerState sample_state;
 Texture2D tex : register(t0);
 
-static const float3 light_pos = { 0,0,0 };
+static const float3 light_pos = { 15,2,15 };
 static const float4 light_ambient = { 0.33f,0.33f,0.33f,1.0f };
 static const float4 light_diffuse = { 1,1,1,1 };
 static const float4 light_specular = { 1,1,1,1 };
@@ -29,7 +29,7 @@ float4 p_main(PS_INPUT input) : SV_Target
 	const float3 reflect_dir = reflect(-light_dir, norm_normal);
 
 	const float diff = max(dot(input.normal, light_dir), 0.0f);
-	const float spec = pow(max(dot(view_dir, reflect_dir), 0.0f), 25);
+	const float spec = pow(max(dot(view_dir, reflect_dir), 0.0f), 64);
 
 	float4 obj_color = input.color * tex.Sample(sample_state, input.tex_coords);
 

@@ -5,6 +5,11 @@
 #include "../app/app.h"
 #include "../app/components.h"
 
+typedef enum render_pass_flags_t
+{
+    RENDER_PASS_FLAG_WIREFRAME = 1 << 0,
+} render_pass_flags;
+
 typedef struct vertex_t
 {
     float pos[N3];
@@ -33,6 +38,8 @@ typedef struct render_pass_data_t
     dm_render_handle tex;
     
     uint32_t         entity_count, instance_count;
+    
+    render_pass_flags flags;
     
     dm_entity        entities[MAX_ENTITIES_PER_FRAME];
     inst_vertex      insts[MAX_ENTITIES_PER_FRAME];
@@ -236,11 +243,13 @@ bool render_pass_render(dm_context* context)
     
     DM_VEC3_COPY(uni.view_pos, app_data->camera.pos);
     
+    if(dm_input_key_just_pressed(DM_KEY_SPACE, context)) pass_data->flags ^= RENDER_PASS_FLAG_WIREFRAME;
+    
     // render
     dm_render_command_bind_shader(pass_data->shader, context);
     dm_render_command_bind_pipeline(pass_data->pipe, context);
     dm_render_command_bind_texture(pass_data->tex, 0, context);
-    //dm_render_command_toggle_wireframe(true, context);
+    if(pass_data->flags & RENDER_PASS_FLAG_WIREFRAME) dm_render_command_toggle_wireframe(true, context);
     dm_render_command_bind_buffer(pass_data->vb, 0, context);
     dm_render_command_bind_buffer(pass_data->instb[0], 1, context);
     dm_render_command_update_buffer(pass_data->instb[0], pass_data->insts, sizeof(pass_data->insts), 0, context);

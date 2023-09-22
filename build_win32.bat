@@ -7,9 +7,10 @@ SET DM_DIR=%SRC_DIR%\DarkMatter
 REM SET /A vulkan=0
 SET /A opengl=0
 SET /A debug=0
-SET /A physics_mt=1
+SET /A physics_mt=0
+SET /A physics_debug=0
 
-SET c_filenames=%SRC_DIR%\main.c %SRC_DIR%\app\app.c %SRC_DIR%\app\camera.c %SRC_DIR%\app\components.c %SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c %SRC_DIR%\rendering\imgui_render_pass.c %SRC_DIR%\systems\gravity_system.c
+SET c_filenames=%SRC_DIR%\main.c %SRC_DIR%\app\app.c %SRC_DIR%\app\camera.c %SRC_DIR%\app\components.c %SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c %SRC_DIR%\rendering\imgui_render_pass.c %SRC_DIR%\systems\gravity_system.c %SRC_DIR%\app\stress_test.c %SRC_DIR%\app\physics_test.c
 
 IF /I "%physics_mt%" EQU "1" (
 	SET c_filenames=%c_filenames% %SRC_DIR%\systems\physics_system_multi_th.c
@@ -29,6 +30,10 @@ IF /I "%debug%" EQU "1" (
 ) ELSE (
 	SET defines=%defines% /DDM_RELEASE
 	SET compiler_flags=/O2 /Ob3 /Zi
+)
+
+IF /I "%physics_debug%" EQU "1" (
+	SET defines=%defines% /DDM_PHYSICS_DEBUG
 )
 
 IF /I "%vulkan%" EQU "1" (

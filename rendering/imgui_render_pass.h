@@ -3,6 +3,13 @@
 
 #include "dm.h"
 
+static const float COLOR_WHITE[4]   = { 1,1,1,1 }; 
+static const float COLOR_RED[4]     = { 1,0,0,1 };
+static const float COLOR_GREEN[4]   = { 0,1,0,1 };
+static const float COLOR_BLUE[4]    = { 0,0,1,1 };
+static const float COLOR_YELLOW[4]  = { 1,1,0,1 };
+static const float COLOR_MAGENTA[4] = { 1,0,1,1 };
+
 bool imgui_render_pass_init(dm_context* context);
 void imgui_render_pass_shutdown(dm_context* context);
 bool imgui_render_pass_render(dm_context* context);

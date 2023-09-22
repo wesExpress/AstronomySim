@@ -63,13 +63,6 @@ typedef struct component_collision_t
 } component_collision;
 
 // physics
-typedef enum physics_movement_type_t
-{
-    PHYSICS_MOVEMENT_KINEMATIC,
-    PHYSICS_MOVEMENT_STATIC,
-    MOVEMENT_UNKNOWN
-} physics_movement_type;
-
 typedef struct dm_component_physics_t
 {
     float vel_x[DM_ECS_MAX_ENTITIES];
@@ -100,7 +93,7 @@ typedef struct dm_component_physics_t
     float damping_w[DM_ECS_MAX_ENTITIES];
     
     // enums
-    physics_movement_type movement_type[DM_ECS_MAX_ENTITIES];
+    dm_physics_movement_type movement_type[DM_ECS_MAX_ENTITIES];
 } component_physics;
 
 // rigid body
@@ -144,6 +137,7 @@ bool register_mesh(dm_ecs_id* id, dm_context* context);
 
 void entity_add_transform(dm_entity entity, dm_ecs_id t_id, float pos_x,float pos_y,float pos_z, float scale_x,float scale_y,float scale_z, float rot_i,float rot_j,float rot_k,float rot_r, dm_context* context);
 void entity_add_kinematics(dm_entity entity, dm_ecs_id p_id, float mass, float vel_x, float vel_y, float vel_z, float damping_v, float damping_w, dm_context* context);
+void entity_add_statics(dm_entity entity, dm_ecs_id p_id, float mass, dm_context* context);
 void entity_add_collider_box(dm_entity entity, dm_ecs_id c_id, float center_x,float center_y,float center_z, float dim_x,float dim_y,float dim_z, dm_context* context);
 void entity_add_collider_sphere(dm_entity entity, dm_ecs_id c_id, float center_x,float center_y,float center_z, float radius, dm_context* context);
 void entity_add_rigid_body_box(dm_entity entity, dm_ecs_id r_id, float mass, float min_x, float min_y, float min_z, float max_x, float max_y, float max_z, dm_context* context);
