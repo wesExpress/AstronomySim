@@ -50,8 +50,8 @@ void entity_add_kinematics(dm_entity entity, dm_ecs_id p_id, float mass, float v
     physics->mass[index]     = mass;
     physics->inv_mass[index] = 1.0f / mass;
     
-    physics->damping_v[index] = damping_v;
-    physics->damping_w[index] = damping_w;
+    physics->damping_v[index] = 1.0f / (1.0f + damping_v * DM_PHYSICS_FIXED_DT);
+    physics->damping_w[index] = 1.0f / (1.0f + damping_w * DM_PHYSICS_FIXED_DT);
     
     physics->movement_type[index] = DM_PHYSICS_MOVEMENT_TYPE_KINEMATIC;
     

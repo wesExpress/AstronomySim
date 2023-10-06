@@ -45,6 +45,27 @@ typedef struct render_pass_data_t
     inst_vertex      insts[MAX_ENTITIES_PER_FRAME];
 } render_pass_data;
 
+void render_pass_draw_transform(float pos[3], float rot[4], dm_context* context)
+{
+    static const float x_axis[3] = { 1,0,0 };
+    static const float y_axis[3] = { 0,1,0 };
+    static const float z_axis[3] = { 0,0,1 };
+    
+    float x_rot[3], y_rot[3], z_rot[3];
+    
+    dm_vec3_rotate(x_axis, rot, x_rot);
+    dm_vec3_rotate(y_axis, rot, y_rot);
+    dm_vec3_rotate(z_axis, rot, z_rot);
+    
+    dm_vec3_add_vec3(pos, x_rot, x_rot);
+    dm_vec3_add_vec3(pos, y_rot, y_rot);
+    dm_vec3_add_vec3(pos, z_rot, z_rot);
+    
+    debug_render_arrow(pos, x_rot, COLOR_RED,   context);
+    debug_render_arrow(pos, y_rot, COLOR_GREEN, context);
+    debug_render_arrow(pos, z_rot, COLOR_BLUE,  context);
+}
+
 bool render_pass_init(dm_context* context)
 {
     application_data* app_data = context->app_data;
@@ -231,6 +252,10 @@ bool render_pass_render(dm_context* context)
         inst->color[3] = 1;
         
         pass_data->instance_count++;
+        
+#if 0
+        render_pass_draw_transform(pos, rot, context);
+#endif
     }
     
     // uniform

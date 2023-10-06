@@ -51,8 +51,8 @@ typedef struct physics_system_broadphase_data_t
 
 typedef struct physics_system_narrowphase_data_t
 {
-    uint32_t            manifold_count;
-    dm_contact_manifold manifolds[PHYSICS_SYSTEM_MAX_MANIFOLD_COUNT];
+    uint32_t             manifold_capacity, manifold_count;
+    dm_contact_manifold* manifolds;
 } physics_system_narrowphase_data;
 
 typedef enum physics_system_flag_t
@@ -935,7 +935,13 @@ bool physics_system_narrowphase(dm_ecs_system* system, dm_context* context)
 {
     physics_system_manager* manager = system->system_data;
     
+    if(!manager->narrowphase_data.manifolds)
+    {
+        manager->narrowphase_data.manifold_capacity = 16;
+        manager->narrowphase_data.manifolds = dm_alloc(sizeof(dm_contact_manifold) * manager->narrowphase_data.manifold_capacity);
+    }
     manager->narrowphase_data.manifold_count = 0;
+    
     
     float              pos[2][3], rots[2][4], cens[2][3], internals[2][6], vels[2][3], ws[2][3];
     dm_collision_shape shapes[2];
@@ -1024,7 +1030,6 @@ bool physics_system_narrowphase(dm_ecs_system* system, dm_context* context)
         
         assert(simplex.size==4);
         
-        if(manager->narrowphase_data.manifold_count>PHYSICS_SYSTEM_MAX_MANIFOLD_COUNT) { DM_LOG_ERROR("Too many manifolds!"); break; }
         manifold = &manager->narrowphase_data.manifolds[manager->narrowphase_data.manifold_count++];
         *manifold = (dm_contact_manifold){ 0 };
         
@@ -1057,6 +1062,12 @@ bool physics_system_narrowphase(dm_ecs_system* system, dm_context* context)
         
         if(!dm_physics_collide_entities(pos, rots, cens, internals, vels, ws, shapes, &simplex, manifold)) return false;
         
+        float load = (float)manager->narrowphase_data.manifold_count / (float)manager->narrowphase_data.manifold_capacity;
+        if(load > 0.75f)
+        {
+            manager->narrowphase_data.manifold_capacity *= 2;
+            manager->narrowphase_data.manifolds = dm_realloc(manager->narrowphase_data.manifolds, sizeof(dm_contact_manifold) * manager->narrowphase_data.manifold_capacity);
+        }
 #ifdef DM_PHYSICS_DEBUG
 #if 0
         for(uint32_t i=0; i<manifold->point_count; i++)
