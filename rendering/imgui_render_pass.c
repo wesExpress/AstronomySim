@@ -7,9 +7,6 @@
 #include <stdarg.h>
 #include <float.h>
 
-#define IMGUI_MAX_VERTEX_BUFFER 512 * 1024
-#define IMGUI_MAX_INDEX_BUFFER  128 * 1024
-
 typedef struct imgui_pass_vertex_t
 {
     float pos[3];

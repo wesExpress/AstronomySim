@@ -122,7 +122,9 @@ bool gravity_system_run(void* s, void* c)
     
     gravity_system_update_values(system, context);
     
+#if 0
     imgui_draw_text_fmt(20,120, 0,1,0,1, context, "Gravity took: %0.3lf ms (%u entities)", dm_timer_elapsed_ms(&t, context), system->entity_count);
+#endif
     
     return true;
 }

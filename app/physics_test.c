@@ -3,9 +3,11 @@
 #include "dm.h"
 #include <float.h>
 
-#define STACK_WIDTH  6
-#define STACK_HEIGHT 6
-#define STACK_DEPTH  6
+#define N 3
+
+#define STACK_WIDTH  N
+#define STACK_HEIGHT N
+#define STACK_DEPTH  N
 
 void physics_test_init_entities(application_data* app_data, dm_context* context)
 {

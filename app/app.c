@@ -56,8 +56,8 @@ void draw_path(application_data* app_data, dm_context* context)
 
 void dm_application_setup(dm_context_init_packet* init_packet)
 {
-    init_packet->window_width = 1920;
-    init_packet->window_height = 1080;
+    //init_packet->window_width = 1920;
+    //init_packet->window_height = 1080;
 }
 
 bool dm_application_init(dm_context* context)
@@ -71,7 +71,7 @@ bool dm_application_init(dm_context* context)
     // rendering
     if(!render_pass_init(context))       return false;
     if(!debug_render_pass_init(context)) return false;
-    if(!imgui_render_pass_init(context)) return false;
+    //if(!imgui_render_pass_init(context)) return false;
     
     // components
     if(!register_transform(&app_data->components.transform, context))   return false;
@@ -107,7 +107,7 @@ void dm_application_shutdown(dm_context* context)
 {
     render_pass_shutdown(context);
     debug_render_pass_shutdown(context);
-    imgui_render_pass_shutdown(context);
+    //imgui_render_pass_shutdown(context);
     
     dm_free(context->app_data);
 }
@@ -130,7 +130,11 @@ bool dm_application_update(dm_context* context)
     
     //draw_path(app_data, context);
     
-    imgui_draw_text_fmt(DM_SCREEN_WIDTH(context)-100,20, 0,1,0,1, context, "FPS: %0.2f", 1.0f / context->delta);
+    //imgui_draw_text_fmt(DM_SCREEN_WIDTH(context)-100,20, 0,1,0,1, context, "FPS: %0.2f", 1.0f / context->delta);
+    
+    dm_imgui_begin("Test", 50,50,230,230, DM_IMGUI_WINDOW_FLAG_MOVABLE, context);
+    dm_imgui_button("Test", context);
+    dm_imgui_end(context);
     
     return true;
 }
@@ -142,7 +146,6 @@ bool dm_application_render(dm_context* context)
     
     if(!render_pass_render(context))       return false;
     if(!debug_render_pass_render(context)) return false;
-    if(!imgui_render_pass_render(context)) return false;
     
     return true;
 }

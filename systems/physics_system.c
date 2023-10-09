@@ -381,11 +381,13 @@ bool physics_system_run(void* s, void* d)
     
     float iter_f_inv = 1 / (float)iters;
     
+#if 0
     imgui_draw_text_fmt(20,20,  1,1,0,1, context, "Physics broadphase average: %0.3lf ms", broad_time * iter_f_inv);
     imgui_draw_text_fmt(20,40,  1,1,0,1, context, "Physics narrowphase average: %0.3lf ms (%u checks)", narrow_time * iter_f_inv, manager->broadphase_data.num_possible_collisions);
     imgui_draw_text_fmt(20,60,  1,1,0,1, context, "Physics collision resolution average: %0.3lf ms (%u manifolds)", collision_time * iter_f_inv, manager->narrowphase_data.manifold_count);
     imgui_draw_text_fmt(20,80,  1,1,0,1, context, "Updating entities average: %0.3lf ms", update_time * iter_f_inv);
     imgui_draw_text_fmt(20,100, 1,0,1,1, context, "Physics took: %0.3lf ms, %u iterations", total_time, iters);
+#endif
     
     return true;
 }

@@ -10,7 +10,7 @@ SET /A debug=1
 SET /A physics_mt=0
 SET /A physics_debug=0
 
-SET c_filenames=%SRC_DIR%\app\app.c %SRC_DIR%\app\camera.c %SRC_DIR%\app\components.c %SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c %SRC_DIR%\rendering\imgui_render_pass.c %SRC_DIR%\systems\gravity_system.c %SRC_DIR%\app\stress_test.c %SRC_DIR%\app\physics_test.c
+SET c_filenames=%SRC_DIR%\app\app.c %SRC_DIR%\app\camera.c %SRC_DIR%\app\components.c %SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c %SRC_DIR%\systems\gravity_system.c %SRC_DIR%\app\stress_test.c %SRC_DIR%\app\physics_test.c
 
 IF /I "%physics_mt%" EQU "1" (
 	SET c_filenames=%c_filenames% %SRC_DIR%\systems\physics_system_multi_th.c
@@ -18,7 +18,7 @@ IF /I "%physics_mt%" EQU "1" (
 	SET c_filenames=%c_filenames% %SRC_DIR%\systems\physics_system.c
 )
 
-SET dm_filenames=%DM_DIR%\dm_impl.c %DM_DIR%\platform\dm_platform_win32.c %DM_DIR%\dm_physics.c
+SET dm_filenames=%DM_DIR%\dm_impl.c %DM_DIR%\platform\dm_platform_win32.c %DM_DIR%\dm_physics.c %DM_DIR%\dm_imgui.c
 
 SET linker_flags=/link user32.lib gdi32.lib
 SET include_flags=/I%SRC_DIR% /I%DM_DIR% /I%DM_DIR%\lib
@@ -61,7 +61,8 @@ cl %compiler_flags% %defines% /FC %include_flags% %c_filenames% %dm_filenames% /
 CD ..
 IF NOT EXIST "build\assets\shaders" mkdir build\assets\shaders
 
-cd assets/shaders
+REM shaders
+CD assets/shaders
 IF /I "%vulkan%" EQU "1" (
 	FOR /R %%f IN (*.glsl) DO (
 		SET fname=%%f
@@ -107,6 +108,52 @@ IF /I "%vulkan%" EQU "1" (
 )
 
 CD ..\..
+CD %DM_DIR%\assets\shaders
+IF /I "%vulkan%" EQU "1" (
+	FOR /R %%f IN (*.glsl) DO (
+		SET fname=%%f
+		SET root=!fname:~0,-5!
+		SET output=!root!.spv
+		SET shader_type=!root:~-5!
+
+		ECHO Compiling shader: !fname!
+		IF /I "!shader_type!" EQU "pixel" (
+			SET shader_flags=-fshader-stage=frag
+		) ELSE (
+			SET shader_flags=-fshader-stage=vert
+		)
+
+		%VULKAN_SDK%\bin\glslc !shader_flags! !fname! -o !output!
+		MOVE !output! %SRC_DIR%\build\assets\shaders
+	)
+) ELSE IF /I "%opengl%" EQU "1" (
+	FOR /R %%f in (*.glsl) DO (
+		COPY /y %%f %SRC_DIR%\build\assets\shaders
+	)
+) ELSE (
+	FOR /R %%f IN (*.hlsl) DO (
+		SET fname=%%f
+		SET root=!fname:~0,-5!
+		SET output=!root!.fxc
+		SET shader_type=!root:~-5!
+		SET debug_shader=!root!.pdb
+
+		ECHO Compiling shader: !fname!
+		IF /I "!shader_type!" EQU "pixel" (
+			SET shader_flags=/E p_main /T ps_5_0
+		) ELSE (
+			SET shader_flags=/E v_main /T vs_5_0
+		)
+		ECHO !shader_flags!
+
+		fxc %fxc_flags% !shader_flags! !fname! /Zi /Fd /Fo !output!
+
+		MOVE !output! %SRC_DIR%\build\assets\shaders
+		MOVE !debug_shader! %SRC_DIR%\build\assets\shaders
+	)
+)
+
+CD ..\..\..
 
 IF NOT EXIST "build\assets\textures" mkdir build\assets\textures
 COPY /y "assets\textures\default_texture.png" build\assets\textures
