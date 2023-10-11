@@ -66,6 +66,9 @@ typedef struct physics_system_manager_t
     double              accum_time, simulation_time;
     physics_system_flag flags;
     
+    double broadphase_avg, narrowphase_avg, constraints_avg, update_avg, total;
+    uint32_t num_iterations;
+    
     dm_ecs_id transform, collision, physics, rigid_body;
     uint32_t entity_count;
     
@@ -86,16 +89,13 @@ void physics_system_update_entities_simd(dm_ecs_system* system);
 /************
 SYSTEM FUNCS
 **************/
-bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_ecs_id r_id, dm_context* context)
+bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_ecs_id r_id, dm_ecs_system_timing timing, dm_ecs_id* sys_id, dm_context* context)
 {
     dm_ecs_id comps[] = { t_id, c_id, p_id, r_id };
     
-    dm_ecs_system_timing timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
+    *sys_id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, physics_system_run, physics_system_shutdown, physics_system_insert, context);
     
-    dm_ecs_id id;
-    id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, physics_system_run, physics_system_shutdown, physics_system_insert, context);
-    
-    dm_ecs_system* system = &context->ecs_manager.systems[timing][id];
+    dm_ecs_system* system = &context->ecs_manager.systems[timing][*sys_id];
     system->system_data   = dm_alloc(sizeof(physics_system_manager));
     
     physics_system_manager* manager = system->system_data;
@@ -381,13 +381,12 @@ bool physics_system_run(void* s, void* d)
     
     float iter_f_inv = 1 / (float)iters;
     
-#if 0
-    imgui_draw_text_fmt(20,20,  1,1,0,1, context, "Physics broadphase average: %0.3lf ms", broad_time * iter_f_inv);
-    imgui_draw_text_fmt(20,40,  1,1,0,1, context, "Physics narrowphase average: %0.3lf ms (%u checks)", narrow_time * iter_f_inv, manager->broadphase_data.num_possible_collisions);
-    imgui_draw_text_fmt(20,60,  1,1,0,1, context, "Physics collision resolution average: %0.3lf ms (%u manifolds)", collision_time * iter_f_inv, manager->narrowphase_data.manifold_count);
-    imgui_draw_text_fmt(20,80,  1,1,0,1, context, "Updating entities average: %0.3lf ms", update_time * iter_f_inv);
-    imgui_draw_text_fmt(20,100, 1,0,1,1, context, "Physics took: %0.3lf ms, %u iterations", total_time, iters);
-#endif
+    manager->broadphase_avg = broad_time * iter_f_inv;
+    manager->narrowphase_avg = narrow_time * iter_f_inv;
+    manager->constraints_avg = collision_time * iter_f_inv;
+    manager->update_avg = update_time * iter_f_inv;
+    manager->total = total_time * iter_f_inv;
+    manager->num_iterations = iters;
     
     return true;
 }
@@ -1917,4 +1916,55 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
         dm_mm_store_ps(rigid_body->i_inv_22 + i, i_inv_22);
 #endif
     }
+}
+
+/*******
+TIMINGS
+*********/
+double physics_system_get_broadphase_average(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->broadphase_avg;
+}
+
+double physics_system_get_narrowphase_average(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->narrowphase_avg;
+}
+
+double physics_system_get_constraints_average(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->constraints_avg;
+}
+
+double physics_system_get_update_average(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->update_avg;
+}
+
+double physics_system_get_total_time(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->total;
+}
+
+uint32_t physics_system_get_num_iterations(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->num_iterations;
 }

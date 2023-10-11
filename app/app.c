@@ -81,7 +81,9 @@ bool dm_application_init(dm_context* context)
     if(!register_mesh(&app_data->components.mesh, context))             return false;
     
     // systems
-    if(!physics_system_init(app_data->components.transform, app_data->components.collision, app_data->components.physics, app_data->components.rigid_body, context)) return false;
+    app_data->physics_system_timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
+    
+    if(!physics_system_init(app_data->components.transform, app_data->components.collision, app_data->components.physics, app_data->components.rigid_body, app_data->physics_system_timing, &app_data->physics_system, context)) return false;
     //if(!gravity_system_init(app_data->components.transform, app_data->components.physics, context)) { DM_LOG_FATAL("Could not initialize gravity system"); return false; }
     
     // camera
@@ -107,7 +109,6 @@ void dm_application_shutdown(dm_context* context)
 {
     render_pass_shutdown(context);
     debug_render_pass_shutdown(context);
-    //imgui_render_pass_shutdown(context);
     
     dm_free(context->app_data);
 }
@@ -128,13 +129,34 @@ bool dm_application_update(dm_context* context)
         render_pass_submit_entity(app_data->entities[i], context);
     }
     
-    //draw_path(app_data, context);
+    // imgui
+    dm_ecs_system_timing timing = app_data->physics_system_timing;
+    dm_ecs_id sys_id = app_data->physics_system;
+    dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
+    struct nk_context* ctx = &imgui_nk_ctx->ctx;
     
-    //imgui_draw_text_fmt(DM_SCREEN_WIDTH(context)-100,20, 0,1,0,1, context, "FPS: %0.2f", 1.0f / context->delta);
-    
-    dm_imgui_begin("Test", 50,50,230,230, DM_IMGUI_WINDOW_FLAG_MOVABLE, context);
-    dm_imgui_button("Test", context);
-    dm_imgui_end(context);
+    if(nk_begin(ctx, "Physics Timings", nk_rect(100,100, 250,250),  NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
+                NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE))
+    {
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_value_float(ctx, "Broadphase average (ms)", physics_system_get_broadphase_average(timing, sys_id, context));
+        
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_value_float(ctx, "Narrowphase average (ms)", physics_system_get_narrowphase_average(timing, sys_id, context));
+        
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_value_float(ctx, "Constraints average (ms)", physics_system_get_constraints_average(timing, sys_id, context));
+        
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_value_float(ctx, "Update average (ms)", physics_system_get_update_average(timing, sys_id, context));
+        
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_value_float(ctx, "Total time (ms)", physics_system_get_total_time(timing, sys_id, context));
+        
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_value_uint(ctx, "Num iterations", physics_system_get_num_iterations(timing, sys_id, context));
+    }
+    nk_end(ctx);
     
     return true;
 }

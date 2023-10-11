@@ -149,7 +149,7 @@ bool render_pass_init(dm_context* context)
         {
             if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(inst_vertex) * MAX_ENTITIES_PER_FRAME, sizeof(inst_vertex), &pass_data->instb[i], context)) return false;
         }
-        if(!dm_renderer_create_static_index_buffer(indices, sizeof(indices), &pass_data->ib, context)) return false;
+        if(!dm_renderer_create_static_index_buffer(indices, sizeof(indices), sizeof(uint32_t), &pass_data->ib, context)) return false;
         if(!dm_renderer_create_uniform(sizeof(uniform), DM_UNIFORM_STAGE_BOTH, &pass_data->uni, context)) return false;
         
         dm_shader_desc shader_desc = { 0 };
@@ -278,7 +278,7 @@ bool render_pass_render(dm_context* context)
     dm_render_command_bind_buffer(pass_data->vb, 0, context);
     dm_render_command_bind_buffer(pass_data->instb[0], 1, context);
     dm_render_command_update_buffer(pass_data->instb[0], pass_data->insts, sizeof(pass_data->insts), 0, context);
-    dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_VERTEX, 0, context);
+    dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_BOTH, 0, context);
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
     dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);

@@ -104,6 +104,8 @@ void camera_update(basic_camera* camera, dm_context* context)
     // rotation
     if(rotated)
     {
+        if(!dm_input_is_key_pressed(DM_KEY_LCTRL, context)) return;
+        
         float delta_yaw   = (float)delta_x * camera->look_sens;
         float delta_pitch = (float)delta_y * camera->look_sens;
         

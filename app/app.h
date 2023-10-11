@@ -27,6 +27,9 @@ typedef struct application_data_t
     
     component_ids components;
     
+    dm_ecs_id physics_system, gravity_system;
+    dm_ecs_system_timing physics_system_timing, gravity_system_timing;
+    
     dm_entity    entities[DM_ECS_MAX_ENTITIES];
     uint32_t     entity_count;
     
