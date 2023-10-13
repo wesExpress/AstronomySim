@@ -156,7 +156,10 @@ IF /I "%vulkan%" EQU "1" (
 CD ..\..\..
 
 IF NOT EXIST "build\assets\textures" mkdir build\assets\textures
-COPY /y "assets\textures\default_texture.png" build\assets\textures
+COPY /y "assets\textures" build\assets\textures
 
 IF NOT EXIST "build\assets\fonts" mkdir build\assets\fonts
-COPY /y "assets\fonts\Chicago.ttf" build\assets\fonts
+COPY /y "assets\fonts" build\assets\fonts
+
+IF NOT EXIST "build\assets\models" mkdir build\assets\models
+COPY /y "assets\models" build\assets\models

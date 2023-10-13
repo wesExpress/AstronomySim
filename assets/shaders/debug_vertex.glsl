@@ -12,7 +12,7 @@ struct ps_input
 
 layout(location=0) out ps_input vs_output;
 
-layout (std140, binding=0) uniform uni
+layout (std140, binding=2) uniform uni
 {
 	mat4  view_proj;
 };

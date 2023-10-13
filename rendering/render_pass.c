@@ -30,19 +30,27 @@ typedef struct uniform_t
     float view_pos[N3];
 } uniform;
 
+typedef struct mesh_t
+{
+    uint32_t vertex_offset, index_offset;
+    uint32_t vertex_count, index_count;
+} mesh;
+
 #define MAX_ENTITIES_PER_FRAME DM_ECS_MAX_ENTITIES
-#define MAX_MESH_COUNT 10
+#define MAX_MESH_COUNT 100
 typedef struct render_pass_data_t
 {
     dm_render_handle vb, instb[MAX_MESH_COUNT], ib, shader, pipe, uni;
     dm_render_handle tex;
     
-    uint32_t         entity_count, instance_count;
+    uint32_t entity_count[MAX_MESH_COUNT], mesh_count;
     
     render_pass_flags flags;
     
-    dm_entity        entities[MAX_ENTITIES_PER_FRAME];
-    inst_vertex      insts[MAX_ENTITIES_PER_FRAME];
+    mesh meshes[MAX_MESH_COUNT];
+    
+    dm_entity        entities[MAX_MESH_COUNT][MAX_ENTITIES_PER_FRAME];
+    inst_vertex      insts[MAX_MESH_COUNT][MAX_ENTITIES_PER_FRAME];
 } render_pass_data;
 
 void render_pass_draw_transform(float pos[3], float rot[4], dm_context* context)
@@ -72,111 +80,176 @@ bool render_pass_init(dm_context* context)
     app_data->render_pass_data = dm_alloc(sizeof(render_pass_data));
     render_pass_data* pass_data = app_data->render_pass_data;
     
+    // cube
+    vertex cube_vertices[] = {
+        // front face
+        { { -0.5f,-0.5f, 0.5f }, { 0,0 }, { 0,0,1 } },
+        { {  0.5f,-0.5f, 0.5f }, { 1,0 }, { 0,0,1 } },
+        { {  0.5f, 0.5f, 0.5f }, { 1,1 }, { 0,0,1 } },
+        { { -0.5f, 0.5f, 0.5f }, { 0,1 }, { 0,0,1 } },
+        
+        // back face
+        { {  0.5f,-0.5f,-0.5f }, { 0,0 }, { 0,0,-1 } }, 
+        { { -0.5f,-0.5f,-0.5f }, { 1,0 }, { 0,0,-1 } },
+        { { -0.5f, 0.5f,-0.5f }, { 1,1 }, { 0,0,-1 } },
+        { {  0.5f, 0.5f,-0.5f }, { 0,1 }, { 0,0,-1 } },
+        
+        // right
+        { {  0.5f,-0.5f, 0.5f }, { 0,0 }, { 1,0,0 } },
+        { {  0.5f,-0.5f,-0.5f }, { 1,0 }, { 1,0,0 } },
+        { {  0.5f, 0.5f,-0.5f }, { 1,1 }, { 1,0,0 } },
+        { {  0.5f, 0.5f, 0.5f }, { 0,1 }, { 1,0,0 } },
+        
+        // left
+        { { -0.5f, 0.5f, 0.5f }, { 0,0 }, { -1,0,0 } },
+        { { -0.5f, 0.5f,-0.5f }, { 1,0 }, { -1,0,0 } },
+        { { -0.5f,-0.5f,-0.5f }, { 1,1 }, { -1,0,0 } },
+        { { -0.5f,-0.5f, 0.5f }, { 0,1 }, { -1,0,0 } },
+        
+        // bottom
+        { { -0.5f,-0.5f,-0.5f }, { 0,0 }, { 0,-1,0 } },
+        { {  0.5f,-0.5f,-0.5f }, { 1,0 }, { 0,-1,0 } },
+        { {  0.5f,-0.5f, 0.5f }, { 1,1 }, { 0,-1,0 } },
+        { { -0.5f,-0.5f, 0.5f }, { 0,1 }, { 0,-1,0 } },
+        
+        // top
+        { { -0.5f, 0.5f, 0.5f }, { 0,0 }, { 0,1,0 } },
+        { {  0.5f, 0.5f, 0.5f }, { 1,0 }, { 0,1,0 } },
+        { {  0.5f, 0.5f,-0.5f }, { 1,1 }, { 0,1,0 } },
+        { { -0.5f, 0.5f,-0.5f }, { 0,1 }, { 0,1,0 } },
+    };
+    
+    uint32_t cube_indices[] = {
+        0,1,2,
+        2,3,0,
+        
+        4,5,6,
+        6,7,4,
+        
+        8,9,10,
+        10,11,8,
+        
+        12,13,14,
+        14,15,12,
+        
+        16,17,18,
+        18,19,16,
+        
+        20,21,22,
+        22,23,20
+    };
+    
+    mesh cube = {
+        .vertex_count=DM_ARRAY_LEN(cube_vertices),
+        .index_count=DM_ARRAY_LEN(cube_indices)
+    };
+    
+    size_t vertices_size = sizeof(cube_vertices);
+    size_t indices_size = sizeof(cube_indices);
+    
+    float* vertices   = dm_alloc(vertices_size);
+    uint32_t* indices = dm_alloc(indices_size);
+    
+    dm_memcpy(pass_data->meshes + pass_data->mesh_count++, &cube, sizeof(cube));
+    
+    dm_memcpy(vertices, cube_vertices, sizeof(cube_vertices));
+    dm_memcpy(indices, cube_indices, sizeof(cube_indices));
+    
+    // planet meshes
+    uint32_t mesh_vertex_count, mesh_index_count;
+    
+    const dm_mesh_vertex_attrib mesh_attribs[] = {
+        DM_MESH_VERTEX_ATTRIB_POSITION,
+        DM_MESH_VERTEX_ATTRIB_TEXCOORD,
+        DM_MESH_VERTEX_ATTRIB_NORMAL,
+    };
+    
+    uint32_t index_offset = DM_ARRAY_LEN(cube_vertices);
+    size_t vertex_offset = DM_ARRAY_LEN(cube_vertices) * 8;
+    
+    for(uint32_t i=0; i<50; i++)
     {
-        // cube
-        vertex vertices[] = {
-            // front face
-            { { -0.5f,-0.5f, 0.5f }, { 0,0 }, { 0,0,1 } },
-            { {  0.5f,-0.5f, 0.5f }, { 1,0 }, { 0,0,1 } },
-            { {  0.5f, 0.5f, 0.5f }, { 1,1 }, { 0,0,1 } },
-            { { -0.5f, 0.5f, 0.5f }, { 0,1 }, { 0,0,1 } },
-            
-            // back face
-            { {  0.5f,-0.5f,-0.5f }, { 0,0 }, { 0,0,-1 } }, 
-            { { -0.5f,-0.5f,-0.5f }, { 1,0 }, { 0,0,-1 } },
-            { { -0.5f, 0.5f,-0.5f }, { 1,1 }, { 0,0,-1 } },
-            { {  0.5f, 0.5f,-0.5f }, { 0,1 }, { 0,0,-1 } },
-            
-            // right
-            { {  0.5f,-0.5f, 0.5f }, { 0,0 }, { 1,0,0 } },
-            { {  0.5f,-0.5f,-0.5f }, { 1,0 }, { 1,0,0 } },
-            { {  0.5f, 0.5f,-0.5f }, { 1,1 }, { 1,0,0 } },
-            { {  0.5f, 0.5f, 0.5f }, { 0,1 }, { 1,0,0 } },
-            
-            // left
-            { { -0.5f, 0.5f, 0.5f }, { 0,0 }, { -1,0,0 } },
-            { { -0.5f, 0.5f,-0.5f }, { 1,0 }, { -1,0,0 } },
-            { { -0.5f,-0.5f,-0.5f }, { 1,1 }, { -1,0,0 } },
-            { { -0.5f,-0.5f, 0.5f }, { 0,1 }, { -1,0,0 } },
-            
-            // bottom
-            { { -0.5f,-0.5f,-0.5f }, { 0,0 }, { 0,-1,0 } },
-            { {  0.5f,-0.5f,-0.5f }, { 1,0 }, { 0,-1,0 } },
-            { {  0.5f,-0.5f, 0.5f }, { 1,1 }, { 0,-1,0 } },
-            { { -0.5f,-0.5f, 0.5f }, { 0,1 }, { 0,-1,0 } },
-            
-            // top
-            { { -0.5f, 0.5f, 0.5f }, { 0,0 }, { 0,1,0 } },
-            { {  0.5f, 0.5f, 0.5f }, { 1,0 }, { 0,1,0 } },
-            { {  0.5f, 0.5f,-0.5f }, { 1,1 }, { 0,1,0 } },
-            { { -0.5f, 0.5f,-0.5f }, { 0,1 }, { 0,1,0 } },
+        float* mesh_vertices;
+        uint32_t* mesh_indices;
+        
+        uint32_t mesh_vertex_count = 0;
+        uint32_t mesh_index_count = 0;
+        
+        char buffer[512];
+        snprintf(buffer, sizeof(buffer), "assets/models/Planets_%u.obj", i+1);
+        if(!dm_renderer_load_model(buffer, mesh_attribs, DM_ARRAY_LEN(mesh_attribs), &mesh_vertices, &mesh_indices, &mesh_vertex_count, &mesh_index_count, index_offset, context)) return false;
+        
+        vertices_size += sizeof(float) * 8 * mesh_vertex_count;
+        indices_size  += sizeof(uint32_t) * mesh_index_count;
+        
+        vertices = dm_realloc(vertices, vertices_size);
+        indices  = dm_realloc(indices, indices_size);
+        
+        dm_memcpy(vertices + vertex_offset, mesh_vertices, sizeof(float) * mesh_vertex_count * 8);
+        dm_memcpy(indices + index_offset, mesh_indices, sizeof(float) * mesh_index_count);
+        
+        mesh planet = {
+            .vertex_offset=vertex_offset, .index_offset=index_offset,
+            .vertex_count=mesh_vertex_count, .index_count=mesh_index_count
         };
         
-        uint32_t indices[] = {
-            0,1,2,
-            2,3,0,
-            
-            4,5,6,
-            6,7,4,
-            
-            8,9,10,
-            10,11,8,
-            
-            12,13,14,
-            14,15,12,
-            
-            16,17,18,
-            18,19,16,
-            
-            20,21,22,
-            22,23,20
-        };
+        dm_memcpy(pass_data->meshes + pass_data->mesh_count++, &planet, sizeof(planet));
         
-        dm_vertex_attrib_desc attrib_descs[] = {
-            { .name="POSITION", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, pos), .count=3, .index=0, .normalized=false },
-            { .name="TEXCOORDS", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, tex_coords), .count=2, .index=0, .normalized=false },
-            { .name="NORMAL", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, normal), .count=3, .index=0, .normalized=false },
-            { .name="OBJ_MODEL", .data_t=DM_VERTEX_DATA_T_MATRIX_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, obj_model), .count=4, .index=0, .normalized=false},
-            { .name="OBJ_NORM", .data_t=DM_VERTEX_DATA_T_MATRIX_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, obj_normal), .count=4, .index=0, .normalized=false},
-            { .name="COLOR", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, color), .count=4, .index=0, .normalized=false }
-        };
+        index_offset += mesh_index_count;
+        vertex_offset += mesh_vertex_count * 8;
         
-        dm_pipeline_desc pipeline_desc = dm_renderer_default_pipeline();
-        
-        // resources
-        if(!dm_renderer_create_static_vertex_buffer(vertices, sizeof(vertices), sizeof(vertex), &pass_data->vb, context)) return false;
-        for(uint32_t i=0; i<MAX_MESH_COUNT; i++)
-        {
-            if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(inst_vertex) * MAX_ENTITIES_PER_FRAME, sizeof(inst_vertex), &pass_data->instb[i], context)) return false;
-        }
-        if(!dm_renderer_create_static_index_buffer(indices, sizeof(indices), sizeof(uint32_t), &pass_data->ib, context)) return false;
-        if(!dm_renderer_create_uniform(sizeof(uniform), DM_UNIFORM_STAGE_BOTH, &pass_data->uni, context)) return false;
-        
-        dm_shader_desc shader_desc = { 0 };
-#ifdef DM_VULKAN
-        strcpy(shader_desc.vertex, "assets/shaders/test_vertex.spv");
-        strcpy(shader_desc.pixel, "assets/shaders/test_pixel.spv");
-#elif defined(DM_OPENGL)
-        strcpy(shader_desc.vertex, "assets/shaders/test_vertex.glsl");
-        strcpy(shader_desc.pixel, "assets/shaders/test_pixel.glsl");
-        
-        shader_desc.vb_count = 2;
-        shader_desc.vb[0] = pass_data->vb;
-        shader_desc.vb[1] = pass_data->instb[0];
-#elif defined(DM_DIRECTX)
-        strcpy(shader_desc.vertex, "assets/shaders/test_vertex.fxc");
-        strcpy(shader_desc.pixel, "assets/shaders/test_pixel.fxc");
-#else
-        strcpy(shader_desc.vertex, "vertex_test_main");
-        strcpy(shader_desc.pixel, "fragment_test_main");
-        strcpy(shader_desc.master, "assets/shaders/test.metallib");
-#endif
-        
-        if(!dm_renderer_create_shader_and_pipeline(shader_desc, pipeline_desc, attrib_descs, DM_ARRAY_LEN(attrib_descs), &pass_data->shader, &pass_data->pipe, context)) return false;
-        
-        // assets
-        if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, false, "default", &pass_data->tex, context)) return false;
+        dm_free(mesh_vertices);
+        dm_free(mesh_indices);
     }
+    
+    // attribs
+    dm_vertex_attrib_desc attrib_descs[] = {
+        { .name="POSITION", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, pos), .count=3, .index=0, .normalized=false },
+        { .name="TEXCOORDS", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, tex_coords), .count=2, .index=0, .normalized=false },
+        { .name="NORMAL", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, normal), .count=3, .index=0, .normalized=false },
+        { .name="OBJ_MODEL", .data_t=DM_VERTEX_DATA_T_MATRIX_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, obj_model), .count=4, .index=0, .normalized=false},
+        { .name="OBJ_NORM", .data_t=DM_VERTEX_DATA_T_MATRIX_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, obj_normal), .count=4, .index=0, .normalized=false},
+        { .name="COLOR", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, color), .count=4, .index=0, .normalized=false }
+    };
+    
+    dm_pipeline_desc pipeline_desc = dm_renderer_default_pipeline();
+    
+    // resources
+    if(!dm_renderer_create_static_vertex_buffer(vertices, vertices_size, sizeof(vertex), &pass_data->vb, context)) return false;
+    for(uint32_t i=0; i<MAX_MESH_COUNT; i++)
+    {
+        if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(inst_vertex) * MAX_ENTITIES_PER_FRAME, sizeof(inst_vertex), &pass_data->instb[i], context)) return false;
+    }
+    if(!dm_renderer_create_static_index_buffer(indices, indices_size, sizeof(uint32_t), &pass_data->ib, context)) return false;
+    if(!dm_renderer_create_uniform(sizeof(uniform), DM_UNIFORM_STAGE_BOTH, &pass_data->uni, context)) return false;
+    
+    dm_shader_desc shader_desc = { 0 };
+#ifdef DM_VULKAN
+    strcpy(shader_desc.vertex, "assets/shaders/test_vertex.spv");
+    strcpy(shader_desc.pixel, "assets/shaders/test_pixel.spv");
+#elif defined(DM_OPENGL)
+    strcpy(shader_desc.vertex, "assets/shaders/test_vertex.glsl");
+    strcpy(shader_desc.pixel, "assets/shaders/test_pixel.glsl");
+    
+    shader_desc.vb_count = 2;
+    shader_desc.vb[0] = pass_data->vb;
+    shader_desc.vb[1] = pass_data->instb[0];
+#elif defined(DM_DIRECTX)
+    strcpy(shader_desc.vertex, "assets/shaders/test_vertex.fxc");
+    strcpy(shader_desc.pixel, "assets/shaders/test_pixel.fxc");
+#else
+    strcpy(shader_desc.vertex, "vertex_test_main");
+    strcpy(shader_desc.pixel, "fragment_test_main");
+    strcpy(shader_desc.master, "assets/shaders/test.metallib");
+#endif
+    
+    if(!dm_renderer_create_shader_and_pipeline(shader_desc, pipeline_desc, attrib_descs, DM_ARRAY_LEN(attrib_descs), &pass_data->shader, &pass_data->pipe, context)) return false;
+    
+    // assets
+    if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, false, "default", &pass_data->tex, context)) return false;
+    
+    dm_free(vertices);
+    dm_free(indices);
     
     return true;
 }
@@ -187,14 +260,14 @@ void render_pass_shutdown(dm_context* context)
     dm_free(app_data->render_pass_data);
 }
 
-void render_pass_submit_entity(dm_entity entity, dm_context* context)
+void render_pass_submit_entity(dm_entity entity, uint32_t mesh_id, dm_context* context)
 {
     application_data* app_data = context->app_data;
     render_pass_data* pass_data = app_data->render_pass_data;
     
-    if(pass_data->entity_count+1 > MAX_ENTITIES_PER_FRAME) { DM_LOG_ERROR("Trying to render too many entities"); return; }
+    if(pass_data->entity_count[mesh_id]+1 > MAX_ENTITIES_PER_FRAME) { DM_LOG_ERROR("Trying to render too many entities"); return; }
     
-    pass_data->entities[pass_data->entity_count++] = entity;
+    pass_data->entities[mesh_id][pass_data->entity_count[mesh_id]++] = entity;
 }
 
 bool render_pass_render(dm_context* context)
@@ -202,6 +275,30 @@ bool render_pass_render(dm_context* context)
     application_data* app_data = context->app_data;
     render_pass_data* pass_data = app_data->render_pass_data;
     
+    if(dm_input_key_just_pressed(DM_KEY_SPACE, context)) pass_data->flags ^= RENDER_PASS_FLAG_WIREFRAME;
+    
+    // shader and pipeline
+    dm_render_command_bind_shader(pass_data->shader, context);
+    dm_render_command_bind_pipeline(pass_data->pipe, context);
+    if(pass_data->flags & RENDER_PASS_FLAG_WIREFRAME) dm_render_command_toggle_wireframe(true, context);
+    dm_render_command_bind_buffer(pass_data->vb, 0, context);
+    dm_render_command_bind_buffer(pass_data->ib, 0, context);
+    
+    // uniform
+    uniform uni = { 0 };
+    
+    dm_memcpy(uni.view_proj, app_data->camera.view_proj, sizeof(uni.view_proj));
+#ifdef DM_DIRECTX
+    dm_mat4_transpose(uni.view_proj, uni.view_proj);
+#endif
+    
+    DM_VEC3_COPY(uni.view_pos, app_data->camera.pos);
+    dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_BOTH, 0, context);
+    dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
+    
+    dm_render_command_bind_texture(pass_data->tex, 0, context);
+    
+    // update instance buffers
     const dm_ecs_id t_id = app_data->components.transform;
     const dm_ecs_id c_id = app_data->components.collision;
     
@@ -214,78 +311,61 @@ bool render_pass_render(dm_context* context)
     
     float pos[3], scale[3], rot[4];
     
-    for(uint32_t i=0; i<pass_data->entity_count; i++)
+    for(uint32_t m=0; m<pass_data->mesh_count; m++)
     {
-        dm_entity entity = pass_data->entities[i];
-        t_index = dm_ecs_entity_get_component_index(entity, t_id, context);
+        if(pass_data->entity_count[m]==0) continue;
         
-        pos[0] = transform->pos_x[t_index]; 
-        pos[1] = transform->pos_y[t_index]; 
-        pos[2] = transform->pos_z[t_index];
-        
-        scale[0] = transform->scale_x[t_index]; 
-        scale[1] = transform->scale_y[t_index]; 
-        scale[2] = transform->scale_z[t_index]; 
-        
-        rot[0] = transform->rot_i[t_index];
-        rot[1] = transform->rot_j[t_index];
-        rot[2] = transform->rot_k[t_index];
-        rot[3] = transform->rot_r[t_index];
-        
-        inst = &pass_data->insts[i];
-        
-        dm_mat4_rotate_from_quat(rot, obj_rm);
-        
-        dm_mat_scale_make(scale, inst->obj_model);
-        dm_mat4_mul_mat4(inst->obj_model, obj_rm, inst->obj_model);
-        dm_mat_translate(inst->obj_model, pos, inst->obj_model);
+        for(uint32_t i=0; i<pass_data->entity_count[m]; i++)
+        {
+            dm_entity entity = pass_data->entities[m][i];
+            t_index = dm_ecs_entity_get_component_index(entity, t_id, context);
+            
+            pos[0] = transform->pos_x[t_index]; 
+            pos[1] = transform->pos_y[t_index]; 
+            pos[2] = transform->pos_z[t_index];
+            
+            scale[0] = transform->scale_x[t_index]; 
+            scale[1] = transform->scale_y[t_index]; 
+            scale[2] = transform->scale_z[t_index]; 
+            
+            rot[0] = transform->rot_i[t_index];
+            rot[1] = transform->rot_j[t_index];
+            rot[2] = transform->rot_k[t_index];
+            rot[3] = transform->rot_r[t_index];
+            
+            inst = &pass_data->insts[m][i];
+            
+            dm_mat4_rotate_from_quat(rot, obj_rm);
+            
+            dm_mat_scale_make(scale, inst->obj_model);
+            dm_mat4_mul_mat4(inst->obj_model, obj_rm, inst->obj_model);
+            dm_mat_translate(inst->obj_model, pos, inst->obj_model);
 #ifdef DM_DIRECTX
-        dm_mat4_transpose(inst->obj_model, inst->obj_model);
+            dm_mat4_transpose(inst->obj_model, inst->obj_model);
 #endif
-        
-        dm_mat4_inverse(inst->obj_model, inst->obj_normal);
-        dm_mat4_transpose(inst->obj_normal, inst->obj_normal);
-        
-        inst->color[0] = 1;
-        inst->color[1] = 1;
-        inst->color[2] = 1;
-        inst->color[3] = 1;
-        
-        pass_data->instance_count++;
-        
+            
+            dm_mat4_inverse(inst->obj_model, inst->obj_normal);
+            dm_mat4_transpose(inst->obj_normal, inst->obj_normal);
+            
+            inst->color[0] = 1;
+            inst->color[1] = 1;
+            inst->color[2] = 1;
+            inst->color[3] = 1;
+            
 #if 0
-        render_pass_draw_transform(pos, rot, context);
+            render_pass_draw_transform(pos, rot, context);
 #endif
+        }
+        
+        dm_render_command_bind_buffer(pass_data->instb[m], 1, context);
+        dm_render_command_update_buffer(pass_data->instb[m], pass_data->insts[m], sizeof(pass_data->insts[m]), 0, context);
+        dm_render_command_draw_instanced(pass_data->meshes[m].index_count, pass_data->entity_count[m], pass_data->meshes[m].index_offset,0,0, context);
+        
     }
     
-    // uniform
-    uniform uni = { 0 };
-    
-    dm_memcpy(uni.view_proj, app_data->camera.view_proj, sizeof(uni.view_proj));
-#ifdef DM_DIRECTX
-    dm_mat4_transpose(uni.view_proj, uni.view_proj);
-#endif
-    
-    DM_VEC3_COPY(uni.view_pos, app_data->camera.pos);
-    
-    if(dm_input_key_just_pressed(DM_KEY_SPACE, context)) pass_data->flags ^= RENDER_PASS_FLAG_WIREFRAME;
-    
-    // render
-    dm_render_command_bind_shader(pass_data->shader, context);
-    dm_render_command_bind_pipeline(pass_data->pipe, context);
-    dm_render_command_bind_texture(pass_data->tex, 0, context);
-    if(pass_data->flags & RENDER_PASS_FLAG_WIREFRAME) dm_render_command_toggle_wireframe(true, context);
-    dm_render_command_bind_buffer(pass_data->vb, 0, context);
-    dm_render_command_bind_buffer(pass_data->instb[0], 1, context);
-    dm_render_command_update_buffer(pass_data->instb[0], pass_data->insts, sizeof(pass_data->insts), 0, context);
-    dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_BOTH, 0, context);
-    dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
-    dm_render_command_bind_buffer(pass_data->ib, 0, context);
-    dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
-    
     // reset counts back to 0
-    pass_data->entity_count = 0;
-    pass_data->instance_count = 0;
+    dm_memzero(pass_data->entity_count, sizeof(pass_data->entity_count));
+    dm_memzero(pass_data->entities, sizeof(pass_data->entities));
     
     return true;
 }

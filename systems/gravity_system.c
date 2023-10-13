@@ -24,6 +24,8 @@ typedef struct gravity_system_manager_t
 {
     dm_ecs_id transform, physics;
     
+    double time;
+    
     gravity_system_cache cache;
 } gravity_system_manager;
 
@@ -33,17 +35,14 @@ void simd_gravity(dm_ecs_system*  system, dm_context* context);
 /************
 SYSTEM FUNCS
 **************/
-bool gravity_system_init(dm_ecs_id t_id, dm_ecs_id p_id, dm_context* context)
+bool gravity_system_init(dm_ecs_id t_id, dm_ecs_id p_id, dm_ecs_system_timing timing, dm_ecs_id* sys_id, dm_context* context)
 {
     dm_ecs_id comps[] = { t_id, p_id };
     
-    dm_ecs_system_timing timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
+    *sys_id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, gravity_system_run, gravity_system_shutdown, gravity_system_insert, context);
+    if(*sys_id==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not initialize graity system."); return false; }
     
-    dm_ecs_id id;
-    id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, gravity_system_run, gravity_system_shutdown, gravity_system_insert, context);
-    if(id==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not initialize graity system."); return false; }
-    
-    dm_ecs_system* gravity_system = &context->ecs_manager.systems[timing][id];
+    dm_ecs_system* gravity_system = &context->ecs_manager.systems[timing][*sys_id];
     
     gravity_system->system_data = dm_alloc(sizeof(gravity_system_manager));
     gravity_system_manager* manager = gravity_system->system_data;
@@ -122,11 +121,18 @@ bool gravity_system_run(void* s, void* c)
     
     gravity_system_update_values(system, context);
     
-#if 0
-    imgui_draw_text_fmt(20,120, 0,1,0,1, context, "Gravity took: %0.3lf ms (%u entities)", dm_timer_elapsed_ms(&t, context), system->entity_count);
-#endif
+    gravity_system_manager* manager = system->system_data;
+    manager->time = dm_timer_elapsed_ms(&t, context);
     
     return true;
+}
+
+double gravity_system_get_timing(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* system = &context->ecs_manager.systems[timing][sys_id];
+    gravity_system_manager* manager = system->system_data;
+    
+    return manager->time;
 }
 
 /************

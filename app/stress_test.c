@@ -30,12 +30,6 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     rot_k /= mag;
     rot_r /= mag;
     
-#if 0
-    float vel_x = dm_random_float(context) * 2 - 1;
-    float vel_y = dm_random_float(context) * 2 - 1;
-    float vel_z = dm_random_float(context) * 2 - 1;
-#endif
-    
     float mass = DM_MIN(scale_x, DM_MIN(scale_y, scale_z)) * 1e2f;
     entity_add_kinematics(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, context);
     
@@ -59,8 +53,6 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     }
     
     entity_add_transform(entity, app_data->components.transform, pos_x,pos_y,pos_z, scale_x,scale_y,scale_z, rot_i,rot_j,rot_k,rot_r, context);
-    
-    //entity_apply_angular_velocity(entity, app_data->components.physics, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
     
     return entity;
 }

@@ -366,8 +366,13 @@ bool physics_system_run(void* s, void* d)
         
         // update
         dm_timer_start(&t, context);
-        //physics_system_update_entities(system);
-        if(!(manager->flags & DM_PHYSICS_FLAG_PAUSED)) physics_system_update_entities_simd(system);
+        
+        if(!(manager->flags & DM_PHYSICS_FLAG_PAUSED))
+        {
+            if(system->entity_count < 100) physics_system_update_entities(system);
+            else physics_system_update_entities_simd(system);
+        }
+        
         update_time += dm_timer_elapsed_ms(&t, context);
         
         manager->accum_time -= DM_PHYSICS_FIXED_DT;

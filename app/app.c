@@ -15,7 +15,7 @@
 #include "stress_test.h"
 #include "physics_test.h"
 
-#define PHYSICS_TEST
+//#define PHYSICS_TEST
 
 #define TIME_LIM 1.0f
 void draw_path(application_data* app_data, dm_context* context)
@@ -82,9 +82,10 @@ bool dm_application_init(dm_context* context)
     
     // systems
     app_data->physics_system_timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
+    app_data->gravity_system_timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
     
     if(!physics_system_init(app_data->components.transform, app_data->components.collision, app_data->components.physics, app_data->components.rigid_body, app_data->physics_system_timing, &app_data->physics_system, context)) return false;
-    //if(!gravity_system_init(app_data->components.transform, app_data->components.physics, context)) { DM_LOG_FATAL("Could not initialize gravity system"); return false; }
+    //if(!gravity_system_init(app_data->components.transform, app_data->components.physics, app_data->gravity_system_timing, &app_data->gravity_system, context)) { DM_LOG_FATAL("Could not initialize gravity system"); return false; }
     
     // camera
     const float cam_pos[] = { 0,4,10.0f };
@@ -126,7 +127,7 @@ bool dm_application_update(dm_context* context)
     // submit entities
     for(uint32_t i=0; i<app_data->entity_count; i++)
     {
-        render_pass_submit_entity(app_data->entities[i], context);
+        render_pass_submit_entity(app_data->entities[i], dm_random_uint32_range(1,50, context), context);
     }
     
     // imgui
@@ -135,28 +136,30 @@ bool dm_application_update(dm_context* context)
     dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
     struct nk_context* ctx = &imgui_nk_ctx->ctx;
     
-    if(nk_begin(ctx, "Physics Timings", nk_rect(100,100, 250,250),  NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
+    if(nk_begin(ctx, "Timings", nk_rect(100,100, 250,250),  NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
                 NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE))
     {
-        nk_layout_row_dynamic(ctx, 22, 1);
-        nk_value_float(ctx, "Broadphase average (ms)", physics_system_get_broadphase_average(timing, sys_id, context));
+        if(nk_tree_push(ctx, NK_TREE_TAB, "Physics", NK_MINIMIZED))
+        {
+            nk_value_float(ctx, "Broadphase average (ms)", physics_system_get_broadphase_average(timing, sys_id, context));
+            nk_value_float(ctx, "Narrowphase average (ms)", physics_system_get_narrowphase_average(timing, sys_id, context));
+            nk_value_float(ctx, "Constraints average (ms)", physics_system_get_constraints_average(timing, sys_id, context));
+            nk_value_float(ctx, "Update average (ms)", physics_system_get_update_average(timing, sys_id, context));
+            nk_value_float(ctx, "Total time (ms)", physics_system_get_total_time(timing, sys_id, context));
+            nk_value_uint(ctx, "Num iterations", physics_system_get_num_iterations(timing, sys_id, context));
+            
+            nk_tree_pop(ctx);
+        }
         
-        nk_layout_row_dynamic(ctx, 22, 1);
-        nk_value_float(ctx, "Narrowphase average (ms)", physics_system_get_narrowphase_average(timing, sys_id, context));
-        
-        nk_layout_row_dynamic(ctx, 22, 1);
-        nk_value_float(ctx, "Constraints average (ms)", physics_system_get_constraints_average(timing, sys_id, context));
-        
-        nk_layout_row_dynamic(ctx, 22, 1);
-        nk_value_float(ctx, "Update average (ms)", physics_system_get_update_average(timing, sys_id, context));
-        
-        nk_layout_row_dynamic(ctx, 22, 1);
-        nk_value_float(ctx, "Total time (ms)", physics_system_get_total_time(timing, sys_id, context));
-        
-        nk_layout_row_dynamic(ctx, 22, 1);
-        nk_value_uint(ctx, "Num iterations", physics_system_get_num_iterations(timing, sys_id, context));
+        if(nk_tree_push(ctx, NK_TREE_TAB, "Gravity", NK_MINIMIZED))
+        {
+            nk_value_float(ctx, "Naive (ms)", gravity_system_get_timing(app_data->gravity_system_timing, app_data->gravity_system, context));
+            
+            nk_tree_pop(ctx);
+        }
     }
     nk_end(ctx);
+    
     
     return true;
 }

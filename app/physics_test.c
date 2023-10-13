@@ -3,7 +3,7 @@
 #include "dm.h"
 #include <float.h>
 
-#define N 3
+#define N 5
 
 #define STACK_WIDTH  N
 #define STACK_HEIGHT N
