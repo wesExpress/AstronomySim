@@ -662,13 +662,11 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
 {
     physics_system_broadphase_data* broadphase_data = &manager->broadphase_data;
     physics_system_aabb_sort* aabbs_sorted = &broadphase_data->aabbs_sorted;
-    
-    component_collision* collision = &manager->cache.collision;
-    
+        
     uint32_t i,j;
     uint32_t entity_a, entity_b;
     
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
     dm_mm256_float a_min_x, a_min_y, a_min_z;
     dm_mm256_float a_max_x, a_max_y, a_max_z;
     dm_mm256_float b_min_x, b_min_y, b_min_z;
@@ -680,7 +678,6 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
     dm_mm256_float break_cond, intersect_mask;
     
     const dm_mm256_float ones = dm_mm256_set1_ps(1);
-    dm_mm256_float mask;
 #elif defined(DM_SIMD_ARM)
     dm_mm_float a_min_x, a_min_y, a_min_z;
     dm_mm_float a_max_x, a_max_y, a_max_z;
@@ -700,7 +697,7 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
     {
         entity_a = broadphase_data->sweep_indices[i];
         
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
         a_min_x = dm_mm256_set1_ps(aabbs_sorted->min_x[i]);
         a_min_y = dm_mm256_set1_ps(aabbs_sorted->min_y[i]);
         a_min_z = dm_mm256_set1_ps(aabbs_sorted->min_z[i]);
@@ -726,7 +723,7 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
         
         for(; j<count; j+=PHYSICS_SIMD_N)
         {
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
             b_min_x = dm_mm256_load_ps(aabbs_sorted->min_x + j);
             b_min_y = dm_mm256_load_ps(aabbs_sorted->min_y + j);
             b_min_z = dm_mm256_load_ps(aabbs_sorted->min_z + j);
@@ -817,7 +814,7 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
             }
             
             // finally, we need to break if ANY of the j's are beyond
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
             if(dm_mm256_any_non_zero(break_cond)) break;
 #elif defined(DM_SIMD_ARM)
             if(dm_mm_any_non_zero(break_cond)) break;
@@ -1397,7 +1394,7 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
     component_physics*    physics   = &manager->cache.physics;
     component_rigid_body* rigid_body = &manager->cache.rigid_body;
     
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
     dm_mm256_float pos_x, pos_y, pos_z;
     dm_mm256_float rot_i, rot_j, rot_k, rot_r;
     dm_mm256_float vel_x, vel_y, vel_z;
@@ -1461,7 +1458,7 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
     uint32_t i=0;
     for(; i<system->entity_count; i+=PHYSICS_SIMD_N)
     {
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
         pos_x = dm_mm256_load_ps(transform->pos_x + i);
         pos_y = dm_mm256_load_ps(transform->pos_y + i);
         pos_z = dm_mm256_load_ps(transform->pos_z + i);

@@ -7,7 +7,7 @@
 
 #define G 6.6743e-11f
 
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
 #define GRAV_SYSTEM_N DM_SIMD256_FLOAT_N
 #elif defined(DM_SIMD_ARM)
 #define GRAV_SYSTEM_N DM_SIMD_FLOAT_N
@@ -222,7 +222,7 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
     
     float* mass = manager->cache.mass;
     
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
     dm_mm256_float mass_i, mass_j;
     dm_mm256_float pos_i_x, pos_i_y, pos_i_z;
     dm_mm256_float pos_j_x, pos_j_y, pos_j_z;
@@ -255,7 +255,7 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
     for(; i<system->entity_count; i++)
     {
         // load in entity_i data
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
         pos_i_x = dm_mm256_set1_ps(pos_x[i]);
         pos_i_y = dm_mm256_set1_ps(pos_y[i]);
         pos_i_z = dm_mm256_set1_ps(pos_z[i]);
@@ -280,7 +280,7 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
         j = i+1;
         for(; j<system->entity_count; j+=GRAV_SYSTEM_N)
         {
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
             pos_j_x = dm_mm256_load_ps(pos_x + j);
             pos_j_y = dm_mm256_load_ps(pos_y + j);
             pos_j_z = dm_mm256_load_ps(pos_z + j);

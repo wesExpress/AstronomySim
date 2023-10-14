@@ -156,8 +156,6 @@ bool render_pass_init(dm_context* context)
     dm_memcpy(indices, cube_indices, sizeof(cube_indices));
     
     // planet meshes
-    uint32_t mesh_vertex_count, mesh_index_count;
-    
     const dm_mesh_vertex_attrib mesh_attribs[] = {
         DM_MESH_VERTEX_ATTRIB_POSITION,
         DM_MESH_VERTEX_ATTRIB_TEXCOORD,
@@ -300,7 +298,6 @@ bool render_pass_render(dm_context* context)
     
     // update instance buffers
     const dm_ecs_id t_id = app_data->components.transform;
-    const dm_ecs_id c_id = app_data->components.collision;
     
     component_transform* transform = dm_ecs_get_component_block(t_id, context);
     uint32_t t_index;

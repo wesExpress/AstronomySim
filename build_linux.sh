@@ -13,10 +13,10 @@ DM_DIR=$SRC_DIR/DarkMatter
 mkdir -p build
 cd build
 
-c_files="$SRC_DIR/main.c $SRC_DIR/app/app.c $SRC_DIR/app/components.c $SRC_DIR/app/camera.c $SRC_DIR/rendering/render_pass.c $SRC_DIR/rendering/debug_render_pass.c $SRC_DIR/rendering/imgui_render_pass.c $SRC_DIR/systems/physics_system.c $SRC_DIR/systems/gravity_system.c"
+c_files="$SRC_DIR/app/app.c $SRC_DIR/app/components.c $SRC_DIR/app/camera.c $SRC_DIR/rendering/render_pass.c $SRC_DIR/rendering/debug_render_pass.c $SRC_DIR/systems/physics_system.c $SRC_DIR/systems/gravity_system.c $SRC_DIR/app/stress_test.c"
 
-dm_files="$DM_DIR/dm_impl.c $DM_DIR/platform/dm_platform_linux.c $DM_DIR/dm_physics.c"
-
+dm_files="$DM_DIR/dm_impl.c $DM_DIR/platform/dm_platform_linux.c $DM_DIR/dm_physics.c $DM_DIR/dm_imgui.c"
+``
 if ((vulkan)); then
 	dm_files="$dm_files $DM_DIR/rendering/dm_renderer_vulkan.c"
 	defines="-DDM_VULKAN"
@@ -86,8 +86,33 @@ done
 
 cd ../..
 
+cd DarkMatter/assets/shaders
+for file in *.glsl; do
+	if((vulkan)); then
+		root=${file%.*}
+		shader_type=${root: -5}
+		output=$root.spv
+		echo "Compiling shader: $file"
+		if [[ "$shader_type" == "pixel" ]]; then
+			shader_flags=-fshader-stage=frag
+		else
+			shader_flags=-fshader-stage=vert
+		fi
+		$VULKAN_SDK/bin/glslc $shader_flags $file -o $output
+		mv $output $SRC_DIR/build/assets/shaders
+	else
+		echo $file
+		cp $file $SRC_DIR/build/assets/shaders
+	fi
+done
+
+cd ../../..
+
 mkdir -p $SRC_DIR/build/assets/textures
-cp "assets/textures/default_texture.png" $SRC_DIR/build/assets/textures
+cp -r "assets/textures/" $SRC_DIR/build/assets
 
 mkdir -p $SRC_DIR/build/assets/fonts
-cp "assets/fonts/Chicago.ttf" $SRC_DIR/build/assets/fonts
+cp -r "assets/fonts/" $SRC_DIR/build/assets
+
+mkdir -p $SRC_DIR/build/assets/models
+cp -r "assets/models/" $SRC_DIR/build/assets
