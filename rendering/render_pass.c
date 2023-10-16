@@ -182,7 +182,7 @@ bool render_pass_init(dm_context* context)
 #else
         snprintf(buffer, sizeof(buffer), "assets/models/Planet_%u.glb", i+1);
 #endif
-        if(!dm_renderer_load_model(buffer, mesh_attribs, DM_ARRAY_LEN(mesh_attribs), DM_MESH_INDEX_TYPE_UINT16, &mesh_vertices, &mesh_indices, &mesh_vertex_count, &mesh_index_count, index_offset, context)) return false;
+        if(!dm_renderer_load_model(buffer, mesh_attribs, DM_ARRAY_LEN(mesh_attribs), DM_MESH_INDEX_TYPE_UINT16, &mesh_vertices, (void**)&mesh_indices, &mesh_vertex_count, &mesh_index_count, index_offset, context)) return false;
         
         dm_memcpy(vs, mesh_vertices, sizeof(vs));
         dm_memcpy(inds, mesh_indices, sizeof(inds));
