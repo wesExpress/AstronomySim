@@ -36,6 +36,8 @@ build_win   = "build_win32.bat";
 build_mac   = "./build_mac.sh";
 build_linux = "./build_linux.sh";
 
+post_build_win = "post_build_win32.bat";
+
 run_win = "run.bat";
 run_mac = "./run.sh";
 run_linux = "./run.sh";
@@ -45,8 +47,8 @@ command_list = {
 		.name = "build",
 		.out = "*compilation*", .footer_panel=false, .save_dirty_files=true, .cursor_at_end=true,
 		.cmd = {
-					{build_win, .os = "win"},
-					{build_mac, .os = "mac"},
+					{build_win,   .os = "win"},
+					{build_mac,   .os = "mac"},
 					{build_linux, .os = "linux"},
 				},
 	},
@@ -54,12 +56,22 @@ command_list = {
 		.name = "run",
 		.out = "", .footer_panel=false, .save_dirty_files=false, .cursor_at_end=true,
 		.cmd = {
-					{run_win, .os = "win"},
-					{run_mac, .os = "mac"},
+					{run_win,   .os = "win"},
+					{run_mac,   .os = "mac"},
 					{run_linux, .os = "linux"},
+				},
+	},
+	{
+		.name = "post_build",
+		.out = "*compilation*", .footer_panel=false, .save_dirty_files=true, .cursor_at_end=true,
+		.cmd = {
+					{post_build_win,   .os = "win"},
+					{post_build_mac,   .os = "mac"},
+					{post_build_linux, .os = "linux"},
 				},
 	},
 };
 
 fkey_command[2] = "build";
+fkey_command[3] = "post_build";
 fkey_command[5] = "run";

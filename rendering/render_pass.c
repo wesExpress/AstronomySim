@@ -41,7 +41,7 @@ typedef struct mesh_t
 typedef struct render_pass_data_t
 {
     dm_render_handle vb, instb[MAX_MESH_COUNT], ib, shader, pipe, uni;
-    dm_render_handle tex;
+    dm_render_handle default_tex, planet_tex;
     
     uint32_t entity_count[MAX_MESH_COUNT], mesh_count;
     
@@ -165,6 +165,9 @@ bool render_pass_init(dm_context* context)
     uint32_t index_offset = DM_ARRAY_LEN(cube_vertices);
     size_t vertex_offset = DM_ARRAY_LEN(cube_vertices) * 8;
     
+    vertex vs[100];
+    uint16_t inds[100];
+    
     for(uint32_t i=0; i<50; i++)
     {
         float* mesh_vertices;
@@ -174,8 +177,15 @@ bool render_pass_init(dm_context* context)
         uint32_t mesh_index_count = 0;
         
         char buffer[512];
+#if 0
         snprintf(buffer, sizeof(buffer), "assets/models/Planets_%u.obj", i+1);
-        if(!dm_renderer_load_model(buffer, mesh_attribs, DM_ARRAY_LEN(mesh_attribs), &mesh_vertices, &mesh_indices, &mesh_vertex_count, &mesh_index_count, index_offset, context)) return false;
+#else
+        snprintf(buffer, sizeof(buffer), "assets/models/Planet_%u.glb", i+1);
+#endif
+        if(!dm_renderer_load_model(buffer, mesh_attribs, DM_ARRAY_LEN(mesh_attribs), DM_MESH_INDEX_TYPE_UINT16, &mesh_vertices, &mesh_indices, &mesh_vertex_count, &mesh_index_count, index_offset, context)) return false;
+        
+        dm_memcpy(vs, mesh_vertices, sizeof(vs));
+        dm_memcpy(inds, mesh_indices, sizeof(inds));
         
         vertices_size += sizeof(float) * 8 * mesh_vertex_count;
         indices_size  += sizeof(uint32_t) * mesh_index_count;
@@ -243,8 +253,9 @@ bool render_pass_init(dm_context* context)
     
     if(!dm_renderer_create_shader_and_pipeline(shader_desc, pipeline_desc, attrib_descs, DM_ARRAY_LEN(attrib_descs), &pass_data->shader, &pass_data->pipe, context)) return false;
     
-    // assets
-    if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, false, "default", &pass_data->tex, context)) return false;
+    // textures
+    if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, false, "default", &pass_data->default_tex, context)) return false;
+    if(!dm_renderer_create_texture_from_file("assets/textures/planets_texture.png", 4, false, "default", &pass_data->planet_tex, context)) return false;
     
     dm_free(vertices);
     dm_free(indices);
@@ -294,7 +305,7 @@ bool render_pass_render(dm_context* context)
     dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_BOTH, 0, context);
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
     
-    dm_render_command_bind_texture(pass_data->tex, 0, context);
+    dm_render_command_bind_texture(pass_data->default_tex, 0, context);
     
     // update instance buffers
     const dm_ecs_id t_id = app_data->components.transform;
