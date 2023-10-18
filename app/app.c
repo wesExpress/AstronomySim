@@ -71,7 +71,6 @@ bool dm_application_init(dm_context* context)
     // rendering
     if(!render_pass_init(context))       return false;
     if(!debug_render_pass_init(context)) return false;
-    //if(!imgui_render_pass_init(context)) return false;
     
     // components
     if(!register_transform(&app_data->components.transform, context))   return false;
@@ -92,7 +91,7 @@ bool dm_application_init(dm_context* context)
     float cam_forward[] = { 0,0,-1 };
     dm_vec3_norm(cam_forward, cam_forward);
     
-    camera_init(cam_pos, cam_forward, 0.01f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), 5.0f, 1.0f, &app_data->camera); 
+    camera_init(cam_pos, cam_forward, 0.01f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), 15.0f, 1.0f, &app_data->camera); 
     
     // entities
 #ifdef PHYSICS_TEST
@@ -124,11 +123,7 @@ bool dm_application_update(dm_context* context)
     physics_test_update_entities(app_data, context);
 #endif
     
-    // submit entities
-    for(uint32_t i=0; i<app_data->entity_count; i++)
-    {
-        render_pass_submit_entity(app_data->entities[i], dm_random_uint32_range(1,50, context), context);
-    }
+    static int mesh_index = 1;
     
     // imgui
     dm_ecs_system_timing timing = app_data->physics_system_timing;
@@ -136,8 +131,8 @@ bool dm_application_update(dm_context* context)
     dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
     struct nk_context* ctx = &imgui_nk_ctx->ctx;
     
-    if(nk_begin(ctx, "Timings", nk_rect(100,100, 250,250),  NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
-                NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE))
+    if(nk_begin(ctx, "Timings", nk_rect(100,100, 250,250), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
+                NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
     {
         if(nk_tree_push(ctx, NK_TREE_TAB, "Physics", NK_MINIMIZED))
         {
@@ -160,6 +155,23 @@ bool dm_application_update(dm_context* context)
     }
     nk_end(ctx);
     
+    if(nk_begin(ctx, "Mesh Selector", nk_rect(100,400, 250,150), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
+                NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
+    {
+        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_value_int(ctx, "Mesh index", mesh_index);
+        nk_layout_row_dynamic(ctx, 30, 2);
+        if(nk_button_label(ctx, "Increment")) mesh_index++;
+        else if(nk_button_label(ctx, "Decrement")) mesh_index--;
+        mesh_index = DM_CLAMP(mesh_index, 1,NUM_PLANETS);
+    }
+    nk_end(ctx);
+    
+    // submit entities
+    for(uint32_t i=0; i<app_data->entity_count; i++)
+    {
+        render_pass_submit_entity(app_data->entities[i], (uint32_t)mesh_index, context);
+    }
     
     return true;
 }
@@ -167,7 +179,7 @@ bool dm_application_update(dm_context* context)
 bool dm_application_render(dm_context* context)
 {
     dm_render_command_set_default_viewport(context);
-    dm_render_command_clear(0.1f,0.3f,0.5f,1,context);
+    dm_render_command_clear(0,0,0,1,context);
     
     if(!render_pass_render(context))       return false;
     if(!debug_render_pass_render(context)) return false;

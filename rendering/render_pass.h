@@ -1,6 +1,7 @@
 #ifndef RENDER_PASS_H
 #define RENDER_PASS_H
 
+#define NUM_PLANETS 50
 #include "dm.h"
 
 bool render_pass_init(dm_context* context);

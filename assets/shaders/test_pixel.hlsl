@@ -16,8 +16,8 @@ cbuffer uni : register(b0)
 SamplerState sample_state;
 Texture2D tex : register(t0);
 
-static const float3 light_pos = { 15,2,15 };
-static const float4 light_ambient = { 0.33f,0.33f,0.33f,1.0f };
+static const float3 light_pos = { 0,0,0 };
+static const float4 light_ambient = { 0.05f,0.05f,0.05f,1.0f };
 static const float4 light_diffuse = { 1,1,1,1 };
 static const float4 light_specular = { 1,1,1,1 };
 

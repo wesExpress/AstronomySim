@@ -16,9 +16,13 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     float pos_y = (dm_random_float(context) * 2 - 1) * h;
     float pos_z = (dm_random_float(context) * 2 - 1) * h;
     
-    float scale_x = dm_random_float_range(0.5,3,context);
-    float scale_y = dm_random_float_range(0.5,3,context);
-    float scale_z = dm_random_float_range(0.5,3,context);
+    //float scale_x = dm_random_float_range(0.5,3,context);
+    //float scale_y = dm_random_float_range(0.5,3,context);
+    //float scale_z = dm_random_float_range(0.5,3,context);
+    
+    float scale_x = 1;
+    float scale_y = 1;
+    float scale_z = 1;
     
     float rot_i = dm_random_float(context);
     float rot_j = dm_random_float(context);
@@ -33,11 +37,11 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     float mass = DM_MIN(scale_x, DM_MIN(scale_y, scale_z)) * 1e2f;
     entity_add_kinematics(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, context);
     
-    if(dm_random_float(context) > 1)
+    if(dm_random_float(context) > 0)
     {
         scale_y = scale_z = scale_x;
         
-        float radius = scale_x * 0.5f;
+        float radius = 20.0f * 0.5f;
         
         entity_add_collider_sphere(entity, app_data->components.collision, 0,0,0, radius, context);
         entity_add_rigid_body_sphere(entity, app_data->components.rigid_body, mass, radius, context);
@@ -53,6 +57,8 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     }
     
     entity_add_transform(entity, app_data->components.transform, pos_x,pos_y,pos_z, scale_x,scale_y,scale_z, rot_i,rot_j,rot_k,rot_r, context);
+    
+    
     
     return entity;
 }
