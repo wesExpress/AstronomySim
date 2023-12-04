@@ -4,7 +4,7 @@ set echo on
 output="AstronomySim"
 
 vulkan=0
-debug=1
+debug=0
 simd_256=1
 
 SRC_DIR=$PWD
@@ -13,10 +13,14 @@ DM_DIR=$SRC_DIR/DarkMatter
 mkdir -p build
 cd build
 
-c_files="$SRC_DIR/app/app.c $SRC_DIR/app/components.c $SRC_DIR/app/camera.c $SRC_DIR/rendering/render_pass.c $SRC_DIR/rendering/debug_render_pass.c $SRC_DIR/systems/physics_system.c $SRC_DIR/systems/gravity_system.c $SRC_DIR/app/stress_test.c"
+app="$SRC_DIR/app/raytrace_app.c"
+#app="$SRC_DIR/app/app.c $SRC_DIR/app/stress_test.c"
+#rendering="$SRC_DIR/rendering/render_pass.c $SRC_DIR/rendering/debug_render_pass.c"
+
+c_files="$app $SRC_DIR/app/camera.c $SRC_DIR/app/components.c $SRC_DIR/systems/physics_system.c $SRC_DIR/systems/gravity_system.c"
 
 dm_files="$DM_DIR/dm_impl.c $DM_DIR/platform/dm_platform_linux.c $DM_DIR/dm_physics.c $DM_DIR/dm_imgui.c"
-``
+
 if ((vulkan)); then
 	dm_files="$dm_files $DM_DIR/rendering/dm_renderer_vulkan.c"
 	defines="-DDM_VULKAN"

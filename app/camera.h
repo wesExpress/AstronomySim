@@ -17,5 +17,6 @@ typedef struct basic_camera_t
 
 void camera_init(const float pos[3], const float forward[3], float near_plane, float far_plane, float fov, uint32_t width, uint32_t height, float move_speed, float look_sens, basic_camera* camera);
 bool camera_update(basic_camera* camera, dm_context* context);
+void camera_resize(const uint32_t width, const uint32_t height, basic_camera* camera, dm_context* context);
 
 #endif //CAMERA_H

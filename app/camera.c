@@ -51,7 +51,7 @@ void update_camera_proj(basic_camera* camera)
     dm_mat4_mul_mat4(camera->view, camera->proj, camera->view_proj);
 }
 
-void resize_camera(const uint32_t width, const uint32_t height, basic_camera* camera, dm_context* context)
+void camera_resize(const uint32_t width, const uint32_t height, basic_camera* camera, dm_context* context)
 {
     camera->width  = width;
     camera->height = height;

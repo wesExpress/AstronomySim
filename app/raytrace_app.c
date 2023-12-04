@@ -58,7 +58,7 @@ void fill_pixel(const float ray_dir[3], const float ray_origin[3], float color[4
     dm_vec3_scale(ray_dir, t, hit_point);
     dm_vec3_add_vec3(ray_origin, hit_point, hit_point);
     
-    float normal[3];
+    float normal[3] = { 0 };
     dm_vec3_norm(hit_point, normal);
     
     float light_dir[] = { -1,-1,-1 };
@@ -160,8 +160,13 @@ bool dm_application_init(dm_context* context)
     dm_pipeline_desc p_desc = dm_renderer_default_pipeline();
     
     dm_shader_desc s_desc = {
+#ifdef DM_DIRECTX
         .vertex="assets/shaders/quad_vertex.fxc",
         .pixel="assets/shaders/quad_pixel.fxc",
+#elif defined(DM_OPENGL)
+        .vertex="assets/shaders/quad_vertex.glsl",
+        .pixel="assets/shaders/quad_pixel.glsl",
+#endif
         .vb={ app_data->handles.vb },
         .vb_count=1
     };
@@ -189,7 +194,7 @@ bool dm_application_init(dm_context* context)
         }
     }
     
-    if(!dm_renderer_create_dynamic_texture(app_data->image.w, app_data->image.h, 4, app_data->image.data, &app_data->handles.texture, context)) return false;
+    if(!dm_renderer_create_dynamic_texture(app_data->image.w, app_data->image.h, 4, app_data->image.data, "image_texture", &app_data->handles.texture, context)) return false;
     
     // camera
     float camera_p[] = { 0,0,5 };
@@ -221,7 +226,7 @@ bool dm_application_update(dm_context* context)
     
     if(width_changed || height_changed) 
     {
-        resize_camera(&app_data->camera, context);
+        camera_resize(app_data->image.w, app_data->image.h, &app_data->camera, context);
         
         app_data->image.w = context->platform_data.window_data.width;
         app_data->image.h = context->platform_data.window_data.height;
@@ -235,7 +240,7 @@ bool dm_application_update(dm_context* context)
     // update image
     uint32_t index;
     
-    float color[N4] = { 0,0,0,1 };
+    float color[N4] = { 0,1,0,1 };
     
     for(uint32_t y=0; y<app_data->image.h; y++)
     {
