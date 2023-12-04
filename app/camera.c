@@ -22,6 +22,8 @@ void camera_init(const float pos[N3], const float forward[N3], float near_plane,
     dm_mat_view(camera->pos, look, camera->up, camera->view);
     dm_mat4_inverse(camera->view, camera->inv_view);
     dm_mat_perspective(dm_deg_to_rad(camera->fov), (float)width / (float)height, camera->near_plane, camera->far_plane, camera->proj);
+    dm_mat4_inverse(camera->proj, camera->inv_proj);
+    
     dm_mat4_mul_mat4(camera->view, camera->proj, camera->view_proj);
     
     dm_vec3_cross(camera->forward, camera->up, camera->right);
@@ -44,33 +46,28 @@ void update_camera_view(basic_camera* camera)
 void update_camera_proj(basic_camera* camera)
 {
     dm_mat_perspective(dm_deg_to_rad(camera->fov), (float)camera->width / (float)camera->height, camera->near_plane, camera->far_plane, camera->proj);
+    dm_mat4_inverse(camera->proj, camera->inv_proj);
     
     dm_mat4_mul_mat4(camera->view, camera->proj, camera->view_proj);
 }
 
-void resize_camera(basic_camera* camera, dm_context* context)
+void resize_camera(const uint32_t width, const uint32_t height, basic_camera* camera, dm_context* context)
 {
-    uint32_t width  = DM_SCREEN_WIDTH(context);
-    uint32_t height = DM_SCREEN_HEIGHT(context);
-    if((width == camera->width) && (height == camera->height)) return;
-    
-    camera->width = width;
+    camera->width  = width;
     camera->height = height;
     
     update_camera_proj(camera);
 }
 
-void camera_update(basic_camera* camera, dm_context* context)
+bool camera_update(basic_camera* camera, dm_context* context)
 {
     static float up[] = { 0,1,0 };
-    
-    resize_camera(camera, context);
     
     bool moved = (dm_input_is_key_pressed(DM_KEY_A, context) || dm_input_is_key_pressed(DM_KEY_D, context) || dm_input_is_key_pressed(DM_KEY_W, context) || dm_input_is_key_pressed(DM_KEY_S, context) || dm_input_is_key_pressed(DM_KEY_Q, context) || dm_input_is_key_pressed(DM_KEY_E, context));
     
     int delta_x, delta_y;
     dm_input_get_mouse_delta(&delta_x, &delta_y, context);
-    bool rotated = (delta_x != 0) || (delta_y != 0);
+    bool rotated = ((delta_x != 0) || (delta_y != 0)) & dm_input_is_key_pressed(DM_KEY_LCTRL, context);
     
     // movement
     if(moved)
@@ -104,10 +101,8 @@ void camera_update(basic_camera* camera, dm_context* context)
     // rotation
     if(rotated)
     {
-        if(!dm_input_is_key_pressed(DM_KEY_LCTRL, context)) return;
-        
-        float delta_yaw   = (float)delta_x * camera->look_sens;
-        float delta_pitch = (float)delta_y * camera->look_sens;
+        float delta_yaw   =  (float)delta_x * camera->look_sens;
+        float delta_pitch =  (float)delta_y * camera->look_sens;
         
         float q1[4], q2[4], rot[4];
         
@@ -122,5 +117,11 @@ void camera_update(basic_camera* camera, dm_context* context)
         dm_vec3_cross(camera->forward, up, camera->right);
     }
     
-    if(moved || rotated) update_camera_view(camera);
+    if(moved || rotated) 
+    {
+        update_camera_view(camera);
+        return true;
+    }
+    
+    return false;
 }

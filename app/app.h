@@ -38,6 +38,8 @@ typedef struct application_data_t
     void* render_pass_data;
     void* debug_render_pass_data;
     void* imgui_pass_data;
+    
+    void* internal_data;
 } application_data;
 
 #endif //APP_H

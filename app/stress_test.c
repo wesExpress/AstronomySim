@@ -58,15 +58,60 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     
     entity_add_transform(entity, app_data->components.transform, pos_x,pos_y,pos_z, scale_x,scale_y,scale_z, rot_i,rot_j,rot_k,rot_r, context);
     
-    
-    
     return entity;
 }
 
-void stress_test_init_entities(application_data* app_data, dm_context* context)
+void stress_test_init(application_data* app_data, dm_context* context)
 {
     for(uint32_t i=0; i<DM_ECS_MAX_ENTITIES; i++)
     {
         app_data->entities[app_data->entity_count++] = create_entity(app_data, context);
     }
+}
+
+void stress_test_update(application_data* app_data, dm_context* context)
+{
+    static int mesh_index = 1;
+    
+    // imgui
+    dm_ecs_system_timing timing = app_data->physics_system_timing;
+    dm_ecs_id sys_id = app_data->physics_system;
+    dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
+    struct nk_context* ctx = &imgui_nk_ctx->ctx;
+    
+    if(nk_begin(ctx, "Timings", nk_rect(100,100, 250,250), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
+                NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
+    {
+        if(nk_tree_push(ctx, NK_TREE_TAB, "Physics", NK_MINIMIZED))
+        {
+            nk_value_float(ctx, "Broadphase average (ms)", physics_system_get_broadphase_average(timing, sys_id, context));
+            nk_value_float(ctx, "Narrowphase average (ms)", physics_system_get_narrowphase_average(timing, sys_id, context));
+            nk_value_float(ctx, "Constraints average (ms)", physics_system_get_constraints_average(timing, sys_id, context));
+            nk_value_float(ctx, "Update average (ms)", physics_system_get_update_average(timing, sys_id, context));
+            nk_value_float(ctx, "Total time (ms)", physics_system_get_total_time(timing, sys_id, context));
+            nk_value_uint(ctx, "Num iterations", physics_system_get_num_iterations(timing, sys_id, context));
+            
+            nk_tree_pop(ctx);
+        }
+        
+        if(nk_tree_push(ctx, NK_TREE_TAB, "Gravity", NK_MINIMIZED))
+        {
+            nk_value_float(ctx, "Naive (ms)", gravity_system_get_timing(app_data->gravity_system_timing, app_data->gravity_system, context));
+            
+            nk_tree_pop(ctx);
+        }
+    }
+    nk_end(ctx);
+    
+    if(nk_begin(ctx, "Mesh Selector", nk_rect(100,400, 250,150), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
+                NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
+    {
+        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_value_int(ctx, "Mesh index", mesh_index);
+        nk_layout_row_dynamic(ctx, 30, 2);
+        if(nk_button_label(ctx, "Increment")) mesh_index++;
+        else if(nk_button_label(ctx, "Decrement")) mesh_index--;
+        mesh_index = DM_CLAMP(mesh_index, 1,NUM_PLANETS);
+    }
+    nk_end(ctx);
 }

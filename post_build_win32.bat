@@ -43,8 +43,10 @@ IF /I "%vulkan%" EQU "1" (
 		ECHO Compiling shader: !fname!
 		IF /I "!shader_type!" EQU "pixel" (
 			SET shader_flags=/E p_main /T ps_5_0
-		) ELSE (
+		) ELSE IF /I "!shader_type!" EQU "ertex" (
 			SET shader_flags=/E v_main /T vs_5_0
+		) ELSE IF /I "!shader_type!" EQU "mpute" (
+			SET shader_flags=/E c_main /T cs_5_0
 		)
 		ECHO !shader_flags!
 

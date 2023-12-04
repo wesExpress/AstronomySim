@@ -1,6 +1,6 @@
-#include "app.h"
-
 #include "dm.h"
+
+#include "app.h"
 
 #include "camera.h"
 
@@ -12,10 +12,17 @@
 #include "../rendering/debug_render_pass.h"
 #include "../rendering/imgui_render_pass.h"
 
-#include "stress_test.h"
-#include "physics_test.h"
-
+//#define STRESS_TEST
 //#define PHYSICS_TEST
+#define RAY_TRACE
+
+#ifdef STRESS_TEST
+#include "stress_test.h"
+#elif defined(PHYSICS_TEST)
+#include "physics_test.h"
+#elif defined(RAY_TRACE)
+#include "ray_trace.h"
+#endif
 
 #define TIME_LIM 1.0f
 void draw_path(application_data* app_data, dm_context* context)
@@ -94,10 +101,12 @@ bool dm_application_init(dm_context* context)
     camera_init(cam_pos, cam_forward, 0.01f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), 15.0f, 1.0f, &app_data->camera); 
     
     // entities
-#ifdef PHYSICS_TEST
-    physics_test_init_entities(app_data, context);
-#else
+#ifdef STRESS_TEST
     stress_test_init_entities(app_data, context);
+#elif defined(PHYSICS_TEST)
+    physics_test_init_entities(app_data, context);
+#elif defined(RAY_TRACE)
+    if(!ray_trace_init(app_data, context)) return false;
 #endif
     
     dm_timer_start(&app_data->draw_data.draw_timer, context);
@@ -110,6 +119,9 @@ void dm_application_shutdown(dm_context* context)
     render_pass_shutdown(context);
     debug_render_pass_shutdown(context);
     
+    application_data* app_data = context->app_data;
+    if(app_data->internal_data) dm_free(app_data->internal_data);
+    
     dm_free(context->app_data);
 }
 
@@ -119,70 +131,26 @@ bool dm_application_update(dm_context* context)
     
     camera_update(&app_data->camera, context);
     
-#ifdef PHYSICS_TEST
-    physics_test_update_entities(app_data, context);
+#ifdef STRESS_TEST
+    stress_test_update(app_data, context);
+#elif defined(PHYSICS_TEST)
+    physics_test_update(app_data, context);
+#elif defined(RAY_TRACE)
+    ray_trace_update(app_data, context);
 #endif
-    
-    static int mesh_index = 1;
-    
-    // imgui
-    dm_ecs_system_timing timing = app_data->physics_system_timing;
-    dm_ecs_id sys_id = app_data->physics_system;
-    dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
-    struct nk_context* ctx = &imgui_nk_ctx->ctx;
-    
-    if(nk_begin(ctx, "Timings", nk_rect(100,100, 250,250), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
-                NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
-    {
-        if(nk_tree_push(ctx, NK_TREE_TAB, "Physics", NK_MINIMIZED))
-        {
-            nk_value_float(ctx, "Broadphase average (ms)", physics_system_get_broadphase_average(timing, sys_id, context));
-            nk_value_float(ctx, "Narrowphase average (ms)", physics_system_get_narrowphase_average(timing, sys_id, context));
-            nk_value_float(ctx, "Constraints average (ms)", physics_system_get_constraints_average(timing, sys_id, context));
-            nk_value_float(ctx, "Update average (ms)", physics_system_get_update_average(timing, sys_id, context));
-            nk_value_float(ctx, "Total time (ms)", physics_system_get_total_time(timing, sys_id, context));
-            nk_value_uint(ctx, "Num iterations", physics_system_get_num_iterations(timing, sys_id, context));
-            
-            nk_tree_pop(ctx);
-        }
-        
-        if(nk_tree_push(ctx, NK_TREE_TAB, "Gravity", NK_MINIMIZED))
-        {
-            nk_value_float(ctx, "Naive (ms)", gravity_system_get_timing(app_data->gravity_system_timing, app_data->gravity_system, context));
-            
-            nk_tree_pop(ctx);
-        }
-    }
-    nk_end(ctx);
-    
-    if(nk_begin(ctx, "Mesh Selector", nk_rect(100,400, 250,150), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
-                NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
-    {
-        nk_layout_row_dynamic(ctx, 30, 1);
-        nk_value_int(ctx, "Mesh index", mesh_index);
-        nk_layout_row_dynamic(ctx, 30, 2);
-        if(nk_button_label(ctx, "Increment")) mesh_index++;
-        else if(nk_button_label(ctx, "Decrement")) mesh_index--;
-        mesh_index = DM_CLAMP(mesh_index, 1,NUM_PLANETS);
-    }
-    nk_end(ctx);
-    
-    // submit entities
-    for(uint32_t i=0; i<app_data->entity_count; i++)
-    {
-        render_pass_submit_entity(app_data->entities[i], (uint32_t)mesh_index, context);
-    }
     
     return true;
 }
 
 bool dm_application_render(dm_context* context)
 {
-    dm_render_command_set_default_viewport(context);
-    dm_render_command_clear(0,0,0,1,context);
+    application_data* app_data = context->app_data;
     
-    if(!render_pass_render(context))       return false;
-    if(!debug_render_pass_render(context)) return false;
-    
-    return true;
+#ifdef STRESS_TEST
+    return stress_test_render(app_data, context);
+#elif defined(PHYSICS_TEST)
+    return physics_test_render(app_data, context);
+#elif defined(RAY_TRACE)
+    return ray_trace_render(app_data, context);
+#endif
 }

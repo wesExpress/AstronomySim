@@ -9,7 +9,7 @@
 #define STACK_HEIGHT N
 #define STACK_DEPTH  N
 
-void physics_test_init_entities(application_data* app_data, dm_context* context)
+void physics_test_init(application_data* app_data, dm_context* context)
 {
     dm_entity entity;
     
@@ -73,7 +73,7 @@ void physics_test_init_entities(application_data* app_data, dm_context* context)
     }
 }
 
-void physics_test_update_entities(application_data* app_data, dm_context* context)
+void physics_test_update(application_data* app_data, dm_context* context)
 {
     const float box_mass = 1.0f;
     float force = 0.5f * -9.8f * box_mass;
@@ -82,4 +82,65 @@ void physics_test_update_entities(application_data* app_data, dm_context* contex
     {
         entity_apply_force(app_data->entities[i], app_data->components.physics, 0,force,0, context);
     }
+    
+    static int mesh_index = 1;
+    
+    // imgui
+    dm_ecs_system_timing timing = app_data->physics_system_timing;
+    dm_ecs_id sys_id = app_data->physics_system;
+    dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
+    struct nk_context* ctx = &imgui_nk_ctx->ctx;
+    
+    if(nk_begin(ctx, "Timings", nk_rect(100,100, 250,250), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
+                NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
+    {
+        if(nk_tree_push(ctx, NK_TREE_TAB, "Physics", NK_MINIMIZED))
+        {
+            nk_value_float(ctx, "Broadphase average (ms)", physics_system_get_broadphase_average(timing, sys_id, context));
+            nk_value_float(ctx, "Narrowphase average (ms)", physics_system_get_narrowphase_average(timing, sys_id, context));
+            nk_value_float(ctx, "Constraints average (ms)", physics_system_get_constraints_average(timing, sys_id, context));
+            nk_value_float(ctx, "Update average (ms)", physics_system_get_update_average(timing, sys_id, context));
+            nk_value_float(ctx, "Total time (ms)", physics_system_get_total_time(timing, sys_id, context));
+            nk_value_uint(ctx, "Num iterations", physics_system_get_num_iterations(timing, sys_id, context));
+            
+            nk_tree_pop(ctx);
+        }
+        
+        if(nk_tree_push(ctx, NK_TREE_TAB, "Gravity", NK_MINIMIZED))
+        {
+            nk_value_float(ctx, "Naive (ms)", gravity_system_get_timing(app_data->gravity_system_timing, app_data->gravity_system, context));
+            
+            nk_tree_pop(ctx);
+        }
+    }
+    nk_end(ctx);
+    
+    if(nk_begin(ctx, "Mesh Selector", nk_rect(100,400, 250,150), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
+                NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
+    {
+        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_value_int(ctx, "Mesh index", mesh_index);
+        nk_layout_row_dynamic(ctx, 30, 2);
+        if(nk_button_label(ctx, "Increment")) mesh_index++;
+        else if(nk_button_label(ctx, "Decrement")) mesh_index--;
+        mesh_index = DM_CLAMP(mesh_index, 1,NUM_PLANETS);
+    }
+    nk_end(ctx);
+    
+    // submit entities
+    for(uint32_t i=0; i<app_data->entity_count; i++)
+    {
+        render_pass_submit_entity(app_data->entities[i], (uint32_t)mesh_index, context);
+    }
+}
+
+bool physics_test_render(application_data* app_data, dm_context* context)
+{
+    dm_render_command_set_default_viewport(context);
+    dm_render_command_clear(0,0,0,1,context);
+    
+    if(!render_pass_render(context))       return false;
+    if(!debug_render_pass_render(context)) return false;
+    
+    return true;
 }
