@@ -1,5 +1,19 @@
 #include "dm.h"
 #include "camera.h"
+#include <float.h>
+
+typedef struct ray_t
+{
+    float origin[N3];
+    float direction[N3];
+} ray;
+
+typedef struct sphere_t
+{
+    float pos[3];
+    float radius;
+    float albedo[4];
+} sphere;
 
 typedef struct app_handles_t
 {
@@ -22,8 +36,18 @@ typedef struct application_data_t
     
     basic_camera camera;
     
-    // rays
+    float clear_color[4];
+    
+    // timings
+    dm_timer timer;
+    double t;
+    
+    // ray directions
     float (*ray_dirs)[3];
+    
+    // objects
+    sphere   spheres[10];
+    uint32_t sphere_count;
 } application_data;
 
 /*******
@@ -40,28 +64,53 @@ uint32_t vec4_to_uint32(const float vec[4])
     return result;
 }
 
-void fill_pixel(const float ray_dir[3], const float ray_origin[3], float color[4])
+void trace_ray(const ray r, float color[4], application_data* app_data)
 {
-    float radius = 0.5f;
+    if(app_data->sphere_count==0) return;
     
-    const float a = dm_vec3_dot(ray_dir, ray_dir);
-    const float b = 2.0f * dm_vec3_dot(ray_origin, ray_dir);
-    const float c = dm_vec3_dot(ray_origin, ray_origin) - radius * radius;
+    sphere* s = NULL;
+    sphere* nearest_sphere = NULL;
+    float origin[3];
+    float closest_t;
+    float hit_distance = FLT_MAX;
     
-    const float dis = b * b - 4.0f * a * c;
+    for(uint32_t i=0; i<app_data->sphere_count; i++)
+    {
+        s = &app_data->spheres[i];
+        
+        dm_vec3_sub_vec3(r.origin, s->pos, origin);
+        
+        const float a = dm_vec3_dot(r.direction, r.direction);
+        const float b = 2.0f * dm_vec3_dot(origin, r.direction);
+        const float c = dm_vec3_dot(origin, origin) - (s->radius * s->radius);
+        
+        const float dis = b * b - 4.0f * a * c;
+        
+        // don't hit this sphere
+        if(dis < 0) continue;
+        
+        // are we the closest sphere?
+        closest_t = (-b - dm_sqrtf(dis)) / (2.0f * a);
+        if(closest_t > hit_distance) continue;
+        
+        hit_distance = closest_t;
+        nearest_sphere = s;
+    }
     
-    // haven't hit anything, so early out
-    if(dis < 0) return;
+    if(!nearest_sphere) return;
     
-    const float t = 0.5f * (-b - dm_sqrtf(dis)) / a;
+    dm_vec3_sub_vec3(r.origin, nearest_sphere->pos, origin);
+    
     float hit_point[3];
-    dm_vec3_scale(ray_dir, t, hit_point);
-    dm_vec3_add_vec3(ray_origin, hit_point, hit_point);
+    dm_vec3_scale(r.direction, hit_distance, hit_point);
+    dm_vec3_add_vec3(origin, hit_point, hit_point);
     
     float normal[3] = { 0 };
     dm_vec3_norm(hit_point, normal);
     
     float light_dir[] = { -1,-1,-1 };
+    dm_vec3_norm(light_dir, light_dir);
+    
     float light_dir_neg[3];
     dm_vec3_negate(light_dir, light_dir_neg);
     
@@ -69,8 +118,8 @@ void fill_pixel(const float ray_dir[3], const float ray_origin[3], float color[4
     d = DM_MAX(d, 0);
     
     // determine color of intersection
-    float sphere_color[3] = { 1,0,1 };
-    dm_vec3_scale(sphere_color, d, sphere_color);
+    float sphere_color[3];
+    dm_vec3_scale(nearest_sphere->albedo, d, sphere_color);
     
     color[0] = sphere_color[0];
     color[1] = sphere_color[1];
@@ -81,11 +130,11 @@ void recreate_rays(application_data* app_data)
 {
     if(app_data->ray_dirs) 
     {
-        app_data->ray_dirs = dm_realloc(app_data->ray_dirs, sizeof(float) * 3 * app_data->image.w * app_data->image.h);
+        app_data->ray_dirs = dm_realloc(app_data->ray_dirs, DM_VEC3_SIZE * app_data->image.w * app_data->image.h);
     }
     else
     {
-        app_data->ray_dirs = dm_alloc(sizeof(float) * 3 * app_data->image.w * app_data->image.h);
+        app_data->ray_dirs = dm_alloc(DM_VEC3_SIZE * app_data->image.w * app_data->image.h);
     }
     
     const float height_f_inv = 1.0f / (float)app_data->image.h;
@@ -95,19 +144,19 @@ void recreate_rays(application_data* app_data)
     uint32_t index;
     float w;
     
+    float coords[4] = { 0,0,1,1 };
+    
     for(uint32_t y=0; y<app_data->image.h; y++)
     {
+        coords[1] = (float)y * height_f_inv;
+        coords[1] = coords[1] * 2.0f - 1.0f;
+        
         for(uint32_t x=0; x<app_data->image.w; x++)
         {
-            target[0] = (float)x * width_f_inv;
-            target[0] = target[0] * 2.0f - 1.0f;
+            coords[0] = (float)x * width_f_inv;
+            coords[0] = coords[0] * 2.0f - 1.0f;
             
-            target[1] = (float)y * height_f_inv;
-            target[1] = target[1] * 2.0f - 1.0f;
-            
-            target[2] = target[3] = 1;
-            
-            dm_mat4_mul_vec4(app_data->camera.inv_proj, target, target);
+            dm_mat4_mul_vec4(app_data->camera.inv_proj, coords, target);
             
             w = 1.0f / target[3];
             target[3] = 0.0f;
@@ -116,7 +165,7 @@ void recreate_rays(application_data* app_data)
             dm_mat4_mul_vec4(app_data->camera.inv_view, target, target);
             
             index = x + y * app_data->image.w;
-            dm_memcpy(app_data->ray_dirs + index, target, sizeof(float) * 3);
+            DM_VEC3_COPY(app_data->ray_dirs + index, target);
         }
     }
 }
@@ -197,11 +246,31 @@ bool dm_application_init(dm_context* context)
     if(!dm_renderer_create_dynamic_texture(app_data->image.w, app_data->image.h, 4, app_data->image.data, "image_texture", &app_data->handles.texture, context)) return false;
     
     // camera
-    float camera_p[] = { 0,0,5 };
+    float camera_p[] = { 0,0,100 };
     float camera_f[] = { 0,0,-1 };
-    camera_init(camera_p, camera_f, 0.1f, 100.0f, 75.0f, app_data->image.w, app_data->image.h, 5.0f, 1.0f, &app_data->camera);
+    camera_init(camera_p, camera_f, 0.01f, 100.0f, 75.0f, app_data->image.w, app_data->image.h, 5.0f, 0.1f, &app_data->camera);
     
     recreate_rays(app_data);
+    
+    // spheres
+    sphere s1 = { 
+        .pos={0.1f,0,0},
+        .radius=0.5f,
+        .albedo={1,0,1,1}
+    };
+    
+    dm_memcpy(app_data->spheres + app_data->sphere_count++, &s1, sizeof(s1));
+    
+    sphere s2 = { 
+        .pos={0,0.5f,0},
+        .radius=0.2f,
+        .albedo={0,0,1,1}
+    };
+    
+    dm_memcpy(app_data->spheres + app_data->sphere_count++, &s2, sizeof(s2));
+    
+    // misc
+    app_data->clear_color[3] = 1;
     
     return true;
 }
@@ -219,44 +288,51 @@ bool dm_application_update(dm_context* context)
 {
     application_data* app_data = context->app_data;
     
+    dm_timer_start(&app_data->timer, context);
+    
     // check image width and height
     const bool width_changed  = context->platform_data.window_data.width != app_data->image.w;
     const bool height_changed = context->platform_data.window_data.height != app_data->image.h;
-    const bool camera_updated = camera_update(&app_data->camera, context);
     
     if(width_changed || height_changed) 
     {
-        camera_resize(app_data->image.w, app_data->image.h, &app_data->camera, context);
-        
         app_data->image.w = context->platform_data.window_data.width;
         app_data->image.h = context->platform_data.window_data.height;
         
         app_data->image.data_size = sizeof(uint32_t) * app_data->image.w * app_data->image.h;
         app_data->image.data = dm_realloc(app_data->image.data, app_data->image.data_size);
+        
+        camera_resize(app_data->image.w, app_data->image.h, &app_data->camera, context);
     }
     
+    const bool camera_updated = camera_update(&app_data->camera, context);
     if(width_changed || height_changed || camera_updated) recreate_rays(app_data);
     
     // update image
     uint32_t index;
     
-    float color[N4] = { 0,1,0,1 };
+    float color[N4] = { 1,1,1,1 };
+    ray r;
+    DM_VEC3_COPY(r.origin, app_data->camera.pos);
     
     for(uint32_t y=0; y<app_data->image.h; y++)
     {
         for(uint32_t x=0; x<app_data->image.w; x++)
         {
             index = x + y * app_data->image.w;
+            DM_VEC3_COPY(r.direction, app_data->ray_dirs[index]);
             
-            color[0] = 0; color[1] = 0; color[2] = 0; color[3] = 1;
-            fill_pixel(app_data->ray_dirs[index], app_data->camera.pos, color);
-            color[0] = DM_CLAMP(color[0], 0, 1);
-            color[1] = DM_CLAMP(color[1], 0, 1);
-            color[2] = DM_CLAMP(color[2], 0, 1);
+            dm_memcpy(color, app_data->clear_color, sizeof(color));
+            trace_ray(r, color, app_data);
+            color[0] = dm_clamp(color[0], 0, 1);
+            color[1] = dm_clamp(color[1], 0, 1);
+            color[2] = dm_clamp(color[2], 0, 1);
             
             app_data->image.data[index] = vec4_to_uint32(color);
         }
     }
+    
+    app_data->t = dm_timer_elapsed_ms(&app_data->timer, context);
     
     dm_render_command_update_texture(app_data->handles.texture, app_data->image.w, app_data->image.h, app_data->image.data, app_data->image.data_size, context);
     
@@ -270,12 +346,42 @@ bool dm_application_render(dm_context* context)
     dm_render_command_set_default_viewport(context);
     dm_render_command_clear(0,0,0,1, context);
     
-    
     dm_render_command_bind_shader(app_data->handles.shader, context);
     dm_render_command_bind_pipeline(app_data->handles.pipeline, context);
     dm_render_command_bind_buffer(app_data->handles.vb, 0, context);
     dm_render_command_bind_texture(app_data->handles.texture, 0, context);
     dm_render_command_draw_arrays(0, 6, context);
+    
+    dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
+    struct nk_context* ctx = &imgui_nk_ctx->ctx;
+    
+    sphere* s = &app_data->spheres[0];
+    
+    if(nk_begin(ctx, "Ray Trace App", nk_rect(650,50, 300,250), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
+                NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
+    {
+        nk_layout_row_dynamic(ctx, 30, 3);
+        nk_value_float(ctx, "Camera X", app_data->camera.pos[0]);
+        nk_value_float(ctx, "Camera Y", app_data->camera.pos[1]);
+        nk_value_float(ctx, "Camera Z", app_data->camera.pos[2]);
+        
+        nk_layout_row_dynamic(ctx, 30, 3);
+        nk_value_float(ctx, "Forward X", app_data->camera.forward[0]);
+        nk_value_float(ctx, "Forward Y", app_data->camera.forward[1]);
+        nk_value_float(ctx, "Forward Z", app_data->camera.forward[2]);
+        
+        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_value_float(ctx, "Last update time (ms)", app_data->t);
+        
+        nk_layout_row_dynamic(ctx, 30, 3);
+        nk_property_float(ctx, "X", -10, &s->pos[0], 10, 0.1f,0.1f);
+        nk_property_float(ctx, "Y", -10, &s->pos[1], 10, 0.1f,0.1f);
+        nk_property_float(ctx, "Z", -10, &s->pos[2], 10, 0.1f,0.1f);
+        
+        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_property_float(ctx, "Radius", 0.5f, &s->radius, 2.0f, 0.1f,0.1f);
+    }
+    nk_end(ctx);
     
     return true;
 }

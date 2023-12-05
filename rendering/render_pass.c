@@ -225,8 +225,8 @@ bool render_pass_init(dm_context* context)
     strcpy(shader_desc.pixel, "assets/shaders/test_pixel.glsl");
     
     shader_desc.vb_count = 2;
-    shader_desc.vb[0] = pass_data->vb;
-    shader_desc.vb[1] = pass_data->instb[0];
+    //shader_desc.vb[0] = pass_data->vb;
+    //shader_desc.vb[1] = pass_data->instb[0];
 #elif defined(DM_DIRECTX)
     strcpy(shader_desc.vertex, "assets/shaders/test_vertex.fxc");
     strcpy(shader_desc.pixel, "assets/shaders/test_pixel.fxc");

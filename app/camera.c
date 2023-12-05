@@ -35,7 +35,6 @@ void update_camera_view(basic_camera* camera)
     dm_vec3_add_vec3(camera->pos, camera->forward, look);
     
     dm_vec3_cross(camera->right, camera->forward, camera->up);
-    dm_vec3_norm(camera->up, camera->up);
     
     dm_mat_view(camera->pos, look, camera->up, camera->view);
     dm_mat4_inverse(camera->view, camera->inv_view);
@@ -63,11 +62,13 @@ bool camera_update(basic_camera* camera, dm_context* context)
 {
     static float up[] = { 0,1,0 };
     
-    bool moved = (dm_input_is_key_pressed(DM_KEY_A, context) || dm_input_is_key_pressed(DM_KEY_D, context) || dm_input_is_key_pressed(DM_KEY_W, context) || dm_input_is_key_pressed(DM_KEY_S, context) || dm_input_is_key_pressed(DM_KEY_Q, context) || dm_input_is_key_pressed(DM_KEY_E, context));
+    const bool moved = (dm_input_is_key_pressed(DM_KEY_A, context) || dm_input_is_key_pressed(DM_KEY_D, context) || dm_input_is_key_pressed(DM_KEY_W, context) || dm_input_is_key_pressed(DM_KEY_S, context) || dm_input_is_key_pressed(DM_KEY_Q, context) || dm_input_is_key_pressed(DM_KEY_E, context));
     
     int delta_x, delta_y;
     dm_input_get_mouse_delta(&delta_x, &delta_y, context);
-    bool rotated = ((delta_x != 0) || (delta_y != 0)) & dm_input_is_key_pressed(DM_KEY_LCTRL, context);
+    const bool rotated = ((delta_x != 0) || (delta_y != 0)) & dm_input_is_key_pressed(DM_KEY_LCTRL, context);
+    
+    dm_vec3_cross(camera->forward, up, camera->right);
     
     // movement
     if(moved)
@@ -101,8 +102,8 @@ bool camera_update(basic_camera* camera, dm_context* context)
     // rotation
     if(rotated)
     {
-        float delta_yaw   =  (float)delta_x * camera->look_sens;
-        float delta_pitch =  (float)delta_y * camera->look_sens;
+        const float delta_yaw   = (float)delta_x * camera->look_sens;
+        const float delta_pitch = (float)delta_y * camera->look_sens;
         
         float q1[4], q2[4], rot[4];
         
@@ -113,15 +114,10 @@ bool camera_update(basic_camera* camera, dm_context* context)
         
         dm_vec3_rotate(camera->forward, rot, camera->forward);
         dm_vec3_norm(camera->forward, camera->forward);
-        
-        dm_vec3_cross(camera->forward, up, camera->right);
     }
     
-    if(moved || rotated) 
-    {
-        update_camera_view(camera);
-        return true;
-    }
+    if(!moved & !rotated) return false; 
     
-    return false;
+    update_camera_view(camera);
+    return true;
 }
