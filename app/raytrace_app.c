@@ -74,24 +74,26 @@ void trace_ray(const ray r, float color[4], application_data* app_data)
     float closest_t;
     float hit_distance = FLT_MAX;
     
+    float a,b,c,dis;
+    
     for(uint32_t i=0; i<app_data->sphere_count; i++)
     {
         s = &app_data->spheres[i];
         
         dm_vec3_sub_vec3(r.origin, s->pos, origin);
         
-        const float a = dm_vec3_dot(r.direction, r.direction);
-        const float b = 2.0f * dm_vec3_dot(origin, r.direction);
-        const float c = dm_vec3_dot(origin, origin) - (s->radius * s->radius);
+        a = dm_vec3_dot(r.direction, r.direction);
+        b = 2.0f * dm_vec3_dot(origin, r.direction);
+        c = dm_vec3_dot(origin, origin) - (s->radius * s->radius);
         
-        const float dis = b * b - 4.0f * a * c;
+        dis = b * b - 4.0f * a * c;
         
         // don't hit this sphere
         if(dis < 0) continue;
         
         // are we the closest sphere?
         closest_t = (-b - dm_sqrtf(dis)) / (2.0f * a);
-        if(closest_t > hit_distance) continue;
+        if(closest_t > hit_distance || closest_t < 0) continue;
         
         hit_distance = closest_t;
         nearest_sphere = s;
@@ -248,7 +250,7 @@ bool dm_application_init(dm_context* context)
     // camera
     float camera_p[] = { 0,0,10 };
     float camera_f[] = { 0,0,-1 };
-    camera_init(camera_p, camera_f, 0.1f, 100.0f, 75.0f, app_data->image.w, app_data->image.h, 5.0f, 0.1f, &app_data->camera);
+    camera_init(camera_p, camera_f, 0.1f, 1000.0f, 75.0f, app_data->image.w, app_data->image.h, 5.0f, 0.1f, &app_data->camera);
     
     recreate_rays(app_data);
     
