@@ -246,9 +246,9 @@ bool dm_application_init(dm_context* context)
     if(!dm_renderer_create_dynamic_texture(app_data->image.w, app_data->image.h, 4, app_data->image.data, "image_texture", &app_data->handles.texture, context)) return false;
     
     // camera
-    float camera_p[] = { 0,0,100 };
+    float camera_p[] = { 0,0,10 };
     float camera_f[] = { 0,0,-1 };
-    camera_init(camera_p, camera_f, 0.01f, 100.0f, 75.0f, app_data->image.w, app_data->image.h, 5.0f, 0.1f, &app_data->camera);
+    camera_init(camera_p, camera_f, 0.1f, 100.0f, 75.0f, app_data->image.w, app_data->image.h, 5.0f, 0.1f, &app_data->camera);
     
     recreate_rays(app_data);
     
