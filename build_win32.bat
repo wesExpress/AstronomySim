@@ -9,9 +9,10 @@ SET /A opengl=0
 SET /A debug=0
 SET /A physics_mt=0
 SET /A physics_debug=0
+SET /A math_tests=0
 
 SET app=%SRC_DIR%\app\raytrace_app.c
-SET rendering=%SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c
+REM SET rendering=%SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c
 
 SET c_filenames=%app% %rendering% %SRC_DIR%\app\camera.c %SRC_DIR%\app\components.c %SRC_DIR%\systems\gravity_system.c
 
@@ -24,12 +25,12 @@ IF /I "%physics_mt%" EQU "1" (
 SET dm_filenames=%DM_DIR%\dm_impl.c %DM_DIR%\platform\dm_platform_win32.c %DM_DIR%\dm_physics.c %DM_DIR%\dm_imgui.c
 
 SET linker_flags=/link user32.lib gdi32.lib
-SET include_flags=/I%SRC_DIR% /I%DM_DIR% /I%DM_DIR%\lib
+SET include_flags=/I%SRC_DIR% /I%DM_DIR% /I%DM_DIR%\lib /I%DM_DIR%\lib\cglm\include
 SET compiler_flags=/arch:AVX512 /Wall /WL /TC /std:c99
 
 IF /I "%debug%" EQU "1" (
 	SET defines=%defines% /DDM_DEBUG
-	SET compiler_flags=/W2 /Z7 /Od /Ob0 /RTCsu
+	SET compiler_flags=/W2 /Z7 /Od /Ob0
 ) ELSE (
 	SET defines=%defines% /DDM_RELEASE
 	SET compiler_flags=/O2 /Ob3 /Zi
@@ -37,6 +38,10 @@ IF /I "%debug%" EQU "1" (
 
 IF /I "%physics_debug%" EQU "1" (
 	SET defines=%defines% /DDM_PHYSICS_DEBUG
+)
+
+IF /I "%math_tests%" EQU "1" (
+	SET defines=%defines% /DDM_MATH_TESTS
 )
 
 IF /I "%vulkan%" EQU "1" (

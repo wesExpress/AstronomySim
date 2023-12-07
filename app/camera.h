@@ -10,12 +10,12 @@ typedef struct basic_camera_t
     
     uint32_t width, height;
     
-    float pos[N3];
-    float up[N3], forward[N3], right[N3];
-    float proj[M4], view[M4], inv_view[M4], view_proj[M4], inv_proj[M4];
+    dm_vec3 pos;
+    dm_vec3 up, forward, right;
+    dm_mat4 proj, view, inv_view, view_proj, inv_proj;
 } basic_camera;
 
-void camera_init(const float pos[3], const float forward[3], float near_plane, float far_plane, float fov, uint32_t width, uint32_t height, float move_speed, float look_sens, basic_camera* camera);
+void camera_init(const dm_vec3 pos, const dm_vec3 forward, float near_plane, float far_plane, float fov, uint32_t width, uint32_t height, float move_speed, float look_sens, basic_camera* camera);
 bool camera_update(basic_camera* camera, dm_context* context);
 void camera_resize(const uint32_t width, const uint32_t height, basic_camera* camera, dm_context* context);
 
