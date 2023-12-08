@@ -33,7 +33,7 @@ IF /I "%debug%" EQU "1" (
 	SET compiler_flags=/W2 /Z7 /Od /Ob0
 ) ELSE (
 	SET defines=%defines% /DDM_RELEASE
-	SET compiler_flags=/O2 /Ob3 /Zi
+	SET compiler_flags=/O2 /Ob3 /Zi /GS-
 )
 
 IF /I "%physics_debug%" EQU "1" (
