@@ -56,14 +56,16 @@ typedef struct sphere_data_t
 
 typedef struct mt_data_t
 {
-    uint32_t     y_start, y_incr, width;
-    sphere_data* spheres;
+    uint32_t     y_incr, width;
     dm_vec4      color;
     dm_vec3      ray_pos;
+    
+    sphere_data* spheres;
     uint32_t*    image_data;
     dm_vec4*     ray_dirs;
 } mt_data;
 
+#define NUM_TASKS 8
 typedef struct application_data_t
 {
     app_handles handles;
@@ -80,7 +82,9 @@ typedef struct application_data_t
     uint32_t rays_processed;
     
     // mt stuff
-    dm_threadpool threadpool;
+    dm_threadpool  threadpool;
+    dm_thread_task tasks[NUM_TASKS];
+    mt_data        thread_data[NUM_TASKS];
     
     // ray directions
     dm_vec4* ray_dirs;
@@ -525,7 +529,7 @@ void* image_mt_func(void* func_data)
     dm_vec4 color = { 1,1,1,1 };
     dm_vec3 dir;
     
-    for(uint32_t y=data->y_start; y<(data->y_start + data->y_incr); y++)
+    for(uint32_t y=0; y<data->y_incr; y++)
     {
         for(uint32_t x=0; x<data->width; x++)
         {
@@ -552,42 +556,67 @@ void* image_mt_func(void* func_data)
 
 void create_image_mt(application_data* app_data)
 {
-#define NUM_TASKS 8
-    dm_thread_task tasks[NUM_TASKS] = { 0 };
-    mt_data thread_data[NUM_TASKS];
+    const uint32_t y_incr    = app_data->image.h / NUM_TASKS;
+    const size_t   data_size = sizeof(uint32_t) * y_incr * app_data->image.w;
+    const size_t   ray_size  = sizeof(dm_vec4) * y_incr * app_data->image.w;
     
-    const uint32_t y_incr = app_data->image.h / NUM_TASKS;
+    uint32_t offset;
     
     for(uint32_t i=0; i<NUM_TASKS; i++)
     {
-        thread_data[i].y_start = y_incr * i;
-        thread_data[i].y_incr  = y_incr;
-        thread_data[i].width   = app_data->image.w;
-        thread_data[i].spheres = &app_data->spheres;
+        app_data->thread_data[i].y_incr  = y_incr;
+        app_data->thread_data[i].width   = app_data->image.w;
+        app_data->thread_data[i].spheres = &app_data->spheres;
         
-        thread_data[i].color[0] = app_data->clear_color[0];
-        thread_data[i].color[1] = app_data->clear_color[1];
-        thread_data[i].color[2] = app_data->clear_color[2];
-        thread_data[i].color[3] = app_data->clear_color[3];
+        app_data->thread_data[i].color[0] = app_data->clear_color[0];
+        app_data->thread_data[i].color[1] = app_data->clear_color[1];
+        app_data->thread_data[i].color[2] = app_data->clear_color[2];
+        app_data->thread_data[i].color[3] = app_data->clear_color[3];
         
-        thread_data[i].ray_pos[0] = app_data->camera.pos[0];
-        thread_data[i].ray_pos[1] = app_data->camera.pos[1];
-        thread_data[i].ray_pos[2] = app_data->camera.pos[2];
+        app_data->thread_data[i].ray_pos[0] = app_data->camera.pos[0];
+        app_data->thread_data[i].ray_pos[1] = app_data->camera.pos[1];
+        app_data->thread_data[i].ray_pos[2] = app_data->camera.pos[2];
         
-        thread_data[i].image_data = app_data->image.data;
-        thread_data[i].ray_dirs   = app_data->ray_dirs; 
+        offset = y_incr * i;
+        
+        if(!app_data->thread_data[i].image_data)
+        {
+            app_data->thread_data[i].image_data = dm_alloc(data_size);
+        }
+        else
+        {
+            app_data->thread_data[i].image_data = dm_realloc(app_data->thread_data[i].image_data, data_size);
+        }
+        dm_memcpy(app_data->thread_data[i].image_data, app_data->image.data + offset * app_data->image.w, data_size);
+        
+        if(!app_data->thread_data[i].ray_dirs)
+        {
+            app_data->thread_data[i].ray_dirs = dm_alloc(ray_size);
+        }
+        else
+        {
+            app_data->thread_data[i].ray_dirs = dm_realloc(app_data->thread_data[i].ray_dirs, ray_size);
+        }
+        dm_memcpy(app_data->thread_data[i].ray_dirs, app_data->ray_dirs + offset * app_data->image.w, ray_size);
         
         ///////////////////////////
-        tasks[i].func = image_mt_func;
-        tasks[i].args = &thread_data[i];
+        app_data->tasks[i].func = image_mt_func;
+        app_data->tasks[i].args = &app_data->thread_data[i];
     }
     
     for(uint32_t i=0; i<NUM_TASKS; i++)
     {
-        dm_threadpool_submit_task(&tasks[i], &app_data->threadpool);
+        dm_threadpool_submit_task(&app_data->tasks[i], &app_data->threadpool);
     }
     
     dm_threadpool_wait_for_completion(&app_data->threadpool);
+    
+    for(uint32_t i=0; i<NUM_TASKS; i++)
+    {
+        offset = y_incr * i;
+        
+        dm_memcpy(app_data->image.data + offset * app_data->image.w, app_data->thread_data[i].image_data, data_size);
+    }
 }
 
 /*******************
@@ -735,6 +764,12 @@ bool dm_application_init(dm_context* context)
 void dm_application_shutdown(dm_context* context)
 {
     application_data* app_data = context->app_data;
+    
+    for(uint32_t i=0; i<NUM_TASKS; i++)
+    {
+        dm_free(app_data->thread_data[i].ray_dirs);
+        dm_free(app_data->thread_data[i].image_data);
+    }
     
     dm_threadpool_destroy(&app_data->threadpool);
     
