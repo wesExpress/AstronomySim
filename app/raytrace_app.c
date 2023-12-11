@@ -56,9 +56,12 @@ typedef struct sphere_data_t
 
 typedef struct mt_data_t
 {
-    uint32_t           x_start, count;
-    const sphere_data* spheres;
-    dm_vec4            color;
+    uint32_t     y_start, y_incr, width;
+    sphere_data* spheres;
+    dm_vec4      color;
+    dm_vec3      ray_pos;
+    uint32_t*    image_data;
+    dm_vec4*     ray_dirs;
 } mt_data;
 
 typedef struct application_data_t
@@ -77,7 +80,7 @@ typedef struct application_data_t
     uint32_t rays_processed;
     
     // mt stuff
-    dm_threadpool pool;
+    dm_threadpool threadpool;
     
     // ray directions
     dm_vec4* ray_dirs;
@@ -183,7 +186,7 @@ hit_payload miss(const ray r)
 hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
 {
     dm_mm_float origin_x, origin_y, origin_z;
-    dm_mm_float sphere_x, sphere_y, sphere_z;
+    //dm_mm_float sphere_x, sphere_y, sphere_z;
     dm_mm_float sphere_r2;
     dm_mm_float b, c, d, d_sqrt, b2;
     dm_mm_float d_mask, hit_mask, final_mask, close_mask;
@@ -213,15 +216,21 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
     
     for(uint32_t i=0; i<spheres->count; i+=4)
     {
-        sphere_x  = dm_mm_load_ps(spheres->x + i);
-        sphere_y  = dm_mm_load_ps(spheres->y + i);
-        sphere_z  = dm_mm_load_ps(spheres->z + i);
-        sphere_r2 = dm_mm_load_ps(spheres->radius_2 + i);
+        origin_x  = dm_mm_load_ps(spheres->x + i);
+        origin_y  = dm_mm_load_ps(spheres->y + i);
+        origin_z  = dm_mm_load_ps(spheres->z + i);
         
         // o = ray.o - sphere.o
-        origin_x = dm_mm_sub_ps(ray_origin_x, sphere_x);
-        origin_y = dm_mm_sub_ps(ray_origin_y, sphere_y);
-        origin_z = dm_mm_sub_ps(ray_origin_z, sphere_z);
+        origin_x = dm_mm_sub_ps(ray_origin_x, origin_x);
+        origin_y = dm_mm_sub_ps(ray_origin_y, origin_y);
+        origin_z = dm_mm_sub_ps(ray_origin_z, origin_z);
+        
+        // c = dot(o,o) - sphere.r * sphere.r
+        c = dm_mm_mul_ps(origin_x,origin_x);
+        c = dm_mm_fmadd_ps(origin_y,origin_y, c);
+        c = dm_mm_fmadd_ps(origin_z,origin_z, c);
+        //sphere_r2 = dm_mm_load_ps(spheres->radius_2 + i);
+        c = dm_mm_sub_ps(c, dm_mm_load_ps(spheres->radius_2 + i));
         
         // b = 2 * dot(o, r.dir)
         b  = dm_mm_mul_ps(origin_x, ray_dir_x);
@@ -229,12 +238,6 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
         b  = dm_mm_fmadd_ps(origin_z,ray_dir_z, b);
         b  = dm_mm_mul_ps(b, twos);
         b2 = dm_mm_mul_ps(b,b);
-        
-        // c = dot(o,o) - sphere.r * sphere.r
-        c = dm_mm_mul_ps(origin_x,origin_x);
-        c = dm_mm_fmadd_ps(origin_y,origin_y, c);
-        c = dm_mm_fmadd_ps(origin_z,origin_z, c);
-        c = dm_mm_sub_ps(c, sphere_r2);
         
         // d = b * b - 4 * c
         d = dm_mm_mul_ps(fours, c);
@@ -298,9 +301,12 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
 hit_payload trace_ray(const ray r, float color[4], sphere_data* spheres)
 {
     dm_vec3 origin;
+    
     float closest_t;
     float hit_distance = FLT_MAX;
     int   nearest_sphere_index = -1;
+    
+    float b, c, dis;
     
     for(uint32_t i=0; i<spheres->count; i++)
     {
@@ -308,10 +314,10 @@ hit_payload trace_ray(const ray r, float color[4], sphere_data* spheres)
         origin[1] = r.origin[1] - spheres->y[i];
         origin[2] = r.origin[2] - spheres->z[i];
         
-        const float b = 2.0f * dm_vec3_dot(origin, r.direction);
-        const float c = dm_vec3_dot(origin, origin) - spheres->radius_2[i];
+        b = 2.0f * dm_vec3_dot(origin, r.direction);
+        c = dm_vec3_dot(origin, origin) - spheres->radius_2[i];
         
-        const float dis = b * b - 4.0f * c;
+        dis = b * b - 4.0f * c;
         
         // don't hit this sphere
         if(dis < 0) continue;
@@ -332,22 +338,34 @@ hit_payload trace_ray(const ray r, float color[4], sphere_data* spheres)
 void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_vec3 pos, dm_vec3 dir, sphere_data* spheres)
 {
     ray r;
-    DM_VEC3_COPY(r.origin, pos);
     
-    //uint32_t index = x + y * app_data->image.w;
+    r.origin[0] = pos[0];
+    r.origin[1] = pos[1];
+    r.origin[2] = pos[2];
     
     r.direction[0] = dir[0];
     r.direction[1] = dir[1];
     r.direction[2] = dir[2];
-    //r.direction[3] = dir[3];
     
     uint32_t bounces = 4;
     float multiplier = 0.5f;
     
+    hit_payload payload;
+    
     for(uint32_t i=0; i<bounces; i++)
     {
-        //hit_payload payload = trace_ray(r, color, spheres);
-        hit_payload payload = trace_ray2(r, color, spheres);
+        switch(spheres->count)
+        {
+            case 1:
+            case 2:
+            case 3:
+            payload = trace_ray(r, color, spheres);
+            break;
+            
+            default:
+            payload = trace_ray2(r, color, spheres);
+            break;
+        }
         
         if(payload.hit_distance<0)
         {
@@ -411,39 +429,48 @@ void recreate_rays(application_data* app_data)
     dm_mm_float target_x_mm, target_y_mm, target_z_mm;
     dm_mm_float coords_mm, coords_x_mm, coords_y_mm, coords_z_mm, coords_w_mm;
     
+    //////////// camera matrices are constant, so do them outside
+    dm_mm_float proj_row1 = dm_mm_load_ps(app_data->camera.inv_proj[0]);
+    dm_mm_float proj_row2 = dm_mm_load_ps(app_data->camera.inv_proj[1]);
+    dm_mm_float proj_row3 = dm_mm_load_ps(app_data->camera.inv_proj[2]);
+    dm_mm_float proj_row4 = dm_mm_load_ps(app_data->camera.inv_proj[3]);
+    
+    dm_mm_transpose_mat4(&proj_row1, &proj_row2, &proj_row3, &proj_row4);
+    
+    dm_mm_float view_row1 = dm_mm_load_ps(app_data->camera.inv_view[0]);
+    dm_mm_float view_row2 = dm_mm_load_ps(app_data->camera.inv_view[1]);
+    dm_mm_float view_row3 = dm_mm_load_ps(app_data->camera.inv_view[2]);
+    dm_mm_float view_row4 = dm_mm_load_ps(app_data->camera.inv_view[3]);
+    
+    dm_mm_transpose_mat4(&view_row1, &view_row2, &view_row3, &view_row4);
+    //////////////////////
+    
     dm_vec4 coords = { 0,0,1,1 };
+    
+    coords_z_mm = dm_mm_set1_ps(1);
+    coords_w_mm = dm_mm_set1_ps(1);
     
     for(uint32_t y=0; y<app_data->image.h; y++)
     {
-        coords[1] = (float)y * height_f_inv;
-        coords[1] = coords[1] * 2.0f - 1.0f;
+        index = y * app_data->image.w;
+        
+        coords_y_mm = dm_mm_set1_ps((float)y);
+        coords_y_mm = dm_mm_mul_ps(coords_y_mm, dm_mm_set1_ps(height_f_inv));
+        coords_y_mm = dm_mm_mul_ps(coords_y_mm, dm_mm_set1_ps(2.0f));
+        coords_y_mm = dm_mm_sub_ps(coords_y_mm, dm_mm_set1_ps(1.0f));
         
         for(uint32_t x=0; x<app_data->image.w; x++)
         {
-            index = x + y * app_data->image.w;
+            /////////////////
+            coords_x_mm = dm_mm_set1_ps((float)x);
+            coords_x_mm = dm_mm_mul_ps(coords_x_mm, dm_mm_set1_ps(width_f_inv));
+            coords_x_mm = dm_mm_mul_ps(coords_x_mm, dm_mm_set1_ps(2.0f));
+            coords_x_mm = dm_mm_sub_ps(coords_x_mm, dm_mm_set1_ps(1.0f));
             
-            coords[0] = (float)x * width_f_inv;
-            coords[0] = coords[0] * 2.0f - 1.0f;
-            
-            ///// Full SIMD ray direction creation
-            coords_mm = dm_mm_load_ps(coords);
-            
-            coords_x_mm = dm_mm_broadcast_x_ps(coords_mm);
-            coords_y_mm = dm_mm_broadcast_y_ps(coords_mm);
-            coords_z_mm = dm_mm_broadcast_z_ps(coords_mm);
-            coords_w_mm = dm_mm_broadcast_w_ps(coords_mm);
-            
-            row1 = dm_mm_load_ps(app_data->camera.inv_proj[0]);
-            row2 = dm_mm_load_ps(app_data->camera.inv_proj[1]);
-            row3 = dm_mm_load_ps(app_data->camera.inv_proj[2]);
-            row4 = dm_mm_load_ps(app_data->camera.inv_proj[3]);
-            
-            dm_mm_transpose_mat4(&row1,&row2,&row3,&row4);
-            
-            target_mm = dm_mm_mul_ps(coords_x_mm, row1);
-            target_mm = dm_mm_fmadd_ps(coords_y_mm,row2, target_mm);
-            target_mm = dm_mm_fmadd_ps(coords_z_mm,row3, target_mm);
-            target_mm = dm_mm_fmadd_ps(coords_w_mm,row4, target_mm);
+            target_mm = dm_mm_mul_ps(coords_x_mm, proj_row1);
+            target_mm = dm_mm_fmadd_ps(coords_y_mm,proj_row2, target_mm);
+            target_mm = dm_mm_fmadd_ps(coords_z_mm,proj_row3, target_mm);
+            target_mm = dm_mm_fmadd_ps(coords_w_mm,proj_row4, target_mm);
             
             w_mm = dm_mm_broadcast_w_ps(target_mm);
             target_mm = dm_mm_mul_ps(target_mm, w_mm);
@@ -453,21 +480,114 @@ void recreate_rays(application_data* app_data)
             target_y_mm = dm_mm_broadcast_y_ps(target_mm);
             target_z_mm = dm_mm_broadcast_z_ps(target_mm);
             
-            row1 = dm_mm_load_ps(app_data->camera.inv_view[0]);
-            row2 = dm_mm_load_ps(app_data->camera.inv_view[1]);
-            row3 = dm_mm_load_ps(app_data->camera.inv_view[2]);
-            row4 = dm_mm_load_ps(app_data->camera.inv_view[3]);
+            target_mm = dm_mm_mul_ps(target_x_mm, view_row1);
+            target_mm = dm_mm_fmadd_ps(target_y_mm,view_row2, target_mm);
+            target_mm = dm_mm_fmadd_ps(target_z_mm,view_row3, target_mm);
             
-            dm_mm_transpose_mat4(&row1,&row2,&row3,&row4);
-            
-            target_mm = dm_mm_mul_ps(target_x_mm, row1);
-            target_mm = dm_mm_fmadd_ps(target_y_mm,row2, target_mm);
-            target_mm = dm_mm_fmadd_ps(target_z_mm,row3, target_mm);
-            
-            dm_mm_store_ps(app_data->ray_dirs[index], target_mm);
+            dm_mm_store_ps(app_data->ray_dirs[index++], target_mm);
             /////
         }
     }
+}
+
+void create_image(application_data* app_data)
+{
+    float color[N4] = { 1,1,1,1 };
+    dm_vec3 dir;
+    
+    for(uint32_t y=0; y<app_data->image.h; y++)
+    {
+        for(uint32_t x=0; x<app_data->image.w; x++)
+        {
+            color[0] = app_data->clear_color[0];
+            color[1] = app_data->clear_color[1];
+            color[2] = app_data->clear_color[2];
+            color[3] = app_data->clear_color[3];
+            
+            dir[0] = app_data->ray_dirs[x + y * app_data->image.w][0];
+            dir[1] = app_data->ray_dirs[x + y * app_data->image.w][1];
+            dir[2] = app_data->ray_dirs[x + y * app_data->image.w][2];
+            per_pixel(x,y, color, app_data->clear_color, app_data->camera.pos, dir, &app_data->spheres);
+            
+            color[0] = dm_clamp(color[0], 0, 1);
+            color[1] = dm_clamp(color[1], 0, 1);
+            color[2] = dm_clamp(color[2], 0, 1);
+            
+            app_data->image.data[x + y * app_data->image.w] = vec4_to_uint32(color);
+        }
+    }
+}
+
+void* image_mt_func(void* func_data)
+{
+    mt_data* data = func_data;
+    
+    dm_vec4 color = { 1,1,1,1 };
+    dm_vec3 dir;
+    
+    for(uint32_t y=data->y_start; y<(data->y_start + data->y_incr); y++)
+    {
+        for(uint32_t x=0; x<data->width; x++)
+        {
+            color[0] = data->color[0];
+            color[1] = data->color[1];
+            color[2] = data->color[2];
+            color[3] = data->color[3];
+            
+            dir[0] = data->ray_dirs[x + y * data->width][0];
+            dir[1] = data->ray_dirs[x + y * data->width][1];
+            dir[2] = data->ray_dirs[x + y * data->width][2];
+            per_pixel(x,y, color, data->color, data->ray_pos, dir, data->spheres);
+            
+            color[0] = dm_clamp(color[0], 0, 1);
+            color[1] = dm_clamp(color[1], 0, 1);
+            color[2] = dm_clamp(color[2], 0, 1);
+            
+            data->image_data[x + y * data->width] = vec4_to_uint32(color);
+        }
+    }
+    
+    return NULL;
+}
+
+void create_image_mt(application_data* app_data)
+{
+#define NUM_TASKS 8
+    dm_thread_task tasks[NUM_TASKS] = { 0 };
+    mt_data thread_data[NUM_TASKS];
+    
+    const uint32_t y_incr = app_data->image.h / NUM_TASKS;
+    
+    for(uint32_t i=0; i<NUM_TASKS; i++)
+    {
+        thread_data[i].y_start = y_incr * i;
+        thread_data[i].y_incr  = y_incr;
+        thread_data[i].width   = app_data->image.w;
+        thread_data[i].spheres = &app_data->spheres;
+        
+        thread_data[i].color[0] = app_data->clear_color[0];
+        thread_data[i].color[1] = app_data->clear_color[1];
+        thread_data[i].color[2] = app_data->clear_color[2];
+        thread_data[i].color[3] = app_data->clear_color[3];
+        
+        thread_data[i].ray_pos[0] = app_data->camera.pos[0];
+        thread_data[i].ray_pos[1] = app_data->camera.pos[1];
+        thread_data[i].ray_pos[2] = app_data->camera.pos[2];
+        
+        thread_data[i].image_data = app_data->image.data;
+        thread_data[i].ray_dirs   = app_data->ray_dirs; 
+        
+        ///////////////////////////
+        tasks[i].func = image_mt_func;
+        tasks[i].args = &thread_data[i];
+    }
+    
+    for(uint32_t i=0; i<NUM_TASKS; i++)
+    {
+        dm_threadpool_submit_task(&tasks[i], &app_data->threadpool);
+    }
+    
+    dm_threadpool_wait_for_completion(&app_data->threadpool);
 }
 
 /*******************
@@ -562,7 +682,25 @@ bool dm_application_init(dm_context* context)
         app_data->spheres.radius_2[i] = FLT_MAX;
     }
     
+    // threadool
+    if(!dm_threadpool_create("ray_tracer", 4, &app_data->threadpool)) return false;
+    
     // sphere 1
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    
     make_random_sphere(app_data, context);
     make_random_sphere(app_data, context);
     make_random_sphere(app_data, context);
@@ -598,6 +736,8 @@ void dm_application_shutdown(dm_context* context)
 {
     application_data* app_data = context->app_data;
     
+    dm_threadpool_destroy(&app_data->threadpool);
+    
     dm_free(app_data->ray_dirs);
     dm_free(app_data->image.data);
     dm_free(context->app_data);
@@ -630,30 +770,8 @@ bool dm_application_update(dm_context* context)
     // update image
     dm_timer_start(&app_data->timer, context);
     
-    float color[N4] = { 1,1,1,1 };
-    dm_vec3 dir;
-
-    for(uint32_t y=0; y<app_data->image.h; y++)
-    {
-        for(uint32_t x=0; x<app_data->image.w; x++)
-        {
-            color[0] = app_data->clear_color[0];
-            color[1] = app_data->clear_color[1];
-            color[2] = app_data->clear_color[2];
-            color[3] = app_data->clear_color[3];
-
-            dir[0] = app_data->ray_dirs[x + y * app_data->image.w][0];
-            dir[1] = app_data->ray_dirs[x + y * app_data->image.w][1];
-            dir[2] = app_data->ray_dirs[x + y * app_data->image.w][2];
-            per_pixel(x,y, color, app_data->clear_color, app_data->camera.pos, dir, &app_data->spheres);
-            
-            color[0] = dm_clamp(color[0], 0, 1);
-            color[1] = dm_clamp(color[1], 0, 1);
-            color[2] = dm_clamp(color[2], 0, 1);
-            
-            app_data->image.data[x + y * app_data->image.w] = vec4_to_uint32(color);
-        }
-    }
+    //create_image(app_data);
+    create_image_mt(app_data);
     
     app_data->image_creation_t = dm_timer_elapsed_ms(&app_data->timer, context);
     app_data->rays_processed = app_data->image.w * app_data->image.h;
@@ -682,6 +800,9 @@ bool dm_application_render(dm_context* context)
     if(nk_begin(ctx, "Ray Trace App", nk_rect(650,50, 300,300), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
                 NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
     {
+        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_value_uint(ctx, "Sphere count", app_data->spheres.count);
+        
         nk_layout_row_dynamic(ctx, 30, 1);
         nk_value_float(ctx, "Ray creation (ms)", app_data->ray_creation_t);
         nk_layout_row_dynamic(ctx, 30, 1);
