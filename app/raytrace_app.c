@@ -41,6 +41,26 @@ typedef struct app_image_t
 } app_image;
 
 #define MAX_SPHERE_COUNT 100
+typedef struct sphere_data_t
+{
+    DM_ALIGN(16) float x[MAX_SPHERE_COUNT];
+    DM_ALIGN(16) float y[MAX_SPHERE_COUNT];
+    DM_ALIGN(16) float z[MAX_SPHERE_COUNT];
+    DM_ALIGN(16) float radius[MAX_SPHERE_COUNT];
+    DM_ALIGN(16) float radius_2[MAX_SPHERE_COUNT];
+    
+    dm_vec4 albedo[MAX_SPHERE_COUNT];
+    
+    uint32_t count;
+} sphere_data;
+
+typedef struct mt_data_t
+{
+    uint32_t           x_start, count;
+    const sphere_data* spheres;
+    dm_vec4            color;
+} mt_data;
+
 typedef struct application_data_t
 {
     app_handles handles;
@@ -53,58 +73,67 @@ typedef struct application_data_t
     // timings
     dm_timer timer;
     double image_creation_t, ray_creation_t;
+    double seconds_timer;
+    uint32_t rays_processed;
+    
+    // mt stuff
+    dm_threadpool pool;
     
     // ray directions
     dm_vec4* ray_dirs;
     
     // objects
-    //sphere   spheres[MAX_SPHERE_COUNT];
-    DM_ALIGN(16) float sphere_x[MAX_SPHERE_COUNT];
-    DM_ALIGN(16) float sphere_y[MAX_SPHERE_COUNT];
-    DM_ALIGN(16) float sphere_z[MAX_SPHERE_COUNT];
-    DM_ALIGN(16) float sphere_radius[MAX_SPHERE_COUNT];
-    DM_ALIGN(16) float sphere_radius_2[MAX_SPHERE_COUNT];
-    dm_vec4 sphere_albedo[MAX_SPHERE_COUNT];
-    
-    uint32_t sphere_count;
+    sphere_data spheres;
 } application_data;
 
 /*******
 HELPERS
 *********/
-void make_sphere(float x, float y, float z, float radius, float r, float g, float b, float a, application_data* app_data)
+void make_sphere(const float x, const float y, const float z, const float radius, const float r, const float g, const float b, const float a, application_data* app_data)
 {
-    uint32_t index = app_data->sphere_count;
+    sphere_data* spheres = &app_data->spheres;
+    const uint32_t index = spheres->count;
     
-    app_data->sphere_x[index] = x;
-    app_data->sphere_y[index] = y;
-    app_data->sphere_z[index] = z;
+    spheres->x[index] = x;
+    spheres->y[index] = y;
+    spheres->z[index] = z;
     
-    app_data->sphere_radius[index] = radius;
-    app_data->sphere_radius_2[index] = radius * radius;
+    spheres->radius[index]   = radius;
+    spheres->radius_2[index] = radius * radius;
     
-    dm_vec4_set_from_floats(r,g,b,a, app_data->sphere_albedo[index]);
+    dm_vec4_set_from_floats(r,g,b,a, spheres->albedo[index]);
     
-    app_data->sphere_count++;
+    spheres->count++;
 }
 
 void make_random_sphere(application_data* app_data, dm_context* context)
 {
-    uint32_t index = app_data->sphere_count;
+    sphere_data* spheres = &app_data->spheres;
+    const uint32_t index = spheres->count;
     
-    app_data->sphere_x[index] = dm_random_float_range(-10.0f,10.0f, context);
-    app_data->sphere_y[index] = dm_random_float_range(-10.0f,10.0f, context);
-    app_data->sphere_z[index] = dm_random_float_range(-10.0f,10.0f, context);
+    const float x = dm_random_float_range(-10,10,context);
+    const float y = dm_random_float_range(-10,10,context);
+    const float z = dm_random_float_range(-10,10,context);
     
-    app_data->sphere_radius[index] = dm_random_float_range(0.1f,2.0f, context);
-    app_data->sphere_radius_2[index] = app_data->sphere_radius[index] * app_data->sphere_radius[index];
+    spheres->x[index] = x;
+    spheres->y[index] = y;
+    spheres->z[index] = z;
     
-    float r = dm_random_float(context);
-    float g = dm_random_float(context);
-    float b = dm_random_float(context);
-    dm_vec4_set_from_floats(r,g,b, 1, app_data->sphere_albedo[index]);
+    const float radius = dm_random_float_range(0.1f,2.0f, context);
     
-    app_data->sphere_count++;
+    spheres->radius[index]   = radius;
+    spheres->radius_2[index] = radius * radius;
+    
+    const float r = dm_random_float(context);
+    const float g = dm_random_float(context);
+    const float b = dm_random_float(context);
+    
+    spheres->albedo[index][0] = r;
+    spheres->albedo[index][1] = g;
+    spheres->albedo[index][2] = b;
+    spheres->albedo[index][3] = 1;
+    
+    spheres->count++;
 }
 
 uint32_t vec4_to_uint32(const float vec[4])
@@ -118,7 +147,7 @@ uint32_t vec4_to_uint32(const float vec[4])
     return result;
 }
 
-hit_payload closest_hit(const ray r, float hit_distance, int obj_index, dm_vec4 color, application_data* app_data)
+hit_payload closest_hit(const ray r, float hit_distance, int obj_index, dm_vec4 color, sphere_data* spheres)
 {
     hit_payload payload = {
         .hit_distance=hit_distance,
@@ -126,9 +155,9 @@ hit_payload closest_hit(const ray r, float hit_distance, int obj_index, dm_vec4 
     };
     
     dm_vec3 origin;
-    origin[0] = r.origin[0] - app_data->sphere_x[obj_index];
-    origin[1] = r.origin[1] - app_data->sphere_y[obj_index];
-    origin[2] = r.origin[2] - app_data->sphere_z[obj_index];
+    origin[0] = r.origin[0] - spheres->x[obj_index];
+    origin[1] = r.origin[1] - spheres->y[obj_index];
+    origin[2] = r.origin[2] - spheres->z[obj_index];
     
     dm_vec3 hit_point;
     dm_vec3_scale(r.direction, hit_distance, hit_point);
@@ -137,14 +166,14 @@ hit_payload closest_hit(const ray r, float hit_distance, int obj_index, dm_vec4 
     dm_vec3 normal = { 0 };
     dm_vec3_norm(payload.world_position, payload.world_normal);
     
-    payload.world_position[0] += app_data->sphere_x[obj_index];
-    payload.world_position[1] += app_data->sphere_y[obj_index];
-    payload.world_position[2] += app_data->sphere_z[obj_index];
+    payload.world_position[0] += spheres->x[obj_index];
+    payload.world_position[1] += spheres->y[obj_index];
+    payload.world_position[2] += spheres->z[obj_index];
     
     return payload;
 }
 
-hit_payload miss(const ray r, dm_vec4 color)
+hit_payload miss(const ray r)
 {
     hit_payload payload = {
         .hit_distance=-1
@@ -153,46 +182,47 @@ hit_payload miss(const ray r, dm_vec4 color)
     return payload;
 }
 
-hit_payload trace_ray2(const ray r, float color[4], application_data* app_data)
+hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
 {
     dm_mm_float origin_x, origin_y, origin_z;
     dm_mm_float sphere_x, sphere_y, sphere_z;
     dm_mm_float sphere_r2;
-    dm_mm_float b, c, d, b2;
-    dm_mm_float d_mask, hit_mask, final_mask, min_mask;
+    dm_mm_float b, c, d, d_sqrt, b2;
+    dm_mm_float d_mask, hit_mask, final_mask, close_mask;
     dm_mm_float closest_t;
     
-    dm_mm_float ray_origin_x = dm_mm_set1_ps(r.origin[0]);
-    dm_mm_float ray_origin_y = dm_mm_set1_ps(r.origin[1]);
-    dm_mm_float ray_origin_z = dm_mm_set1_ps(r.origin[2]);
+    const dm_mm_float ray_origin_x = dm_mm_set1_ps(r.origin[0]);
+    const dm_mm_float ray_origin_y = dm_mm_set1_ps(r.origin[1]);
+    const dm_mm_float ray_origin_z = dm_mm_set1_ps(r.origin[2]);
     
-    dm_mm_float ray_dir_x = dm_mm_set1_ps(r.direction[0]);
-    dm_mm_float ray_dir_y = dm_mm_set1_ps(r.direction[1]);
-    dm_mm_float ray_dir_z = dm_mm_set1_ps(r.direction[2]);
+    const dm_mm_float ray_dir_x = dm_mm_set1_ps(r.direction[0]);
+    const dm_mm_float ray_dir_y = dm_mm_set1_ps(r.direction[1]);
+    const dm_mm_float ray_dir_z = dm_mm_set1_ps(r.direction[2]);
     
     static int starting_indices[] = { 0,1,2,3 };
     
     dm_mm_int indices = dm_mm_load_i(starting_indices);
     
-    const dm_mm_float zeros   = dm_mm_set1_ps(0);
-    const dm_mm_float halfs   = dm_mm_set1_ps(0.5f);
-    const dm_mm_float ones    = dm_mm_set1_ps(1.0f);
-    const dm_mm_float twos    = dm_mm_set1_ps(2.0f);
-    const dm_mm_float fours   = dm_mm_set1_ps(4.0f);
-    const dm_mm_int   fours_i = dm_mm_set1_i(4);
-    const dm_mm_float maxes   = dm_mm_set1_ps(FLT_MAX);
+    const dm_mm_float zeros     = dm_mm_set1_ps(0);
+    const dm_mm_float halfs     = dm_mm_set1_ps(0.5f);
+    const dm_mm_float neg_halfs = dm_mm_set1_ps(-0.5f);
+    const dm_mm_float ones      = dm_mm_set1_ps(1.0f);
+    const dm_mm_float twos      = dm_mm_set1_ps(2.0f);
+    const dm_mm_float fours     = dm_mm_set1_ps(4.0f);
+    const dm_mm_float maxes     = dm_mm_set1_ps(FLT_MAX);
     
+    const dm_mm_int fours_i      = dm_mm_set1_i(4);
     const dm_mm_int minus_ones_i = dm_mm_set1_i(-1);
     
     dm_mm_int   hit_index = dm_mm_set1_i(-1);
     dm_mm_float hit_t     = dm_mm_set1_ps(FLT_MAX);
     
-    for(uint32_t i=0; i<app_data->sphere_count; i+=4)
+    for(uint32_t i=0; i<spheres->count; i+=4)
     {
-        sphere_x  = dm_mm_load_ps(app_data->sphere_x + i);
-        sphere_y  = dm_mm_load_ps(app_data->sphere_y + i);
-        sphere_z  = dm_mm_load_ps(app_data->sphere_z + i);
-        sphere_r2 = dm_mm_load_ps(app_data->sphere_radius_2 + i);
+        sphere_x  = dm_mm_load_ps(spheres->x + i);
+        sphere_y  = dm_mm_load_ps(spheres->y + i);
+        sphere_z  = dm_mm_load_ps(spheres->z + i);
+        sphere_r2 = dm_mm_load_ps(spheres->radius_2 + i);
         
         // o = ray.o - sphere.o
         origin_x = dm_mm_sub_ps(ray_origin_x, sphere_x);
@@ -216,20 +246,20 @@ hit_payload trace_ray2(const ray r, float color[4], application_data* app_data)
         d = dm_mm_mul_ps(fours, c);
         d = dm_mm_sub_ps(b2, d);
         
-        // d > 0
-        d_mask = dm_mm_gt_ps(d, zeros);
-        
         // closest hit point
-        d = dm_mm_sqrt_ps(d);
+        d_sqrt = dm_mm_sqrt_ps(d);
         
         // (-b - sqrt(d)) / 2
-        closest_t = dm_mm_add_ps(b, d);
-        closest_t = dm_mm_sub_ps(zeros, closest_t);
-        closest_t = dm_mm_mul_ps(closest_t, halfs);
+        closest_t = dm_mm_add_ps(b, d_sqrt);
+        closest_t = dm_mm_mul_ps(closest_t, neg_halfs);
         
         // closest_t > 0
-        hit_mask = dm_mm_gt_ps(closest_t, zeros);
-        hit_mask = dm_mm_and_ps(hit_mask, dm_mm_lt_ps(closest_t, hit_t));
+        close_mask = dm_mm_lt_ps(closest_t, hit_t);
+        hit_mask   = dm_mm_gt_ps(closest_t, zeros);
+        hit_mask   = dm_mm_and_ps(hit_mask, close_mask);
+        
+        // d > 0
+        d_mask = dm_mm_gt_ps(d, zeros);
         
         final_mask = dm_mm_and_ps(d_mask, hit_mask);
         
@@ -254,31 +284,40 @@ hit_payload trace_ray2(const ray r, float color[4], application_data* app_data)
         if(hits[i] >= nearest_hit) continue;
         
         nearest_hit   = hits[i];
-        nearest_index = i;
+        nearest_index = hit_inds[i];
     }
     
-    if(nearest_index < 0) return miss(r, color);
+    switch(nearest_index)
+    {
+        case -1: return miss(r);
+        
+        default: return closest_hit(r, nearest_hit, nearest_index, color, spheres);
+    }
     
-    return closest_hit(r, nearest_hit, nearest_index, color, app_data);
+#if 0
+    if(nearest_index < 0) return miss(r);
+    
+    return closest_hit(r, nearest_hit, nearest_index, color, spheres);
+#endif
 }
 
-hit_payload trace_ray(const ray r, float color[4], application_data* app_data)
+hit_payload trace_ray(const ray r, float color[4], sphere_data* spheres)
 {
     dm_vec3 origin;
     float closest_t;
     float hit_distance = FLT_MAX;
-    int nearest_sphere_index = -1;
+    int   nearest_sphere_index = -1;
     
-    for(uint32_t i=0; i<app_data->sphere_count; i++)
+    for(uint32_t i=0; i<spheres->count; i++)
     {
-        origin[0] = r.origin[0] - app_data->sphere_x[i];
-        origin[1] = r.origin[1] - app_data->sphere_y[i];
-        origin[2] = r.origin[2] - app_data->sphere_z[i];
+        origin[0] = r.origin[0] - spheres->x[i];
+        origin[1] = r.origin[1] - spheres->y[i];
+        origin[2] = r.origin[2] - spheres->z[i];
         
-        float b = 2.0f * dm_vec3_dot(origin, r.direction);
-        float c = dm_vec3_dot(origin, origin) - app_data->sphere_radius_2[i];
+        const float b = 2.0f * dm_vec3_dot(origin, r.direction);
+        const float c = dm_vec3_dot(origin, origin) - spheres->radius_2[i];
         
-        float dis = b * b - 4.0f * c;
+        const float dis = b * b - 4.0f * c;
         
         // don't hit this sphere
         if(dis < 0) continue;
@@ -291,36 +330,36 @@ hit_payload trace_ray(const ray r, float color[4], application_data* app_data)
         nearest_sphere_index = i;
     }
     
-    if(nearest_sphere_index<0) return miss(r, color);
+    if(nearest_sphere_index<0) return miss(r);
     
-    return closest_hit(r, hit_distance, nearest_sphere_index, color, app_data);
+    return closest_hit(r, hit_distance, nearest_sphere_index, color, spheres);
 }
 
-void per_pixel(uint32_t x, uint32_t y, float color[4], application_data* app_data)
+void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_vec4 pos, dm_vec3 dir, sphere_data* spheres)
 {
     ray r;
-    DM_VEC3_COPY(r.origin, app_data->camera.pos);
+    DM_VEC3_COPY(r.origin, pos);
     
-    uint32_t index = x + y * app_data->image.w;
+    //uint32_t index = x + y * app_data->image.w;
     
-    r.direction[0] = app_data->ray_dirs[index][0];
-    r.direction[1] = app_data->ray_dirs[index][1];
-    r.direction[2] = app_data->ray_dirs[index][2];
-    r.direction[3] = app_data->ray_dirs[index][3];
+    r.direction[0] = dir[0];
+    r.direction[1] = dir[1];
+    r.direction[2] = dir[2];
+    r.direction[3] = dir[3];
     
     uint32_t bounces = 4;
     float multiplier = 0.5f;
     
     for(uint32_t i=0; i<bounces; i++)
     {
-        hit_payload payload = trace_ray(r, color, app_data);
-        //hit_payload payload = trace_ray2(r, color, app_data);
+        //hit_payload payload = trace_ray(r, color, spheres);
+        hit_payload payload = trace_ray2(r, color, spheres);
         
         if(payload.hit_distance<0)
         {
-            color[0] += multiplier * app_data->clear_color[0];
-            color[1] += multiplier * app_data->clear_color[1];
-            color[2] += multiplier * app_data->clear_color[2];
+            color[0] += multiplier * clear_color[0];
+            color[1] += multiplier * clear_color[1];
+            color[2] += multiplier * clear_color[2];
             
             break;
         }
@@ -337,7 +376,7 @@ void per_pixel(uint32_t x, uint32_t y, float color[4], application_data* app_dat
         
         // determine color 
         dm_vec3 sphere_color;
-        dm_vec3_scale(app_data->sphere_albedo[payload.obj_index], d, sphere_color);
+        dm_vec3_scale(spheres->albedo[payload.obj_index], d, sphere_color);
         
         color[0] += multiplier * sphere_color[0];
         color[1] += multiplier * sphere_color[1];
@@ -523,26 +562,35 @@ bool dm_application_init(dm_context* context)
     
     for(uint32_t i=0; i<MAX_SPHERE_COUNT; i++)
     {
-        app_data->sphere_x[i] = FLT_MAX;
-        app_data->sphere_y[i] = FLT_MAX;
-        app_data->sphere_z[i] = FLT_MAX;
-        app_data->sphere_radius[i] = FLT_MAX;
-        app_data->sphere_radius_2[i] = FLT_MAX;
+        app_data->spheres.x[i] = FLT_MAX;
+        app_data->spheres.y[i] = FLT_MAX;
+        app_data->spheres.z[i] = FLT_MAX;
+        
+        app_data->spheres.radius[i] = FLT_MAX;
+        app_data->spheres.radius_2[i] = FLT_MAX;
     }
     
     // sphere 1
-    make_sphere(0.1f,0,0, 0.5f, 1,0,1,1, app_data);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
     
-    // sphere 2
-    make_sphere(0,0.5f,0, 0.2f, 0,0,1,1, app_data);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
     
-    // sphere 3
-    make_sphere(-10,2.0f,-5, 0.2f, 0,1,0,1, app_data);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
     
-    // sphere 4
-    make_sphere(4.f,-3.f,2.f, 0.2f, 1,1,0,1, app_data);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
+    make_random_sphere(app_data, context);
     
-    // AT YOUR OWN PERIL
     make_random_sphere(app_data, context);
     make_random_sphere(app_data, context);
     make_random_sphere(app_data, context);
@@ -600,9 +648,9 @@ bool dm_application_update(dm_context* context)
             color[1] = app_data->clear_color[1];
             color[2] = app_data->clear_color[2];
             color[3] = app_data->clear_color[3];
+            //per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_vec4 pos, dm_vec3 dir, sphere_data* spheres)
+            per_pixel(x,y, color, app_data->clear_color, app_data->camera.pos, app_data->ray_dirs[x + y * app_data->image.w], &app_data->spheres);
             
-            per_pixel(x,y, color, app_data);
-            //trace_ray(r, color, app_data);
             color[0] = dm_clamp(color[0], 0, 1);
             color[1] = dm_clamp(color[1], 0, 1);
             color[2] = dm_clamp(color[2], 0, 1);
@@ -612,6 +660,7 @@ bool dm_application_update(dm_context* context)
     }
     
     app_data->image_creation_t = dm_timer_elapsed_ms(&app_data->timer, context);
+    app_data->rays_processed = app_data->image.w * app_data->image.h;
     
     dm_render_command_update_texture(app_data->handles.texture, app_data->image.w, app_data->image.h, app_data->image.data, app_data->image.data_size, context);
     
@@ -634,7 +683,7 @@ bool dm_application_render(dm_context* context)
     dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
     struct nk_context* ctx = &imgui_nk_ctx->ctx;
     
-    if(nk_begin(ctx, "Ray Trace App", nk_rect(650,50, 300,250), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
+    if(nk_begin(ctx, "Ray Trace App", nk_rect(650,50, 300,300), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
                 NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
     {
         nk_layout_row_dynamic(ctx, 30, 1);
@@ -642,45 +691,9 @@ bool dm_application_render(dm_context* context)
         nk_layout_row_dynamic(ctx, 30, 1);
         nk_value_float(ctx, "Image creation (ms)", app_data->image_creation_t);
         
-        if(nk_tree_push(ctx, NK_TREE_TAB, "Sphere 1", NK_MAXIMIZED))
-        {
-            nk_layout_row_dynamic(ctx, 30, 3);
-            nk_property_float(ctx, "X", -10, &app_data->sphere_x[0], 10, 0.1f,0.1f);
-            nk_property_float(ctx, "Y", -10, &app_data->sphere_y[0], 10, 0.1f,0.1f);
-            nk_property_float(ctx, "Z", -10, &app_data->sphere_z[0], 10, 0.1f,0.1f);
-            
-            nk_layout_row_dynamic(ctx, 30, 1);
-            nk_property_float(ctx, "Radius", 0.5f, &app_data->sphere_radius[0], 2.0f, 0.1f,0.1f);
-            
-            struct nk_colorf bg;
-            bg.r = app_data->sphere_albedo[0][0]; 
-            bg.g = app_data->sphere_albedo[0][1]; 
-            bg.b = app_data->sphere_albedo[0][2]; 
-            bg.a = app_data->sphere_albedo[0][3];
-            
-            if(nk_combo_begin_color(ctx, nk_rgb_cf(bg), nk_vec2(nk_widget_width(ctx),400)))
-            {
-                nk_layout_row_dynamic(ctx, 120, 1);
-                bg = nk_color_picker(ctx, bg, NK_RGBA);
-                
-                nk_layout_row_dynamic(ctx, 25, 1);
-                bg.r = nk_propertyf(ctx, "#R:", 0, bg.r, 1.0f, 0.01f, 0.0005f);
-                bg.g = nk_propertyf(ctx, "#B:", 0, bg.b, 1.0f, 0.01f, 0.0005f);
-                bg.b = nk_propertyf(ctx, "#G:", 0, bg.g, 1.0f, 0.01f, 0.0005f);
-                bg.a = nk_propertyf(ctx, "#A:", 0, bg.a, 1.0f, 0.01f, 0.0005f);
-                
-                nk_combo_end(ctx);
-            }
-            nk_tree_pop(ctx);
-            
-            app_data->sphere_albedo[0][0] = bg.r; 
-            app_data->sphere_albedo[0][1] = bg.g; 
-            app_data->sphere_albedo[0][2] = bg.b; 
-            app_data->sphere_albedo[0][3] = bg.a;
-            
-            app_data->sphere_radius_2[0] = app_data->sphere_radius[0] * app_data->sphere_radius[0];
-        }
-        
+        nk_layout_row_dynamic(ctx, 30, 1);
+        const float num_rays = (float)app_data->rays_processed * 1000.0f / 1e6f / app_data->image_creation_t;
+        nk_value_float(ctx, "Rays processed (millions per second)", num_rays);
     }
     nk_end(ctx);
     

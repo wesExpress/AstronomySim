@@ -5,7 +5,7 @@ SET SRC_DIR=%cd%
 SET DM_DIR=%SRC_DIR%\DarkMatter
 
 REM SET /A vulkan=0
-SET /A opengl=0
+SET /A opengl=1
 
 IF NOT EXIST "build\assets\shaders" mkdir build\assets\shaders
 

@@ -4,9 +4,9 @@ SetLocal EnableDelayedExpansion
 SET SRC_DIR=%cd%
 SET DM_DIR=%SRC_DIR%\DarkMatter
 
+SET /A debug=0
 REM SET /A vulkan=0
 SET /A opengl=0
-SET /A debug=0
 SET /A physics_mt=0
 SET /A physics_debug=0
 SET /A math_tests=0
@@ -33,7 +33,7 @@ IF /I "%debug%" EQU "1" (
 	SET compiler_flags=/W2 /Z7 /Od /Ob0
 ) ELSE (
 	SET defines=%defines% /DDM_RELEASE
-	SET compiler_flags=/O2 /Ob3 /Zi /GS-
+	SET compiler_flags=/O2 /Ob3 /Zi /fp:fast
 )
 
 IF /I "%physics_debug%" EQU "1" (
