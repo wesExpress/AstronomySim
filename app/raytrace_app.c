@@ -162,8 +162,6 @@ hit_payload closest_hit(const ray r, float hit_distance, int obj_index, dm_vec4 
     dm_vec3 hit_point;
     dm_vec3_scale(r.direction, hit_distance, hit_point);
     dm_vec3_add_vec3(origin, hit_point, payload.world_position);
-    
-    dm_vec3 normal = { 0 };
     dm_vec3_norm(payload.world_position, payload.world_normal);
     
     payload.world_position[0] += spheres->x[obj_index];
@@ -204,15 +202,11 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
     dm_mm_int indices = dm_mm_load_i(starting_indices);
     
     const dm_mm_float zeros     = dm_mm_set1_ps(0);
-    const dm_mm_float halfs     = dm_mm_set1_ps(0.5f);
     const dm_mm_float neg_halfs = dm_mm_set1_ps(-0.5f);
-    const dm_mm_float ones      = dm_mm_set1_ps(1.0f);
     const dm_mm_float twos      = dm_mm_set1_ps(2.0f);
     const dm_mm_float fours     = dm_mm_set1_ps(4.0f);
-    const dm_mm_float maxes     = dm_mm_set1_ps(FLT_MAX);
     
     const dm_mm_int fours_i      = dm_mm_set1_i(4);
-    const dm_mm_int minus_ones_i = dm_mm_set1_i(-1);
     
     dm_mm_int   hit_index = dm_mm_set1_i(-1);
     dm_mm_float hit_t     = dm_mm_set1_ps(FLT_MAX);
@@ -335,7 +329,7 @@ hit_payload trace_ray(const ray r, float color[4], sphere_data* spheres)
     return closest_hit(r, hit_distance, nearest_sphere_index, color, spheres);
 }
 
-void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_vec4 pos, dm_vec3 dir, sphere_data* spheres)
+void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_vec3 pos, dm_vec3 dir, sphere_data* spheres)
 {
     ray r;
     DM_VEC3_COPY(r.origin, pos);
@@ -345,7 +339,7 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_ve
     r.direction[0] = dir[0];
     r.direction[1] = dir[1];
     r.direction[2] = dir[2];
-    r.direction[3] = dir[3];
+    //r.direction[3] = dir[3];
     
     uint32_t bounces = 4;
     float multiplier = 0.5f;
@@ -411,12 +405,10 @@ void recreate_rays(application_data* app_data)
     const float height_f_inv = 1.0f / (float)app_data->image.h;
     const float width_f_inv  = 1.0f / (float)app_data->image.w;
     
-    dm_vec4 target, dir;
     uint32_t index;
-    float w;
     
     dm_mm_float w_mm, target_mm, row1,row2,row3,row4;
-    dm_mm_float target_x_mm, target_y_mm, target_z_mm, target_w_mm;
+    dm_mm_float target_x_mm, target_y_mm, target_z_mm;
     dm_mm_float coords_mm, coords_x_mm, coords_y_mm, coords_z_mm, coords_w_mm;
     
     dm_vec4 coords = { 0,0,1,1 };
@@ -639,7 +631,8 @@ bool dm_application_update(dm_context* context)
     dm_timer_start(&app_data->timer, context);
     
     float color[N4] = { 1,1,1,1 };
-    
+    dm_vec3 dir;
+
     for(uint32_t y=0; y<app_data->image.h; y++)
     {
         for(uint32_t x=0; x<app_data->image.w; x++)
@@ -648,8 +641,11 @@ bool dm_application_update(dm_context* context)
             color[1] = app_data->clear_color[1];
             color[2] = app_data->clear_color[2];
             color[3] = app_data->clear_color[3];
-            //per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_vec4 pos, dm_vec3 dir, sphere_data* spheres)
-            per_pixel(x,y, color, app_data->clear_color, app_data->camera.pos, app_data->ray_dirs[x + y * app_data->image.w], &app_data->spheres);
+
+            dir[0] = app_data->ray_dirs[x + y * app_data->image.w][0];
+            dir[1] = app_data->ray_dirs[x + y * app_data->image.w][1];
+            dir[2] = app_data->ray_dirs[x + y * app_data->image.w][2];
+            per_pixel(x,y, color, app_data->clear_color, app_data->camera.pos, dir, &app_data->spheres);
             
             color[0] = dm_clamp(color[0], 0, 1);
             color[1] = dm_clamp(color[1], 0, 1);
