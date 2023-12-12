@@ -18,14 +18,6 @@ typedef struct hit_payload_t
     uint32_t obj_index;
 } hit_payload;
 
-typedef struct sphere_t
-{
-    dm_vec3 pos;
-    float   radius;
-    
-    dm_vec4 albedo;
-} sphere;
-
 typedef struct app_handles_t
 {
     dm_render_handle vb, shader, pipeline;
@@ -37,8 +29,25 @@ typedef struct app_image_t
 {
     uint32_t  w,h;
     size_t    data_size;
+    
+    uint32_t frame_index;
+    
     uint32_t* data;
+    dm_vec4*  accumulated_data;
 } app_image;
+
+#define MAX_MATERIAL_COUNT 100
+typedef struct material_data_t
+{
+    DM_ALIGN(16) float albedo_r[MAX_MATERIAL_COUNT];
+    DM_ALIGN(16) float albedo_g[MAX_MATERIAL_COUNT];
+    DM_ALIGN(16) float albedo_b[MAX_MATERIAL_COUNT];
+    
+    DM_ALIGN(16) float roughness[MAX_MATERIAL_COUNT];
+    DM_ALIGN(16) float metallic[MAX_MATERIAL_COUNT];
+    
+    uint32_t count;
+} material_data;
 
 #define MAX_SPHERE_COUNT 100
 typedef struct sphere_data_t
@@ -49,20 +58,27 @@ typedef struct sphere_data_t
     DM_ALIGN(16) float radius[MAX_SPHERE_COUNT];
     DM_ALIGN(16) float radius_2[MAX_SPHERE_COUNT];
     
-    dm_vec4 albedo[MAX_SPHERE_COUNT];
+    DM_ALIGN(16) uint32_t material_id[MAX_SPHERE_COUNT];
     
     uint32_t count;
 } sphere_data;
 
 typedef struct mt_data_t
 {
-    uint32_t     y_incr, width;
-    dm_vec4      color;
-    dm_vec3      ray_pos;
+    uint32_t y_incr, width;
+    dm_vec4  color;
+    dm_vec3  ray_pos;
+    uint32_t frame_index;
     
-    sphere_data* spheres;
+    sphere_data*   spheres;
+    material_data* materials;
+    
     uint32_t*    image_data;
+    dm_vec4*     accumulated_data;
+    
     dm_vec4*     ray_dirs;
+    
+    dm_context* context;
 } mt_data;
 
 #define NUM_TASKS 8
@@ -86,17 +102,22 @@ typedef struct application_data_t
     dm_thread_task tasks[NUM_TASKS];
     mt_data        thread_data[NUM_TASKS];
     
+    bool accumulate;
+    
     // ray directions
     dm_vec4* ray_dirs;
     
     // objects
     sphere_data spheres;
+    
+    // materials
+    material_data materials;
 } application_data;
 
 /*******
 HELPERS
 *********/
-void make_sphere(const float x, const float y, const float z, const float radius, const float r, const float g, const float b, const float a, application_data* app_data)
+void make_sphere(const float x, const float y, const float z, const float radius, application_data* app_data, dm_context* context)
 {
     sphere_data* spheres = &app_data->spheres;
     const uint32_t index = spheres->count;
@@ -108,7 +129,7 @@ void make_sphere(const float x, const float y, const float z, const float radius
     spheres->radius[index]   = radius;
     spheres->radius_2[index] = radius * radius;
     
-    dm_vec4_set_from_floats(r,g,b,a, spheres->albedo[index]);
+    spheres->material_id[index] = dm_random_uint32_range(0,MAX_MATERIAL_COUNT, context);
     
     spheres->count++;
 }
@@ -135,12 +156,14 @@ void make_random_sphere(application_data* app_data, dm_context* context)
     const float g = dm_random_float(context);
     const float b = dm_random_float(context);
     
-    spheres->albedo[index][0] = r;
-    spheres->albedo[index][1] = g;
-    spheres->albedo[index][2] = b;
-    spheres->albedo[index][3] = 1;
+    spheres->material_id[index] = (uint32_t)dm_random_float_range(0,MAX_MATERIAL_COUNT, context);
     
     spheres->count++;
+}
+
+void reset_frame_index(application_data* app_data)
+{
+    app_data->image.frame_index = 1;
 }
 
 uint32_t vec4_to_uint32(const float vec[4])
@@ -339,7 +362,7 @@ hit_payload trace_ray(const ray r, float color[4], sphere_data* spheres)
     return closest_hit(r, hit_distance, nearest_sphere_index, color, spheres);
 }
 
-void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_vec3 pos, dm_vec3 dir, sphere_data* spheres)
+void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_vec3 pos, dm_vec3 dir, sphere_data* spheres, material_data* materials, dm_context* context)
 {
     ray r;
     
@@ -391,14 +414,18 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_ve
         d = DM_MAX(d, 0);
         
         // determine color 
+        const uint32_t mat_id = spheres->material_id[payload.obj_index];
+        
         dm_vec3 sphere_color;
-        dm_vec3_scale(spheres->albedo[payload.obj_index], d, sphere_color);
+        sphere_color[0] = materials->albedo_r[mat_id] * d;
+        sphere_color[1] = materials->albedo_g[mat_id] * d;
+        sphere_color[2] = materials->albedo_b[mat_id] * d;
         
         color[0] += multiplier * sphere_color[0];
         color[1] += multiplier * sphere_color[1];
         color[2] += multiplier * sphere_color[2];
         
-        multiplier *= 0.75;
+        multiplier *= 0.5;
         
         dm_vec3 offset_pos;
         dm_vec3 scaled_normal;
@@ -410,6 +437,16 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_ve
         r.origin[2] = offset_pos[2];
         
         dm_vec3_reflect(r.direction, payload.world_normal, r.direction);
+        
+        // scattering
+        dm_vec3 sampling = { 
+            dm_random_float_range(-0.5f,0.5f,context), 
+            dm_random_float_range(-0.5f,0.5f,context), 
+            dm_random_float_range(-0.5f,0.5f,context) 
+        };
+        dm_vec3_scale(sampling, materials->roughness[mat_id], sampling);
+        
+        dm_vec3_add_vec3(r.direction, sampling, r.direction);
     }
 }
 
@@ -494,7 +531,7 @@ void recreate_rays(application_data* app_data)
     }
 }
 
-void create_image(application_data* app_data)
+void create_image(application_data* app_data, dm_context* context)
 {
     float color[N4] = { 1,1,1,1 };
     dm_vec3 dir;
@@ -511,7 +548,7 @@ void create_image(application_data* app_data)
             dir[0] = app_data->ray_dirs[x + y * app_data->image.w][0];
             dir[1] = app_data->ray_dirs[x + y * app_data->image.w][1];
             dir[2] = app_data->ray_dirs[x + y * app_data->image.w][2];
-            per_pixel(x,y, color, app_data->clear_color, app_data->camera.pos, dir, &app_data->spheres);
+            per_pixel(x,y, color, app_data->clear_color, app_data->camera.pos, dir, &app_data->spheres, &app_data->materials, context);
             
             color[0] = dm_clamp(color[0], 0, 1);
             color[1] = dm_clamp(color[1], 0, 1);
@@ -541,11 +578,28 @@ void* image_mt_func(void* func_data)
             dir[0] = data->ray_dirs[x + y * data->width][0];
             dir[1] = data->ray_dirs[x + y * data->width][1];
             dir[2] = data->ray_dirs[x + y * data->width][2];
-            per_pixel(x,y, color, data->color, data->ray_pos, dir, data->spheres);
+            per_pixel(x,y, color, data->color, data->ray_pos, dir, data->spheres, data->materials, data->context);
             
+            data->accumulated_data[x + y * data->width][0] += color[0];
+            data->accumulated_data[x + y * data->width][1] += color[1];
+            data->accumulated_data[x + y * data->width][2] += color[2];
+            data->accumulated_data[x + y * data->width][3] += 1;
+            
+            color[0] = data->accumulated_data[x + y * data->width][0];
+            color[1] = data->accumulated_data[x + y * data->width][1];
+            color[2] = data->accumulated_data[x + y * data->width][2];
+            color[3] = data->accumulated_data[x + y * data->width][3];
+            
+            color[0] /= (float)data->frame_index;
+            color[1] /= (float)data->frame_index;
+            color[2] /= (float)data->frame_index;
+            color[3] /= (float)data->frame_index;
+            
+            // clamp to 255
             color[0] = dm_clamp(color[0], 0, 1);
             color[1] = dm_clamp(color[1], 0, 1);
             color[2] = dm_clamp(color[2], 0, 1);
+            color[3] = dm_clamp(color[3], 0, 1);
             
             data->image_data[x + y * data->width] = vec4_to_uint32(color);
         }
@@ -554,19 +608,28 @@ void* image_mt_func(void* func_data)
     return NULL;
 }
 
-void create_image_mt(application_data* app_data)
+void create_image_mt(application_data* app_data, dm_context* context)
 {
     const uint32_t y_incr    = app_data->image.h / NUM_TASKS;
     const size_t   data_size = sizeof(uint32_t) * y_incr * app_data->image.w;
+    const size_t   acc_size  = sizeof(dm_vec4) * y_incr * app_data->image.w;
     const size_t   ray_size  = sizeof(dm_vec4) * y_incr * app_data->image.w;
     
     uint32_t offset;
     
+    if(app_data->image.frame_index==1)
+    {
+        dm_memzero(app_data->image.accumulated_data, sizeof(dm_vec4) * app_data->image.w * app_data->image.h);
+    }
+    
     for(uint32_t i=0; i<NUM_TASKS; i++)
     {
-        app_data->thread_data[i].y_incr  = y_incr;
-        app_data->thread_data[i].width   = app_data->image.w;
-        app_data->thread_data[i].spheres = &app_data->spheres;
+        app_data->thread_data[i].y_incr    = y_incr;
+        app_data->thread_data[i].width     = app_data->image.w;
+        app_data->thread_data[i].spheres   = &app_data->spheres;
+        app_data->thread_data[i].materials = &app_data->materials;
+        app_data->thread_data[i].context   = context;
+        app_data->thread_data[i].frame_index = app_data->image.frame_index;
         
         app_data->thread_data[i].color[0] = app_data->clear_color[0];
         app_data->thread_data[i].color[1] = app_data->clear_color[1];
@@ -581,13 +644,18 @@ void create_image_mt(application_data* app_data)
         
         if(!app_data->thread_data[i].image_data)
         {
-            app_data->thread_data[i].image_data = dm_alloc(data_size);
+            app_data->thread_data[i].image_data       = dm_alloc(data_size);
+            app_data->thread_data[i].accumulated_data = dm_alloc(acc_size);
         }
         else
         {
-            app_data->thread_data[i].image_data = dm_realloc(app_data->thread_data[i].image_data, data_size);
+            app_data->thread_data[i].image_data       = dm_realloc(app_data->thread_data[i].image_data, data_size);
+            app_data->thread_data[i].accumulated_data = dm_realloc(app_data->thread_data[i].accumulated_data, acc_size);
         }
-        dm_memcpy(app_data->thread_data[i].image_data, app_data->image.data + offset * app_data->image.w, data_size);
+        void* src = app_data->image.data + offset * app_data->image.w;
+        dm_memcpy(app_data->thread_data[i].image_data, src, data_size);
+        src = app_data->image.accumulated_data + offset * app_data->image.w;
+        dm_memcpy(app_data->thread_data[i].accumulated_data, src, acc_size);
         
         if(!app_data->thread_data[i].ray_dirs)
         {
@@ -616,6 +684,7 @@ void create_image_mt(application_data* app_data)
         offset = y_incr * i;
         
         dm_memcpy(app_data->image.data + offset * app_data->image.w, app_data->thread_data[i].image_data, data_size);
+        dm_memcpy(app_data->image.accumulated_data + offset * app_data->image.w, app_data->thread_data[i].accumulated_data, acc_size);
     }
 }
 
@@ -624,8 +693,8 @@ FRAMEWORK INTERFACE
 *********************/
 void dm_application_setup(dm_context_init_packet* init_packet)
 {
-    init_packet->window_width  = 1000;
-    init_packet->window_height = 1000;
+    init_packet->window_width  = 1280;
+    init_packet->window_height = 720;
 }
 
 bool dm_application_init(dm_context* context)
@@ -683,21 +752,15 @@ bool dm_application_init(dm_context* context)
     app_data->image.data_size = sizeof(uint32_t) * app_data->image.w * app_data->image.h;
     
     app_data->image.data = dm_alloc(app_data->image.data_size);
-    for(uint32_t y=0; y<app_data->image.h; y++)
-    {
-        for(uint32_t x=0; x<app_data->image.w; x++)
-        {
-            app_data->image.data[x + y * app_data->image.w]  = dm_random_uint32(context);
-            app_data->image.data[x + y * app_data->image.w] |= 0xff000000;
-        }
-    }
+    app_data->image.accumulated_data = dm_alloc(sizeof(dm_vec4) * app_data->image.w * app_data->image.h);
+    app_data->image.frame_index = 1;
     
     if(!dm_renderer_create_dynamic_texture(app_data->image.w, app_data->image.h, 4, app_data->image.data, "image_texture", &app_data->handles.texture, context)) return false;
     
     // camera
     float camera_p[] = { 0,0,5 };
     float camera_f[] = { 0,0,-1 };
-    camera_init(camera_p, camera_f, 0.1f, 100.0f, 75.0f, app_data->image.w, app_data->image.h, 5.0f, 0.1f, &app_data->camera);
+    camera_init(camera_p, camera_f, 0.01f, 100.0f, 75.0f, app_data->image.w, app_data->image.h, 5.0f, 0.1f, &app_data->camera);
     
     recreate_rays(app_data);
     
@@ -714,46 +777,23 @@ bool dm_application_init(dm_context* context)
     // threadool
     if(!dm_threadpool_create("ray_tracer", 4, &app_data->threadpool)) return false;
     
-    // sphere 1
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
+    // materials
+    for(uint32_t i=0; i<MAX_MATERIAL_COUNT; i++)
+    {
+        app_data->materials.albedo_r[i] = dm_random_float(context);
+        app_data->materials.albedo_g[i] = dm_random_float(context);
+        app_data->materials.albedo_b[i] = dm_random_float(context);
+        
+        app_data->materials.roughness[i] = dm_random_float(context);
+        app_data->materials.metallic[i]  = dm_random_float(context);
+    }
     
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
-    make_random_sphere(app_data, context);
+#define NUM_SPHERES 64
+    // spheres
+    for(uint32_t i=0; i<NUM_SPHERES; i++)
+    {
+        make_random_sphere(app_data, context);
+    }
     
     // misc
     app_data->clear_color[3] = 1;
@@ -774,6 +814,7 @@ void dm_application_shutdown(dm_context* context)
     dm_threadpool_destroy(&app_data->threadpool);
     
     dm_free(app_data->ray_dirs);
+    dm_free(app_data->image.accumulated_data);
     dm_free(app_data->image.data);
     dm_free(context->app_data);
 }
@@ -794,6 +835,8 @@ bool dm_application_update(dm_context* context)
         app_data->image.data_size = sizeof(uint32_t) * app_data->image.w * app_data->image.h;
         app_data->image.data = dm_realloc(app_data->image.data, app_data->image.data_size);
         
+        app_data->image.accumulated_data = dm_realloc(app_data->image.accumulated_data, sizeof(dm_vec4) * app_data->image.w * app_data->image.h);
+        
         camera_resize(app_data->image.w, app_data->image.h, &app_data->camera, context);
     }
     
@@ -802,11 +845,15 @@ bool dm_application_update(dm_context* context)
     if(width_changed || height_changed || camera_updated) recreate_rays(app_data);
     app_data->ray_creation_t = dm_timer_elapsed_ms(&app_data->timer, context);
     
+    if(camera_updated) reset_frame_index(app_data);
+    
     // update image
     dm_timer_start(&app_data->timer, context);
     
-    //create_image(app_data);
-    create_image_mt(app_data);
+    create_image_mt(app_data, context);
+    
+    if(app_data->accumulate) app_data->image.frame_index++;
+    else                     app_data->image.frame_index = 1;
     
     app_data->image_creation_t = dm_timer_elapsed_ms(&app_data->timer, context);
     app_data->rays_processed = app_data->image.w * app_data->image.h;
@@ -829,6 +876,8 @@ bool dm_application_render(dm_context* context)
     dm_render_command_bind_texture(app_data->handles.texture, 0, context);
     dm_render_command_draw_arrays(0, 6, context);
     
+    
+    ///////////////////// IMGUI
     dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
     struct nk_context* ctx = &imgui_nk_ctx->ctx;
     
@@ -846,8 +895,13 @@ bool dm_application_render(dm_context* context)
         nk_layout_row_dynamic(ctx, 30, 1);
         const float num_rays = (float)app_data->rays_processed * 1000.0f / 1e6f / app_data->image_creation_t;
         nk_value_float(ctx, "Rays processed (millions per second)", num_rays);
+        
+        nk_layout_row_dynamic(ctx, 30, 2);
+        nk_checkbox_label(ctx, "Accumulate", &app_data->accumulate);
+        if(nk_button_label(ctx, "Reset")) reset_frame_index(app_data);
     }
     nk_end(ctx);
+    /////////////////////////////////
     
     return true;
 }
