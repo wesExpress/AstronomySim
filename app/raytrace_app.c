@@ -34,6 +34,7 @@ typedef struct app_image_t
     
     uint32_t* data;
     dm_vec4*  accumulated_data;
+    uint32_t* random_numbers;
 } app_image;
 
 #define MAX_MATERIAL_COUNT 100
@@ -45,6 +46,12 @@ typedef struct material_data_t
     
     DM_ALIGN(16) float roughness[MAX_MATERIAL_COUNT];
     DM_ALIGN(16) float metallic[MAX_MATERIAL_COUNT];
+    
+    DM_ALIGN(16) float emission_r[MAX_MATERIAL_COUNT];
+    DM_ALIGN(16) float emission_g[MAX_MATERIAL_COUNT];
+    DM_ALIGN(16) float emission_b[MAX_MATERIAL_COUNT];
+    
+    DM_ALIGN(16) float emission_power[MAX_MATERIAL_COUNT];
     
     uint32_t count;
 } material_data;
@@ -66,22 +73,23 @@ typedef struct sphere_data_t
 typedef struct mt_data_t
 {
     uint32_t y_incr, width;
-    dm_vec4  color;
+    dm_vec4  sky_color;
     dm_vec3  ray_pos;
     uint32_t frame_index;
+    
+    uint32_t rays_processed;
     
     sphere_data*   spheres;
     material_data* materials;
     
     uint32_t*    image_data;
     dm_vec4*     accumulated_data;
+    uint32_t *   random_numbers;
     
     dm_vec4*     ray_dirs;
-    
-    dm_context* context;
 } mt_data;
 
-#define NUM_TASKS 8
+#define NUM_TASKS 100
 typedef struct application_data_t
 {
     app_handles handles;
@@ -89,7 +97,7 @@ typedef struct application_data_t
     
     basic_camera camera;
     
-    dm_vec4 clear_color;
+    dm_vec4 sky_color;
     
     // timings
     dm_timer timer;
@@ -177,6 +185,20 @@ uint32_t vec4_to_uint32(const float vec[4])
     return result;
 }
 
+uint32_t pcg_hash(uint32_t input)
+{
+    uint32_t state = input * 747796405u + 2891336453u;
+    uint32_t word  = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+float random_float(uint32_t* seed)
+{
+    *seed = pcg_hash(*seed);
+    
+    return (float)*seed / (float)UINT_MAX;
+}
+
 hit_payload closest_hit(const ray r, float hit_distance, int obj_index, dm_vec4 color, sphere_data* spheres)
 {
     hit_payload payload = {
@@ -213,7 +235,6 @@ hit_payload miss(const ray r)
 hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
 {
     dm_mm_float origin_x, origin_y, origin_z;
-    //dm_mm_float sphere_x, sphere_y, sphere_z;
     dm_mm_float sphere_r2;
     dm_mm_float b, c, d, d_sqrt, b2;
     dm_mm_float d_mask, hit_mask, final_mask, close_mask;
@@ -231,12 +252,11 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
     
     dm_mm_int indices = dm_mm_load_i(starting_indices);
     
-    const dm_mm_float zeros     = dm_mm_set1_ps(0);
-    const dm_mm_float neg_halfs = dm_mm_set1_ps(-0.5f);
-    const dm_mm_float twos      = dm_mm_set1_ps(2.0f);
-    const dm_mm_float fours     = dm_mm_set1_ps(4.0f);
+    const dm_mm_float zeros = dm_mm_set1_ps(0);
+    const dm_mm_float halfs = dm_mm_set1_ps(0.5f);
+    const dm_mm_float twos  = dm_mm_set1_ps(2.0f);
     
-    const dm_mm_int fours_i      = dm_mm_set1_i(4);
+    const dm_mm_int fours_i = dm_mm_set1_i(4);
     
     dm_mm_int   hit_index = dm_mm_set1_i(-1);
     dm_mm_float hit_t     = dm_mm_set1_ps(FLT_MAX);
@@ -248,15 +268,14 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
         origin_z  = dm_mm_load_ps(spheres->z + i);
         
         // o = ray.o - sphere.o
-        origin_x = dm_mm_sub_ps(ray_origin_x, origin_x);
-        origin_y = dm_mm_sub_ps(ray_origin_y, origin_y);
-        origin_z = dm_mm_sub_ps(ray_origin_z, origin_z);
+        origin_x = dm_mm_sub_ps(origin_x, ray_origin_x);
+        origin_y = dm_mm_sub_ps(origin_y, ray_origin_y);
+        origin_z = dm_mm_sub_ps(origin_z, ray_origin_z);
         
         // c = dot(o,o) - sphere.r * sphere.r
         c = dm_mm_mul_ps(origin_x,origin_x);
         c = dm_mm_fmadd_ps(origin_y,origin_y, c);
         c = dm_mm_fmadd_ps(origin_z,origin_z, c);
-        //sphere_r2 = dm_mm_load_ps(spheres->radius_2 + i);
         c = dm_mm_sub_ps(c, dm_mm_load_ps(spheres->radius_2 + i));
         
         // b = 2 * dot(o, r.dir)
@@ -264,35 +283,38 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
         b  = dm_mm_fmadd_ps(origin_y,ray_dir_y, b);
         b  = dm_mm_fmadd_ps(origin_z,ray_dir_z, b);
         b  = dm_mm_mul_ps(b, twos);
-        b2 = dm_mm_mul_ps(b,b);
         
         // d = b * b - 4 * c
-        d = dm_mm_mul_ps(fours, c);
-        d = dm_mm_sub_ps(b2, d);
+        d = dm_mm_mul_ps(twos, c);
+        d = dm_mm_mul_ps(twos, d);
+        d = dm_mm_sub_ps(dm_mm_mul_ps(b,b), d);
+        
+        // d > 0
+        d_mask = dm_mm_gt_ps(d, zeros);
         
         // closest hit point
         d_sqrt = dm_mm_sqrt_ps(d);
         
         // (-b - sqrt(d)) / 2
-        closest_t = dm_mm_add_ps(b, d_sqrt);
-        closest_t = dm_mm_mul_ps(closest_t, neg_halfs);
+        closest_t = dm_mm_sub_ps(b, d_sqrt);
+        closest_t = dm_mm_mul_ps(closest_t, halfs);
         
         // closest_t > 0
         close_mask = dm_mm_lt_ps(closest_t, hit_t);
         hit_mask   = dm_mm_gt_ps(closest_t, zeros);
         hit_mask   = dm_mm_and_ps(hit_mask, close_mask);
         
-        // d > 0
-        d_mask = dm_mm_gt_ps(d, zeros);
-        
         final_mask = dm_mm_and_ps(d_mask, hit_mask);
         
-        hit_t     = _mm_blendv_ps(hit_t, closest_t, final_mask);
-        hit_index = _mm_blendv_epi8(hit_index, indices, dm_mm_cast_float_to_int(final_mask));
+        hit_t     = dm_mm_blendv_ps(hit_t, closest_t, final_mask);
+        hit_index = dm_mm_blendv_i(hit_index, indices, dm_mm_cast_float_to_int(final_mask));
         
         // iterate
         indices = dm_mm_add_i(indices, fours_i);
     }
+    
+    //dm_mm_float m = dm_mm_gt_ps(dm_mm_cast_int_to_float(hit_index), zeros);
+    //if(_mm_movemask_ps(m) == 0) return miss(r);
     
     int     hit_inds[4];
     dm_vec4 hits;
@@ -311,18 +333,9 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
         nearest_index = hit_inds[i];
     }
     
-    switch(nearest_index)
-    {
-        case -1: return miss(r);
-        
-        default: return closest_hit(r, nearest_hit, nearest_index, color, spheres);
-    }
-    
-#if 0
     if(nearest_index < 0) return miss(r);
     
     return closest_hit(r, nearest_hit, nearest_index, color, spheres);
-#endif
 }
 
 hit_payload trace_ray(const ray r, float color[4], sphere_data* spheres)
@@ -362,7 +375,7 @@ hit_payload trace_ray(const ray r, float color[4], sphere_data* spheres)
     return closest_hit(r, hit_distance, nearest_sphere_index, color, spheres);
 }
 
-void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_vec3 pos, dm_vec3 dir, sphere_data* spheres, material_data* materials, dm_context* context)
+void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3 pos, dm_vec3 dir, uint32_t seed, uint32_t* ray_count, sphere_data* spheres, material_data* materials)
 {
     ray r;
     
@@ -374,58 +387,35 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_ve
     r.direction[1] = dir[1];
     r.direction[2] = dir[2];
     
-    uint32_t bounces = 4;
-    float multiplier = 0.5f;
+    uint32_t bounces      = 5;
+    dm_vec3  contribution = { 1,1,1 };
+    dm_vec3  light        = { 0 };
     
     hit_payload payload;
     
+    float light_r = 0;
+    float light_g = 0;
+    float light_b = 0;
+    
+    dm_vec3 sampling;
+    
     for(uint32_t i=0; i<bounces; i++)
     {
-        switch(spheres->count)
-        {
-            case 1:
-            case 2:
-            case 3:
-            payload = trace_ray(r, color, spheres);
-            break;
-            
-            default:
-            payload = trace_ray2(r, color, spheres);
-            break;
-        }
+        seed += i;
+        *ray_count = *ray_count + 1;
         
-        if(payload.hit_distance<0)
-        {
-            color[0] += multiplier * clear_color[0];
-            color[1] += multiplier * clear_color[1];
-            color[2] += multiplier * clear_color[2];
-            
-            break;
-        }
+        //payload = trace_ray(r, color, spheres);
+        payload = trace_ray2(r, color, spheres);
         
-        // lighting
-        dm_vec3 light_dir = { -1,-1,-1 };
-        dm_vec3_norm(light_dir, light_dir);
-        
-        dm_vec3 light_dir_neg;
-        dm_vec3_negate(light_dir, light_dir_neg);
-        
-        float d = dm_vec3_dot(payload.world_normal, light_dir_neg);
-        d = DM_MAX(d, 0);
+        if(payload.hit_distance<0) break;
         
         // determine color 
         const uint32_t mat_id = spheres->material_id[payload.obj_index];
+        float emission_power = materials->emission_power[mat_id];
         
-        dm_vec3 sphere_color;
-        sphere_color[0] = materials->albedo_r[mat_id] * d;
-        sphere_color[1] = materials->albedo_g[mat_id] * d;
-        sphere_color[2] = materials->albedo_b[mat_id] * d;
-        
-        color[0] += multiplier * sphere_color[0];
-        color[1] += multiplier * sphere_color[1];
-        color[2] += multiplier * sphere_color[2];
-        
-        multiplier *= 0.5;
+        light_r += materials->emission_r[mat_id] * emission_power;
+        light_g += materials->emission_g[mat_id] * emission_power;
+        light_b += materials->emission_b[mat_id] * emission_power;
         
         dm_vec3 offset_pos;
         dm_vec3 scaled_normal;
@@ -436,18 +426,24 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 clear_color, dm_ve
         r.origin[1] = offset_pos[1];
         r.origin[2] = offset_pos[2];
         
-        dm_vec3_reflect(r.direction, payload.world_normal, r.direction);
-        
         // scattering
-        dm_vec3 sampling = { 
-            dm_random_float_range(-0.5f,0.5f,context), 
-            dm_random_float_range(-0.5f,0.5f,context), 
-            dm_random_float_range(-0.5f,0.5f,context) 
-        };
-        dm_vec3_scale(sampling, materials->roughness[mat_id], sampling);
+        sampling[0] = random_float(&seed) * 2.0f - 1.0f; 
+        sampling[1] = random_float(&seed) * 2.0f - 1.0f; 
+        sampling[2] = random_float(&seed) * 2.0f - 1.0f; 
+        dm_vec3_norm(sampling, sampling);
+        
+        // biased towards normal
+        dm_vec3_add_vec3(sampling, payload.world_normal, sampling);
+        //dm_vec3_norm(sampling, sampling);
         
         dm_vec3_add_vec3(r.direction, sampling, r.direction);
+        dm_vec3_norm(r.direction, r.direction);
     }
+    
+    color[0] = light_r;
+    color[1] = light_g;
+    color[2] = light_b;
+    color[3] = 1;
 }
 
 void recreate_rays(application_data* app_data)
@@ -531,24 +527,60 @@ void recreate_rays(application_data* app_data)
     }
 }
 
+#define SAMPLES 1
+static const float sample_inv = 1.0f / SAMPLES;;
+
 void create_image(application_data* app_data, dm_context* context)
 {
     float color[N4] = { 1,1,1,1 };
     dm_vec3 dir;
+    uint32_t seed;
+    
+    if(app_data->image.frame_index==1)
+    {
+        dm_memzero(app_data->image.accumulated_data, sizeof(dm_vec4) * app_data->image.w * app_data->image.h);
+    }
+    
+    const float inv_frame_index = 1.0f / (float)app_data->image.frame_index;
     
     for(uint32_t y=0; y<app_data->image.h; y++)
     {
         for(uint32_t x=0; x<app_data->image.w; x++)
         {
-            color[0] = app_data->clear_color[0];
-            color[1] = app_data->clear_color[1];
-            color[2] = app_data->clear_color[2];
-            color[3] = app_data->clear_color[3];
+            seed = app_data->image.random_numbers[x + y * app_data->image.w];
             
-            dir[0] = app_data->ray_dirs[x + y * app_data->image.w][0];
-            dir[1] = app_data->ray_dirs[x + y * app_data->image.w][1];
-            dir[2] = app_data->ray_dirs[x + y * app_data->image.w][2];
-            per_pixel(x,y, color, app_data->clear_color, app_data->camera.pos, dir, &app_data->spheres, &app_data->materials, context);
+            color[0] = 0;
+            color[1] = 0;
+            color[2] = 0;
+            color[3] = 1;
+            
+            for(uint32_t i=0; i<SAMPLES; i++)
+            {
+                seed *= app_data->image.frame_index;
+                
+                dir[0] = app_data->ray_dirs[x + y * app_data->image.w][0];
+                dir[1] = app_data->ray_dirs[x + y * app_data->image.w][1];
+                dir[2] = app_data->ray_dirs[x + y * app_data->image.w][2];
+                per_pixel(x,y, color, app_data->sky_color, app_data->camera.pos, dir, seed, &app_data->rays_processed, &app_data->spheres, &app_data->materials);
+            }
+            color[0] *= sample_inv;
+            color[1] *= sample_inv;
+            color[2] *= sample_inv;
+            
+            app_data->image.accumulated_data[x + y * app_data->image.w][0] += color[0];
+            app_data->image.accumulated_data[x + y * app_data->image.w][1] += color[1];
+            app_data->image.accumulated_data[x + y * app_data->image.w][2] += color[2];
+            app_data->image.accumulated_data[x + y * app_data->image.w][3] += 1;
+            
+            color[0] = app_data->image.accumulated_data[x + y * app_data->image.w][0];
+            color[1] = app_data->image.accumulated_data[x + y * app_data->image.w][1];
+            color[2] = app_data->image.accumulated_data[x + y * app_data->image.w][2];
+            color[3] = app_data->image.accumulated_data[x + y * app_data->image.w][3];
+            
+            color[0] *= inv_frame_index;
+            color[1] *= inv_frame_index;
+            color[2] *= inv_frame_index;
+            color[3] *= inv_frame_index;
             
             color[0] = dm_clamp(color[0], 0, 1);
             color[1] = dm_clamp(color[1], 0, 1);
@@ -566,23 +598,40 @@ void* image_mt_func(void* func_data)
     dm_vec4 color = { 1,1,1,1 };
     dm_vec3 dir;
     
+    uint32_t seed;
+    
+    const float inv_frame_index = 1.0f / (float)data->frame_index;
+    
+    dm_vec4 sample_color;
+    
     for(uint32_t y=0; y<data->y_incr; y++)
     {
         for(uint32_t x=0; x<data->width; x++)
         {
-            color[0] = data->color[0];
-            color[1] = data->color[1];
-            color[2] = data->color[2];
-            color[3] = data->color[3];
+            seed = data->random_numbers[x + y * data->width];
             
-            dir[0] = data->ray_dirs[x + y * data->width][0];
-            dir[1] = data->ray_dirs[x + y * data->width][1];
-            dir[2] = data->ray_dirs[x + y * data->width][2];
-            per_pixel(x,y, color, data->color, data->ray_pos, dir, data->spheres, data->materials, data->context);
+            sample_color[0] = 0;
+            sample_color[1] = 0;
+            sample_color[2] = 0;
+            sample_color[3] = 1;
             
-            data->accumulated_data[x + y * data->width][0] += color[0];
-            data->accumulated_data[x + y * data->width][1] += color[1];
-            data->accumulated_data[x + y * data->width][2] += color[2];
+            for(uint32_t i=0; i<SAMPLES; i++)
+            {
+                seed++;
+                
+                dir[0] = data->ray_dirs[x + y * data->width][0];
+                dir[1] = data->ray_dirs[x + y * data->width][1];
+                dir[2] = data->ray_dirs[x + y * data->width][2];
+                per_pixel(x,y, sample_color, data->sky_color, data->ray_pos, dir, seed, &data->rays_processed, data->spheres, data->materials);
+            }
+            
+            sample_color[0] *= sample_inv;
+            sample_color[1] *= sample_inv;
+            sample_color[2] *= sample_inv;
+            
+            data->accumulated_data[x + y * data->width][0] += sample_color[0];
+            data->accumulated_data[x + y * data->width][1] += sample_color[1];
+            data->accumulated_data[x + y * data->width][2] += sample_color[2];
             data->accumulated_data[x + y * data->width][3] += 1;
             
             color[0] = data->accumulated_data[x + y * data->width][0];
@@ -590,10 +639,10 @@ void* image_mt_func(void* func_data)
             color[2] = data->accumulated_data[x + y * data->width][2];
             color[3] = data->accumulated_data[x + y * data->width][3];
             
-            color[0] /= (float)data->frame_index;
-            color[1] /= (float)data->frame_index;
-            color[2] /= (float)data->frame_index;
-            color[3] /= (float)data->frame_index;
+            color[0] *= inv_frame_index;
+            color[1] *= inv_frame_index;
+            color[2] *= inv_frame_index;
+            color[3] *= inv_frame_index;
             
             // clamp to 255
             color[0] = dm_clamp(color[0], 0, 1);
@@ -628,35 +677,46 @@ void create_image_mt(application_data* app_data, dm_context* context)
         app_data->thread_data[i].width     = app_data->image.w;
         app_data->thread_data[i].spheres   = &app_data->spheres;
         app_data->thread_data[i].materials = &app_data->materials;
-        app_data->thread_data[i].context   = context;
         app_data->thread_data[i].frame_index = app_data->image.frame_index;
         
-        app_data->thread_data[i].color[0] = app_data->clear_color[0];
-        app_data->thread_data[i].color[1] = app_data->clear_color[1];
-        app_data->thread_data[i].color[2] = app_data->clear_color[2];
-        app_data->thread_data[i].color[3] = app_data->clear_color[3];
+        app_data->thread_data[i].sky_color[0] = app_data->sky_color[0];
+        app_data->thread_data[i].sky_color[1] = app_data->sky_color[1];
+        app_data->thread_data[i].sky_color[2] = app_data->sky_color[2];
+        app_data->thread_data[i].sky_color[3] = app_data->sky_color[3];
         
         app_data->thread_data[i].ray_pos[0] = app_data->camera.pos[0];
         app_data->thread_data[i].ray_pos[1] = app_data->camera.pos[1];
         app_data->thread_data[i].ray_pos[2] = app_data->camera.pos[2];
         
-        offset = y_incr * i;
+        app_data->thread_data[i].rays_processed = 0;
         
+        offset = y_incr * i * app_data->image.w;
+        
+        // generate "image" arrays
         if(!app_data->thread_data[i].image_data)
         {
             app_data->thread_data[i].image_data       = dm_alloc(data_size);
             app_data->thread_data[i].accumulated_data = dm_alloc(acc_size);
+            app_data->thread_data[i].random_numbers   = dm_alloc(data_size);
         }
         else
         {
             app_data->thread_data[i].image_data       = dm_realloc(app_data->thread_data[i].image_data, data_size);
             app_data->thread_data[i].accumulated_data = dm_realloc(app_data->thread_data[i].accumulated_data, acc_size);
+            app_data->thread_data[i].random_numbers   = dm_realloc(app_data->thread_data[i].random_numbers, data_size);
         }
-        void* src = app_data->image.data + offset * app_data->image.w;
+        
+        // copy over data
+        void* src = app_data->image.data + offset;
         dm_memcpy(app_data->thread_data[i].image_data, src, data_size);
-        src = app_data->image.accumulated_data + offset * app_data->image.w;
+        
+        src = app_data->image.accumulated_data + offset;
         dm_memcpy(app_data->thread_data[i].accumulated_data, src, acc_size);
         
+        src = app_data->image.random_numbers + offset;
+        dm_memcpy(app_data->thread_data[i].random_numbers, src, data_size);
+        
+        // ray directions
         if(!app_data->thread_data[i].ray_dirs)
         {
             app_data->thread_data[i].ray_dirs = dm_alloc(ray_size);
@@ -665,13 +725,14 @@ void create_image_mt(application_data* app_data, dm_context* context)
         {
             app_data->thread_data[i].ray_dirs = dm_realloc(app_data->thread_data[i].ray_dirs, ray_size);
         }
-        dm_memcpy(app_data->thread_data[i].ray_dirs, app_data->ray_dirs + offset * app_data->image.w, ray_size);
+        dm_memcpy(app_data->thread_data[i].ray_dirs, app_data->ray_dirs + offset, ray_size);
         
         ///////////////////////////
         app_data->tasks[i].func = image_mt_func;
         app_data->tasks[i].args = &app_data->thread_data[i];
     }
     
+    // task submission
     for(uint32_t i=0; i<NUM_TASKS; i++)
     {
         dm_threadpool_submit_task(&app_data->tasks[i], &app_data->threadpool);
@@ -679,12 +740,15 @@ void create_image_mt(application_data* app_data, dm_context* context)
     
     dm_threadpool_wait_for_completion(&app_data->threadpool);
     
+    // copy new image data back over
     for(uint32_t i=0; i<NUM_TASKS; i++)
     {
-        offset = y_incr * i;
+        offset = y_incr * i * app_data->image.w;
         
-        dm_memcpy(app_data->image.data + offset * app_data->image.w, app_data->thread_data[i].image_data, data_size);
-        dm_memcpy(app_data->image.accumulated_data + offset * app_data->image.w, app_data->thread_data[i].accumulated_data, acc_size);
+        dm_memcpy(app_data->image.data + offset, app_data->thread_data[i].image_data, data_size);
+        dm_memcpy(app_data->image.accumulated_data + offset, app_data->thread_data[i].accumulated_data, acc_size);
+        
+        app_data->rays_processed += app_data->thread_data[i].rays_processed;
     }
 }
 
@@ -755,6 +819,8 @@ bool dm_application_init(dm_context* context)
     app_data->image.accumulated_data = dm_alloc(sizeof(dm_vec4) * app_data->image.w * app_data->image.h);
     app_data->image.frame_index = 1;
     
+    app_data->image.random_numbers = dm_alloc(sizeof(uint32_t) * app_data->image.w * app_data->image.h);
+    
     if(!dm_renderer_create_dynamic_texture(app_data->image.w, app_data->image.h, 4, app_data->image.data, "image_texture", &app_data->handles.texture, context)) return false;
     
     // camera
@@ -777,6 +843,7 @@ bool dm_application_init(dm_context* context)
     // threadool
     if(!dm_threadpool_create("ray_tracer", 4, &app_data->threadpool)) return false;
     
+#if 1
     // materials
     for(uint32_t i=0; i<MAX_MATERIAL_COUNT; i++)
     {
@@ -786,6 +853,14 @@ bool dm_application_init(dm_context* context)
         
         app_data->materials.roughness[i] = dm_random_float(context);
         app_data->materials.metallic[i]  = dm_random_float(context);
+        
+        if(dm_random_float(context) < 0.8f) continue;
+        
+        app_data->materials.emission_r[i] = app_data->materials.albedo_r[i];
+        app_data->materials.emission_g[i] = app_data->materials.albedo_g[i];
+        app_data->materials.emission_b[i] = app_data->materials.albedo_b[i];
+        
+        app_data->materials.emission_power[i] = dm_random_float_range(0.5f,10, context);;
     }
     
 #define NUM_SPHERES 64
@@ -794,9 +869,90 @@ bool dm_application_init(dm_context* context)
     {
         make_random_sphere(app_data, context);
     }
+#else
+    {
+        app_data->materials.albedo_r[0] = 1;
+        app_data->materials.albedo_b[0] = 1;
+    }
+    
+    {
+        app_data->materials.albedo_b[1] = 1;
+    }
+    
+    {
+        app_data->materials.albedo_r[2] = 0.7f;
+        app_data->materials.albedo_g[2] = 0.2f;
+        app_data->materials.albedo_b[2] = 0.3f;
+        
+        app_data->materials.emission_r[2] = 0.7f;
+        app_data->materials.emission_g[2] = 0.2f;
+        app_data->materials.emission_b[2] = 0.3f;
+        
+        app_data->materials.emission_power[2] = 20.0f;
+    }
+    
+    {
+        app_data->materials.albedo_g[3] = 1;
+    }
+    
+    app_data->materials.count = 4;
+    
+    // pink sphere
+    {
+        app_data->spheres.x[0] = 0;
+        app_data->spheres.y[0] = 0;
+        app_data->spheres.z[0] = 0;
+        
+        app_data->spheres.radius[0] = 1;
+        app_data->spheres.radius_2[0] = 1;
+        
+        app_data->spheres.material_id[0] = 0;
+    }
+    
+    // blue sphere
+    {
+        app_data->spheres.x[1] = 0;
+        app_data->spheres.y[1] = -11;
+        app_data->spheres.z[1] = 0;
+        
+        app_data->spheres.radius[1] = 10;
+        app_data->spheres.radius_2[1] = 100;
+        
+        app_data->spheres.material_id[1] = 1;
+    }
+    
+    // green sphere
+    {
+        app_data->spheres.x[3] = 2;
+        app_data->spheres.y[3] = 2;
+        app_data->spheres.z[3] = 2;
+        
+        app_data->spheres.radius[3] = 2;
+        app_data->spheres.radius_2[3] = 4;
+        
+        app_data->spheres.material_id[3] = 3;
+    }
+    
+    // emitter
+    {
+        app_data->spheres.x[2] = -20;
+        app_data->spheres.y[2] = 5;
+        app_data->spheres.z[2] = -20;
+        
+        app_data->spheres.radius[2] = 10;
+        app_data->spheres.radius_2[2] = 100;
+        
+        app_data->spheres.material_id[2] = 2;
+    }
+    
+    app_data->spheres.count = 4;
+#endif
     
     // misc
-    app_data->clear_color[3] = 1;
+    app_data->sky_color[0] = 0.6f;
+    app_data->sky_color[1] = 0.7f;
+    app_data->sky_color[2] = 0.9f;
+    app_data->sky_color[3] = 1;
     
     return true;
 }
@@ -809,6 +965,8 @@ void dm_application_shutdown(dm_context* context)
     {
         dm_free(app_data->thread_data[i].ray_dirs);
         dm_free(app_data->thread_data[i].image_data);
+        dm_free(app_data->thread_data[i].accumulated_data);
+        dm_free(app_data->thread_data[i].random_numbers);
     }
     
     dm_threadpool_destroy(&app_data->threadpool);
@@ -816,6 +974,7 @@ void dm_application_shutdown(dm_context* context)
     dm_free(app_data->ray_dirs);
     dm_free(app_data->image.accumulated_data);
     dm_free(app_data->image.data);
+    dm_free(app_data->image.random_numbers);
     dm_free(context->app_data);
 }
 
@@ -837,7 +996,18 @@ bool dm_application_update(dm_context* context)
         
         app_data->image.accumulated_data = dm_realloc(app_data->image.accumulated_data, sizeof(dm_vec4) * app_data->image.w * app_data->image.h);
         
+        app_data->image.random_numbers = dm_realloc(app_data->image.random_numbers, app_data->image.data_size);
+        
         camera_resize(app_data->image.w, app_data->image.h, &app_data->camera, context);
+    }
+    
+    // generate random numbers
+    for(uint32_t y=0; y<app_data->image.h; y++)
+    {
+        for(uint32_t x=0; x<app_data->image.w; x++)
+        {
+            app_data->image.random_numbers[x + y * app_data->image.w] = dm_random_uint32(context);
+        }
     }
     
     dm_timer_start(&app_data->timer, context);
@@ -850,13 +1020,14 @@ bool dm_application_update(dm_context* context)
     // update image
     dm_timer_start(&app_data->timer, context);
     
+    app_data->rays_processed = 0;
+    //create_image(app_data, context);
     create_image_mt(app_data, context);
     
     if(app_data->accumulate) app_data->image.frame_index++;
     else                     app_data->image.frame_index = 1;
     
     app_data->image_creation_t = dm_timer_elapsed_ms(&app_data->timer, context);
-    app_data->rays_processed = app_data->image.w * app_data->image.h;
     
     dm_render_command_update_texture(app_data->handles.texture, app_data->image.w, app_data->image.h, app_data->image.data, app_data->image.data_size, context);
     
@@ -881,7 +1052,7 @@ bool dm_application_render(dm_context* context)
     dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
     struct nk_context* ctx = &imgui_nk_ctx->ctx;
     
-    if(nk_begin(ctx, "Ray Trace App", nk_rect(650,50, 300,300), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
+    if(nk_begin(ctx, "Ray Trace App", nk_rect(950,50, 300,450), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | 
                 NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
     {
         nk_layout_row_dynamic(ctx, 30, 1);
@@ -893,12 +1064,42 @@ bool dm_application_render(dm_context* context)
         nk_value_float(ctx, "Image creation (ms)", app_data->image_creation_t);
         
         nk_layout_row_dynamic(ctx, 30, 1);
-        const float num_rays = (float)app_data->rays_processed * 1000.0f / 1e6f / app_data->image_creation_t;
+        const float num_rays = (float)app_data->rays_processed / app_data->image_creation_t / 1e3f;
         nk_value_float(ctx, "Rays processed (millions per second)", num_rays);
         
         nk_layout_row_dynamic(ctx, 30, 2);
         nk_checkbox_label(ctx, "Accumulate", &app_data->accumulate);
         if(nk_button_label(ctx, "Reset")) reset_frame_index(app_data);
+        
+        // emitter
+        struct nk_colorf c;
+        c.r = app_data->materials.albedo_r[2];
+        c.g = app_data->materials.albedo_g[2];
+        c.b = app_data->materials.albedo_b[2];
+        
+        nk_layout_row_dynamic(ctx, 120, 1);
+        c = nk_color_picker(ctx, c, NK_RGB);
+        
+        nk_layout_row_dynamic(ctx, 20, 1);
+        nk_property_float(ctx, "Emission Power", 0, &app_data->materials.emission_power[2], 30, 0.1f, 0.1f);
+        
+        app_data->materials.albedo_r[2] = c.r;
+        app_data->materials.albedo_g[2] = c.g;
+        app_data->materials.albedo_b[2] = c.b;
+        
+        app_data->materials.emission_r[2] = c.r;
+        app_data->materials.emission_g[2] = c.g;
+        app_data->materials.emission_b[2] = c.b;
+        
+        nk_layout_row_dynamic(ctx, 20, 3);
+        nk_property_float(ctx, "X", -30, &app_data->spheres.x[2], 30, 0.1f, 0.1f);
+        nk_property_float(ctx, "Y", -30, &app_data->spheres.y[2], 30, 0.1f, 0.1f);
+        nk_property_float(ctx, "Z", -30, &app_data->spheres.z[2], 30, 0.1f, 0.1f);
+        
+        nk_layout_row_dynamic(ctx, 20, 1);
+        nk_property_float(ctx, "Radius", 10, &app_data->spheres.radius[2], 50, 0.1f, 0.1f);
+        
+        app_data->spheres.radius_2[2] = app_data->spheres.radius[2] * app_data->spheres.radius[2];
     }
     nk_end(ctx);
     /////////////////////////////////
