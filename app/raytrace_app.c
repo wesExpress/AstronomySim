@@ -2,12 +2,6 @@
 #include "camera.h"
 #include <float.h>
 
-typedef struct ray_t
-{
-    dm_vec3 origin;
-    dm_vec3 direction;
-} ray;
-
 typedef struct hit_payload_t
 {
     float hit_distance;
@@ -17,6 +11,15 @@ typedef struct hit_payload_t
     
     uint32_t obj_index;
 } hit_payload;
+
+typedef struct ray_t
+{
+    dm_vec3 origin;
+    dm_vec3 direction;
+    
+    float    hit_distance;
+    uint32_t hit_index;
+} ray;
 
 typedef struct app_handles_t
 {
@@ -67,8 +70,33 @@ typedef struct sphere_data_t
     
     DM_ALIGN(16) uint32_t material_id[MAX_SPHERE_COUNT];
     
+    DM_ALIGN(16) float aabb_min_x[MAX_SPHERE_COUNT];
+    DM_ALIGN(16) float aabb_min_y[MAX_SPHERE_COUNT];
+    DM_ALIGN(16) float aabb_min_z[MAX_SPHERE_COUNT];
+    
+    DM_ALIGN(16) float aabb_max_x[MAX_SPHERE_COUNT];
+    DM_ALIGN(16) float aabb_max_y[MAX_SPHERE_COUNT];
+    DM_ALIGN(16) float aabb_max_z[MAX_SPHERE_COUNT];
+    
     uint32_t count;
 } sphere_data;
+
+typedef struct bvh_node_t
+{
+    dm_vec3 aabb_min;
+    dm_vec3 aabb_max;
+    
+    uint32_t start, count;
+    
+    uint32_t children[2];
+} bvh_node;
+
+typedef struct bvh_t
+{
+    bvh_node nodes[MAX_SPHERE_COUNT * 2 - 1];
+    uint32_t indices[MAX_SPHERE_COUNT];
+    uint32_t num_levels, invalid_index;
+} bvh;
 
 typedef struct mt_data_t
 {
@@ -79,12 +107,14 @@ typedef struct mt_data_t
     
     uint32_t rays_processed;
     
+    bvh      b;
+    
     sphere_data*   spheres;
     material_data* materials;
     
     uint32_t*    image_data;
     dm_vec4*     accumulated_data;
-    uint32_t *   random_numbers;
+    uint32_t*    random_numbers;
     
     dm_vec4*     ray_dirs;
 } mt_data;
@@ -120,7 +150,246 @@ typedef struct application_data_t
     
     // materials
     material_data materials;
+    
+    // bvh
+    bvh b;
 } application_data;
+
+/*************
+INTERSECTIONS
+***************/
+bool ray_intersects_aabb(const ray* r, const dm_vec3 aabb_min, const dm_vec3 aabb_max)
+{
+    float t_min, t_max;
+    
+    dm_vec3 mins, maxes;
+    
+    dm_vec3_sub_vec3(aabb_min, r->origin, mins);
+    dm_vec3_div_vec3(mins, r->direction, mins);
+    
+    dm_vec3_sub_vec3(aabb_max, r->origin, maxes);
+    dm_vec3_div_vec3(maxes, r->direction, maxes);
+    
+    t_min = DM_MIN(mins[0], maxes[0]);
+    t_max = DM_MAX(mins[0], maxes[0]);
+    
+    t_min = DM_MIN(mins[1], maxes[1]);
+    t_max = DM_MAX(mins[1], maxes[1]);
+    
+    t_min = DM_MIN(mins[2], maxes[2]);
+    t_max = DM_MAX(mins[2], maxes[2]);
+    
+    bool result = t_max >= t_min;
+    result = result && (t_min < r->hit_distance);
+    result = result && (t_max > 0);
+    
+    return result;
+}
+
+void ray_intersects_sphere(ray* r, const uint32_t index, sphere_data* spheres)
+{
+    dm_vec3 origin;
+    
+    origin[0] = r->origin[0] - spheres->x[index];
+    origin[1] = r->origin[1] - spheres->y[index];
+    origin[2] = r->origin[2] - spheres->z[index];
+    
+    float b = 2.0f * dm_vec3_dot(origin, r->direction);
+    float c = dm_vec3_dot(origin, origin) - spheres->radius_2[index];
+    
+    float dis = b * b - 4.0f * c;
+    
+    // don't hit this sphere
+    if(dis < 0) return;
+    
+    // are we the closest sphere?
+    float closest_t = (-b - dm_sqrtf(dis)) * 0.5f;
+    if (closest_t > r->hit_distance || closest_t < 0) return;
+    
+    r->hit_distance = closest_t;
+    r->hit_index    = index;
+}
+
+void ray_intersect_bvh(ray* r, uint32_t index, sphere_data* spheres, bvh* b)
+{
+    if(!ray_intersects_aabb(r, b->nodes[index].aabb_min, b->nodes[index].aabb_max)) return;
+    
+    if(b->nodes[index].count > 0)
+    {
+        for(uint32_t i=0; i<b->nodes[index].count; i++)
+        {
+            ray_intersects_sphere(r, b->indices[b->nodes[index].start + i], spheres);
+        }
+    }
+    else
+    {
+        ray_intersect_bvh(r, b->nodes[index].children[0], spheres, b);
+        ray_intersect_bvh(r, b->nodes[index].children[1], spheres, b);
+    }
+}
+
+/***
+BVH
+*****/
+void bvh_node_init(uint32_t* index, uint32_t current_level, bvh* b)
+{
+    uint32_t current_index = *index;
+    
+    // left side
+    b->nodes[current_index].children[0] = ++(*index);
+    
+    if(current_level < b->num_levels-1)
+    {
+        bvh_node_init(index, current_level + 1, b);
+    }
+    else
+    {
+        b->nodes[b->nodes[current_index].children[0]].children[0] = b->invalid_index;
+        b->nodes[b->nodes[current_index].children[0]].children[1] = b->invalid_index;
+    }
+    
+    // right side
+    b->nodes[current_index].children[1] = ++(*index);
+    
+    if(current_level < b->num_levels-1)
+    {
+        bvh_node_init(index, current_level + 1, b);
+    }
+    else
+    {
+        b->nodes[b->nodes[current_index].children[1]].children[0] = b->invalid_index;
+        b->nodes[b->nodes[current_index].children[1]].children[1] = b->invalid_index;
+    }
+}
+
+void bvh_init(uint32_t num_spheres, bvh* b)
+{
+    b->num_levels    = dm_ceil(dm_log2f((float)num_spheres));
+    b->invalid_index = num_spheres * 2 - 1;
+    
+    for(uint32_t i=0; i<num_spheres; i++)
+    {
+        b->indices[i] = i;
+    }
+    
+    uint32_t index = 0;
+    bvh_node_init(&index, 0, b);
+}
+
+void bvh_update_node_bounds(uint32_t index, sphere_data* spheres, bvh* b)
+{
+    float aabb_min_x, aabb_min_y, aabb_min_z;
+    float aabb_max_x, aabb_max_y, aabb_max_z;
+    
+    float min_x, min_y, min_z;
+    float max_x, max_y, max_z;
+    
+    aabb_min_x = aabb_min_y = aabb_min_z = FLT_MAX;
+    aabb_max_x = aabb_max_y = aabb_max_z = -FLT_MAX;
+    
+    uint32_t s_index;
+    for(uint32_t i=0; i<b->nodes[index].count; i++)
+    {
+        s_index = b->indices[i + b->nodes[index].start];
+        
+        min_x = spheres->aabb_min_x[s_index];
+        min_y = spheres->aabb_min_y[s_index];
+        min_z = spheres->aabb_min_z[s_index];
+        
+        max_x = spheres->aabb_max_x[s_index];
+        max_y = spheres->aabb_max_y[s_index];
+        max_z = spheres->aabb_max_z[s_index];
+        
+        aabb_min_x = (min_x < aabb_min_x) ? min_x : aabb_min_x;
+        aabb_min_y = (min_y < aabb_min_y) ? min_y : aabb_min_y;
+        aabb_min_z = (min_z < aabb_min_z) ? min_z : aabb_min_z;
+        
+        aabb_max_x = (max_x > aabb_max_x) ? max_x : aabb_max_x;
+        aabb_max_y = (max_y > aabb_max_y) ? max_y : aabb_max_y;
+        aabb_max_z = (max_z > aabb_max_z) ? max_z : aabb_max_z;
+    }
+    
+    b->nodes[index].aabb_min[0] = aabb_min_x;
+    b->nodes[index].aabb_min[1] = aabb_min_y;
+    b->nodes[index].aabb_min[2] = aabb_min_z;
+    
+    b->nodes[index].aabb_max[0] = aabb_max_x;
+    b->nodes[index].aabb_max[1] = aabb_max_y;
+    b->nodes[index].aabb_max[2] = aabb_max_z;
+}
+
+void bvh_node_subdivide(uint32_t index, sphere_data* spheres, bvh* b)
+{
+    if(b->nodes[index].count <= 2) return;
+    
+    dm_vec3 extents;
+    dm_vec3_sub_vec3(b->nodes[index].aabb_max, b->nodes[index].aabb_min, extents);
+    int axis = 0;
+    if(extents[1] > extents[0]) axis = 1;
+    if(extents[2] > extents[axis]) axis = 2;
+    
+    float split_pos = b->nodes[index].aabb_min[axis] + extents[axis] * 0.5f;
+    
+    int i = b->nodes[index].start;
+    int j = i + b->nodes[index].count - 1;
+    
+    while(i <= j)
+    {
+        bool swap = false;
+        switch(axis)
+        {
+            case 0:
+            if(spheres->x[b->indices[i]] < split_pos) i++; 
+            else swap = true;
+            break;
+            
+            case 1:
+            if(spheres->y[b->indices[i]] < split_pos) i++; 
+            else swap = true;
+            break;
+            
+            case 2:
+            if(spheres->z[b->indices[i]] < split_pos) i++; 
+            else swap = true;
+            break;
+            
+            default:
+            break;
+        }
+        
+        if(!swap) continue;
+        
+        uint32_t temp = b->indices[i];
+        b->indices[i] = b->indices[j];
+        b->indices[j--] = temp;
+    }
+    
+    int left_count = i - b->nodes[index].start;
+    if(left_count==0 || left_count==b->nodes[index].count) return;
+    
+    b->nodes[b->nodes[index].children[0]].start = b->nodes[index].start;
+    b->nodes[b->nodes[index].children[0]].count = left_count;
+    
+    b->nodes[b->nodes[index].children[1]].start = i;
+    b->nodes[b->nodes[index].children[1]].count = b->nodes[index].count - left_count;
+    
+    b->nodes[index].count = 0;
+    
+    bvh_update_node_bounds(b->nodes[index].children[0], spheres, b);
+    bvh_update_node_bounds(b->nodes[index].children[1], spheres, b);
+    
+    bvh_node_subdivide(b->nodes[index].children[0], spheres, b);
+    bvh_node_subdivide(b->nodes[index].children[1], spheres, b);
+}
+
+void bvh_populate(sphere_data* spheres, bvh* b)
+{
+    b->nodes[0].start = 0;
+    b->nodes[0].count = spheres->count;
+    
+    bvh_update_node_bounds(0, spheres, b);
+    bvh_node_subdivide(0, spheres, b);
+}
 
 /*******
 HELPERS
@@ -138,6 +407,14 @@ void make_sphere(const float x, const float y, const float z, const float radius
     spheres->radius_2[index] = radius * radius;
     
     spheres->material_id[index] = dm_random_uint32_range(0,MAX_MATERIAL_COUNT, context);
+    
+    spheres->aabb_min_x[index] = x - radius;
+    spheres->aabb_min_y[index] = y - radius;
+    spheres->aabb_min_z[index] = z - radius;
+    
+    spheres->aabb_max_x[index] = x + radius;
+    spheres->aabb_max_y[index] = y + radius;
+    spheres->aabb_max_z[index] = z + radius;
     
     spheres->count++;
 }
@@ -165,6 +442,14 @@ void make_random_sphere(application_data* app_data, dm_context* context)
     const float b = dm_random_float(context);
     
     spheres->material_id[index] = (uint32_t)dm_random_float_range(0,MAX_MATERIAL_COUNT, context);
+    
+    spheres->aabb_min_x[index] = x - radius;
+    spheres->aabb_min_y[index] = y - radius;
+    spheres->aabb_min_z[index] = z - radius;
+    
+    spheres->aabb_max_x[index] = x + radius;
+    spheres->aabb_max_y[index] = y + radius;
+    spheres->aabb_max_z[index] = z + radius;
     
     spheres->count++;
 }
@@ -338,6 +623,14 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
     return closest_hit(r, nearest_hit, nearest_index, color, spheres);
 }
 
+void trace_ray3(ray* r, sphere_data* spheres, bvh* b)
+{
+    r->hit_distance = FLT_MAX;
+    r->hit_index    = UINT_MAX;
+    
+    ray_intersect_bvh(r, 0, spheres, b);
+}
+
 hit_payload trace_ray(const ray r, float color[4], sphere_data* spheres)
 {
     dm_vec3 origin;
@@ -375,7 +668,7 @@ hit_payload trace_ray(const ray r, float color[4], sphere_data* spheres)
     return closest_hit(r, hit_distance, nearest_sphere_index, color, spheres);
 }
 
-void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3 pos, dm_vec3 dir, uint32_t seed, uint32_t* ray_count, sphere_data* spheres, material_data* materials)
+void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3 pos, dm_vec3 dir, uint32_t seed, uint32_t* ray_count, sphere_data* spheres, material_data* materials, bvh* b)
 {
     ray r;
     
@@ -391,8 +684,6 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
     dm_vec3  contribution = { 1,1,1 };
     dm_vec3  light        = { 0 };
     
-    hit_payload payload;
-    
     float light_r = 0;
     float light_g = 0;
     float light_b = 0;
@@ -405,12 +696,29 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
         *ray_count = *ray_count + 1;
         
         //payload = trace_ray(r, color, spheres);
-        payload = trace_ray2(r, color, spheres);
+        //payload = trace_ray2(r, color, spheres);
         
-        if(payload.hit_distance<0) break;
+        //if(payload.hit_distance<0) break;
+        
+        trace_ray3(&r, spheres, b);
+        if(r.hit_index==UINT_MAX) break;
+        
+        dm_vec3 origin;
+        origin[0] = r.origin[0] - spheres->x[r.hit_index];
+        origin[1] = r.origin[1] - spheres->y[r.hit_index];
+        origin[2] = r.origin[2] - spheres->z[r.hit_index];
+        
+        dm_vec3 hit_point, world_pos, world_norm;
+        dm_vec3_scale(r.direction, r.hit_distance, hit_point);
+        dm_vec3_add_vec3(origin, hit_point, world_pos);
+        dm_vec3_norm(world_pos, world_norm);
+        
+        world_pos[0] += spheres->x[r.hit_index];
+        world_pos[1] += spheres->y[r.hit_index];
+        world_pos[2] += spheres->z[r.hit_index];
         
         // determine color 
-        const uint32_t mat_id = spheres->material_id[payload.obj_index];
+        const uint32_t mat_id = spheres->material_id[r.hit_index];
         float emission_power = materials->emission_power[mat_id];
         
         light_r += materials->emission_r[mat_id] * emission_power;
@@ -419,8 +727,8 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
         
         dm_vec3 offset_pos;
         dm_vec3 scaled_normal;
-        dm_vec3_scale(payload.world_normal, 0.0001f, scaled_normal);
-        dm_vec3_add_vec3(payload.world_position, scaled_normal, offset_pos);
+        dm_vec3_scale(world_norm, 0.0001f, scaled_normal);
+        dm_vec3_add_vec3(world_pos, scaled_normal, offset_pos);
         
         r.origin[0] = offset_pos[0];
         r.origin[1] = offset_pos[1];
@@ -433,11 +741,14 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
         dm_vec3_norm(sampling, sampling);
         
         // biased towards normal
-        dm_vec3_add_vec3(sampling, payload.world_normal, sampling);
+        dm_vec3_add_vec3(sampling, world_norm, sampling);
         //dm_vec3_norm(sampling, sampling);
         
         dm_vec3_add_vec3(r.direction, sampling, r.direction);
         dm_vec3_norm(r.direction, r.direction);
+        
+        r.hit_distance = FLT_MAX;
+        r.hit_index    = UINT_MAX;
     }
     
     color[0] = light_r;
@@ -561,7 +872,7 @@ void create_image(application_data* app_data, dm_context* context)
                 dir[0] = app_data->ray_dirs[x + y * app_data->image.w][0];
                 dir[1] = app_data->ray_dirs[x + y * app_data->image.w][1];
                 dir[2] = app_data->ray_dirs[x + y * app_data->image.w][2];
-                per_pixel(x,y, color, app_data->sky_color, app_data->camera.pos, dir, seed, &app_data->rays_processed, &app_data->spheres, &app_data->materials);
+                per_pixel(x,y, color, app_data->sky_color, app_data->camera.pos, dir, seed, &app_data->rays_processed, &app_data->spheres, &app_data->materials, &app_data->b);
             }
             color[0] *= sample_inv;
             color[1] *= sample_inv;
@@ -622,7 +933,7 @@ void* image_mt_func(void* func_data)
                 dir[0] = data->ray_dirs[x + y * data->width][0];
                 dir[1] = data->ray_dirs[x + y * data->width][1];
                 dir[2] = data->ray_dirs[x + y * data->width][2];
-                per_pixel(x,y, sample_color, data->sky_color, data->ray_pos, dir, seed, &data->rays_processed, data->spheres, data->materials);
+                per_pixel(x,y, sample_color, data->sky_color, data->ray_pos, dir, seed, &data->rays_processed, data->spheres, data->materials, &data->b);
             }
             
             sample_color[0] *= sample_inv;
@@ -673,11 +984,12 @@ void create_image_mt(application_data* app_data, dm_context* context)
     
     for(uint32_t i=0; i<NUM_TASKS; i++)
     {
-        app_data->thread_data[i].y_incr    = y_incr;
-        app_data->thread_data[i].width     = app_data->image.w;
-        app_data->thread_data[i].spheres   = &app_data->spheres;
-        app_data->thread_data[i].materials = &app_data->materials;
+        app_data->thread_data[i].y_incr      = y_incr;
+        app_data->thread_data[i].width       = app_data->image.w;
+        app_data->thread_data[i].spheres     = &app_data->spheres;
+        app_data->thread_data[i].materials   = &app_data->materials;
         app_data->thread_data[i].frame_index = app_data->image.frame_index;
+        app_data->thread_data[i].b           = app_data->b;
         
         app_data->thread_data[i].sky_color[0] = app_data->sky_color[0];
         app_data->thread_data[i].sky_color[1] = app_data->sky_color[1];
@@ -863,7 +1175,7 @@ bool dm_application_init(dm_context* context)
         app_data->materials.emission_power[i] = dm_random_float_range(0.5f,10, context);;
     }
     
-#define NUM_SPHERES 64
+#define NUM_SPHERES 20
     // spheres
     for(uint32_t i=0; i<NUM_SPHERES; i++)
     {
@@ -947,6 +1259,10 @@ bool dm_application_init(dm_context* context)
     
     app_data->spheres.count = 4;
 #endif
+    
+    // bvh
+    bvh_init(app_data->spheres.count, &app_data->b);
+    bvh_populate(&app_data->spheres, &app_data->b);
     
     // misc
     app_data->sky_color[0] = 0.6f;
