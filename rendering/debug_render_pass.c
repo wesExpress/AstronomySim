@@ -166,7 +166,7 @@ bool debug_render_pass_init(dm_context* context)
     {
         if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(debug_render_instance) * MAX_INSTS_PER_FRAME, sizeof(debug_render_instance), &pass_data->instb[i], context)) return false;
     }
-    if(!dm_renderer_create_static_index_buffer(indices, sizeof(indices), &pass_data->ib, context)) return false;
+    if(!dm_renderer_create_static_index_buffer(indices, sizeof(indices), sizeof(uint32_t), &pass_data->ib, context)) return false;
     if(!dm_renderer_create_uniform(sizeof(debug_render_uniform), DM_UNIFORM_STAGE_VERTEX, &pass_data->uni, context)) return false;
     
     dm_shader_desc shader_desc = { 0 };
@@ -179,7 +179,7 @@ bool debug_render_pass_init(dm_context* context)
     
     shader_desc.vb_count = 2;
     shader_desc.vb[0] = pass_data->vb;
-    shader_desc.vb[1] = pass_data->instb;
+    shader_desc.vb[1] = pass_data->instb[0];
 #elif defined(DM_DIRECTX)
     strcpy(shader_desc.vertex, "assets/shaders/debug_vertex.fxc");
     strcpy(shader_desc.pixel, "assets/shaders/debug_pixel.fxc");
@@ -269,7 +269,7 @@ bool debug_render_pass_render(dm_context* context)
     if(pass_data->line_count     && !debug_render_lines(context))     return false;
     if(pass_data->cube_count     && !debug_render_cubes(context))     return false;
     if(pass_data->bilboard_count && !debug_render_bilboards(context)) return false;
-
+    
     return true;
 }
 

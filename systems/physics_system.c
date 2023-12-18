@@ -9,12 +9,6 @@
 #include <float.h>
 #include <assert.h>
 
-#ifdef DM_SIMD_x86
-#define PHYSICS_SIMD_N DM_SIMD256_FLOAT_N
-#elif defined(DM_SIMD_ARM)
-#define PHYSICS_SIMD_N DM_SIMD_FLOAT_N
-#endif
-
 typedef struct physics_system_aabb_sort_t
 {
     float min_x[DM_ECS_MAX_ENTITIES];
@@ -57,8 +51,8 @@ typedef struct physics_system_broadphase_data_t
 
 typedef struct physics_system_narrowphase_data_t
 {
-    uint32_t            manifold_count;
-    dm_contact_manifold manifolds[PHYSICS_SYSTEM_MAX_MANIFOLD_COUNT];
+    uint32_t             manifold_capacity, manifold_count;
+    dm_contact_manifold* manifolds;
 } physics_system_narrowphase_data;
 
 typedef enum physics_system_flag_t
@@ -72,6 +66,9 @@ typedef struct physics_system_manager_t
     double              accum_time, simulation_time;
     physics_system_flag flags;
     
+    double broadphase_avg, narrowphase_avg, constraints_avg, update_avg, total;
+    uint32_t num_iterations;
+    
     dm_ecs_id transform, collision, physics, rigid_body;
     uint32_t entity_count;
     
@@ -84,7 +81,7 @@ typedef struct physics_system_manager_t
 } physics_system_manager;
 
 bool physics_system_broadphase(dm_ecs_system* system, dm_context* context);
-bool physics_system_narrowphase(dm_ecs_system* system);
+bool physics_system_narrowphase(dm_ecs_system* system, dm_context* context);
 void physics_system_solve_constraints(physics_system_manager* manager);
 void physics_system_update_entities(dm_ecs_system* system);
 void physics_system_update_entities_simd(dm_ecs_system* system);
@@ -92,16 +89,13 @@ void physics_system_update_entities_simd(dm_ecs_system* system);
 /************
 SYSTEM FUNCS
 **************/
-bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_ecs_id r_id, dm_context* context)
+bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_ecs_id r_id, dm_ecs_system_timing timing, dm_ecs_id* sys_id, dm_context* context)
 {
     dm_ecs_id comps[] = { t_id, c_id, p_id, r_id };
     
-    dm_ecs_system_timing timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
+    *sys_id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, physics_system_run, physics_system_shutdown, physics_system_insert, context);
     
-    dm_ecs_id id;
-    id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, physics_system_run, physics_system_shutdown, physics_system_insert, context);
-    
-    dm_ecs_system* system = &context->ecs_manager.systems[timing][id];
+    dm_ecs_system* system = &context->ecs_manager.systems[timing][*sys_id];
     system->system_data   = dm_alloc(sizeof(physics_system_manager));
     
     physics_system_manager* manager = system->system_data;
@@ -133,22 +127,11 @@ void physics_system_insert(const uint32_t entity_index, void* s, void* c)
     
     const uint32_t i = system->entity_count;
     
-    const dm_ecs_id t_id = manager->transform;
-    const dm_ecs_id p_id = manager->physics;
-    const dm_ecs_id r_id = manager->rigid_body;
-    const dm_ecs_id c_id = manager->collision;
-    
-    const component_transform*  transform  = dm_ecs_get_component_block(t_id, context);
-    const component_physics*    physics    = dm_ecs_get_component_block(p_id, context);
-    const component_collision*  collision  = dm_ecs_get_component_block(c_id, context);
-    const component_rigid_body* rigid_body = dm_ecs_get_component_block(r_id, context);
-    
-    const uint32_t t_index = system->entity_indices[i][t_id];
-    const uint32_t p_index = system->entity_indices[i][p_id]; 
-    const uint32_t c_index = system->entity_indices[i][c_id]; 
-    const uint32_t r_index = system->entity_indices[i][r_id];
-    
     // transform
+    const dm_ecs_id t_id = manager->transform;
+    const component_transform*  transform  = dm_ecs_get_component_block(t_id, context);
+    const uint32_t t_index = system->entity_indices[i][t_id];
+    
     manager->cache.transform.pos_x[i] = transform->pos_x[t_index];
     manager->cache.transform.pos_y[i] = transform->pos_y[t_index];
     manager->cache.transform.pos_z[i] = transform->pos_z[t_index];
@@ -163,6 +146,10 @@ void physics_system_insert(const uint32_t entity_index, void* s, void* c)
     manager->cache.transform.rot_r[i] = transform->rot_r[t_index];
     
     // physics
+    const dm_ecs_id p_id = manager->physics;
+    const component_physics*    physics    = dm_ecs_get_component_block(p_id, context);
+    const uint32_t p_index = system->entity_indices[i][p_id]; 
+    
     manager->cache.physics.vel_x[i] = physics->vel_x[p_index];
     manager->cache.physics.vel_y[i] = physics->vel_y[p_index];
     manager->cache.physics.vel_z[i] = physics->vel_z[p_index];
@@ -192,6 +179,10 @@ void physics_system_insert(const uint32_t entity_index, void* s, void* c)
     manager->cache.physics.movement_type[i] = physics->movement_type[p_index];
     
     // collision
+    const dm_ecs_id c_id = manager->collision;
+    const component_collision*  collision  = dm_ecs_get_component_block(c_id, context);
+    const uint32_t c_index = system->entity_indices[i][c_id]; 
+    
     manager->cache.collision.aabb_local_min_x[i] = collision->aabb_local_min_x[c_index];
     manager->cache.collision.aabb_local_min_y[i] = collision->aabb_local_min_y[c_index];
     manager->cache.collision.aabb_local_min_z[i] = collision->aabb_local_min_z[c_index];
@@ -223,6 +214,10 @@ void physics_system_insert(const uint32_t entity_index, void* s, void* c)
     manager->cache.collision.flag[i] = collision->flag[c_index];
     
     // rigid body
+    const dm_ecs_id r_id = manager->rigid_body;
+    const component_rigid_body* rigid_body = dm_ecs_get_component_block(r_id, context);
+    const uint32_t r_index = system->entity_indices[i][r_id];
+    
     manager->cache.rigid_body.i_body_00[i] = rigid_body->i_body_00[r_index];
     manager->cache.rigid_body.i_body_11[i] = rigid_body->i_body_11[r_index];
     manager->cache.rigid_body.i_body_22[i] = rigid_body->i_body_22[r_index];
@@ -343,20 +338,14 @@ bool physics_system_run(void* s, void* d)
     
     uint32_t iters = 0;
     
-    if(dm_input_key_just_pressed(DM_KEY_C, context))
-    {
-        if(manager->flags & DM_PHYSICS_FLAG_NO_COLLISIONS) manager->flags &= ~DM_PHYSICS_FLAG_NO_COLLISIONS;
-        else manager->flags |= DM_PHYSICS_FLAG_NO_COLLISIONS;
-    }
+    if(dm_input_key_just_pressed(DM_KEY_C, context)) manager->flags ^= DM_PHYSICS_FLAG_NO_COLLISIONS;
+    if(dm_input_key_just_pressed(DM_KEY_P, context)) manager->flags ^= DM_PHYSICS_FLAG_PAUSED;
     
     dm_timer_start(&full, context);
     
-    // use multi threaded functions only if we really need to
-    // (aka high entity counts)
     while(manager->accum_time >= DM_PHYSICS_FIXED_DT)
     {
-        iters++;
-        
+        if(iters > PHYSICS_SYSTEM_MAX_SUB_STEPS) break;
         // broadphase
         if(!(manager->flags & DM_PHYSICS_FLAG_NO_COLLISIONS))
         {
@@ -366,22 +355,29 @@ bool physics_system_run(void* s, void* d)
             
             // narrowphase
             dm_timer_start(&t, context);
-            if(!physics_system_narrowphase(system)) return false;
+            if(!physics_system_narrowphase(system, context)) return false;
             narrow_time += dm_timer_elapsed_ms(&t, context);
             
             // collision resolution
             dm_timer_start(&t, context);
-            physics_system_solve_constraints(manager);
+            if(!(manager->flags & DM_PHYSICS_FLAG_PAUSED)) physics_system_solve_constraints(manager);
             collision_time += dm_timer_elapsed_ms(&t, context);
         }
         
         // update
         dm_timer_start(&t, context);
-        physics_system_update_entities(system);
-        //physics_system_update_entities_simd(system);
+        
+        if(!(manager->flags & DM_PHYSICS_FLAG_PAUSED))
+        {
+            if(system->entity_count < 100) physics_system_update_entities(system);
+            else physics_system_update_entities_simd(system);
+        }
+        
         update_time += dm_timer_elapsed_ms(&t, context);
         
         manager->accum_time -= DM_PHYSICS_FIXED_DT;
+        
+        iters++;
     }
     
     physics_system_update_values(system, context);
@@ -390,11 +386,12 @@ bool physics_system_run(void* s, void* d)
     
     float iter_f_inv = 1 / (float)iters;
     
-    imgui_draw_text_fmt(20,20,  1,1,0,1, context, "Physics broadphase average: %0.3lf ms", broad_time * iter_f_inv);
-    imgui_draw_text_fmt(20,40,  1,1,0,1, context, "Physics narrowphase average: %0.3lf ms (%u checks)", narrow_time * iter_f_inv, manager->broadphase_data.num_possible_collisions);
-    imgui_draw_text_fmt(20,60,  1,1,0,1, context, "Physics collision resolution average: %0.3lf ms (%u manifolds)", collision_time * iter_f_inv, manager->narrowphase_data.manifold_count);
-    imgui_draw_text_fmt(20,80,  1,1,0,1, context, "Updating entities average: %0.3lf ms", update_time * iter_f_inv);
-    imgui_draw_text_fmt(20,100, 1,0,1,1, context, "Physics took: %0.3lf ms, %u iterations", total_time, iters);
+    manager->broadphase_avg = broad_time * iter_f_inv;
+    manager->narrowphase_avg = narrow_time * iter_f_inv;
+    manager->constraints_avg = collision_time * iter_f_inv;
+    manager->update_avg = update_time * iter_f_inv;
+    manager->total = total_time * iter_f_inv;
+    manager->num_iterations = iters;
     
     return true;
 }
@@ -462,7 +459,7 @@ void physics_system_broadphase_update_sphere_aabbs(uint32_t sphere_count, dm_ecs
     }
 }
 
-void physics_system_broadphase_update_box_aabbs(uint32_t box_count,  dm_ecs_system* system)
+void physics_system_broadphase_update_box_aabbs(uint32_t box_count, dm_ecs_system* system, dm_context* context)
 {
     physics_system_manager* manager = system->system_data;
     
@@ -603,7 +600,7 @@ void physics_system_broadphase_update_box_aabbs(uint32_t box_count,  dm_ecs_syst
     }
 }
 
-int physics_system_broadphase_get_variance_axis(dm_ecs_system* system)
+int physics_system_broadphase_get_variance_axis(dm_ecs_system* system, dm_context* context)
 {
     physics_system_manager* manager = system->system_data;
     
@@ -636,7 +633,7 @@ int physics_system_broadphase_get_variance_axis(dm_ecs_system* system)
     }
     
     if(sphere_count) physics_system_broadphase_update_sphere_aabbs(sphere_count, system);
-    if(box_count)    physics_system_broadphase_update_box_aabbs(box_count, system);
+    if(box_count)    physics_system_broadphase_update_box_aabbs(box_count, system, context);
     
     const float scale = 1.0f / system->entity_count;
     
@@ -665,13 +662,11 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
 {
     physics_system_broadphase_data* broadphase_data = &manager->broadphase_data;
     physics_system_aabb_sort* aabbs_sorted = &broadphase_data->aabbs_sorted;
-    
-    component_collision* collision = &manager->cache.collision;
-    
+        
     uint32_t i,j;
     uint32_t entity_a, entity_b;
     
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
     dm_mm256_float a_min_x, a_min_y, a_min_z;
     dm_mm256_float a_max_x, a_max_y, a_max_z;
     dm_mm256_float b_min_x, b_min_y, b_min_z;
@@ -683,7 +678,6 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
     dm_mm256_float break_cond, intersect_mask;
     
     const dm_mm256_float ones = dm_mm256_set1_ps(1);
-    dm_mm256_float mask;
 #elif defined(DM_SIMD_ARM)
     dm_mm_float a_min_x, a_min_y, a_min_z;
     dm_mm_float a_max_x, a_max_y, a_max_z;
@@ -697,14 +691,13 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
     
     const dm_mm_float ones = dm_mm_set1_ps(1);
 #endif
-    bool  a_possible = false;
-    float b_possible[PHYSICS_SIMD_N] = { 0 };
+    float possible[PHYSICS_SIMD_N] = { 0 };
     
     for(i=0; i<count; i++)
     {
         entity_a = broadphase_data->sweep_indices[i];
         
-#ifndef DM_PLATFORM_APPLE
+#ifdef DM_SIMD_X86
         a_min_x = dm_mm256_set1_ps(aabbs_sorted->min_x[i]);
         a_min_y = dm_mm256_set1_ps(aabbs_sorted->min_y[i]);
         a_min_z = dm_mm256_set1_ps(aabbs_sorted->min_z[i]);
@@ -714,7 +707,7 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
         a_max_z = dm_mm256_set1_ps(aabbs_sorted->max_z[i]);
         
         max_i = dm_mm256_set1_ps(max_array[i]);
-#else
+#elif defined(DM_SIMD_ARM)
         a_min_x = dm_mm_set1_ps(aabbs_sorted->min_x[i]);
         a_min_y = dm_mm_set1_ps(aabbs_sorted->min_y[i]);
         a_min_z = dm_mm_set1_ps(aabbs_sorted->min_z[i]);
@@ -725,15 +718,12 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
         
         max_i = dm_mm_set1_ps(max_array[i]);
 #endif
-        a_possible = false;
         
         j = i + 1;
         
         for(; j<count; j+=PHYSICS_SIMD_N)
         {
-            dm_memzero(b_possible, sizeof(b_possible));
-            
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
             b_min_x = dm_mm256_load_ps(aabbs_sorted->min_x + j);
             b_min_y = dm_mm256_load_ps(aabbs_sorted->min_y + j);
             b_min_z = dm_mm256_load_ps(aabbs_sorted->min_z + j);
@@ -770,8 +760,7 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
             // if ALL elements are 0, nothing is intersecting
             if(dm_mm256_any_non_zero(intersect_mask)==0) continue;
             
-            a_possible = true;
-            dm_mm256_store_ps(b_possible, intersect_mask);
+            dm_mm256_store_ps(possible, intersect_mask);
 #elif defined(DM_SIMD_ARM)
             b_min_x = dm_mm_load_ps(aabbs_sorted->min_x + j);
             b_min_y = dm_mm_load_ps(aabbs_sorted->min_y + j);
@@ -809,17 +798,15 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
             // if ALL elements are 0, nothing is intersecting
             if(dm_mm_any_non_zero(intersect_mask)==0) continue;
             
-            a_possible = true;
-            dm_mm_store_ps(b_possible, intersect_mask);
+            dm_mm_store_ps(possible, intersect_mask);
 #endif
             
             for(uint32_t k=0; k<PHYSICS_SIMD_N; k++)
             {
-                if(b_possible[k]==0) continue;
+                if(j+k >= count) break;
+                if(possible[k]==0) continue;
                 
                 entity_b = broadphase_data->sweep_indices[j+k];
-                
-                collision->flag[entity_b] = COLLISION_FLAG_POSSIBLE;
                 
                 broadphase_data->possible_collisions[broadphase_data->num_possible_collisions].entity_a = entity_a;
                 broadphase_data->possible_collisions[broadphase_data->num_possible_collisions].entity_b = entity_b;
@@ -827,14 +814,12 @@ void physics_system_broadphase_sweep_naive_simd(uint32_t count, float* min_array
             }
             
             // finally, we need to break if ANY of the j's are beyond
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
             if(dm_mm256_any_non_zero(break_cond)) break;
 #elif defined(DM_SIMD_ARM)
             if(dm_mm_any_non_zero(break_cond)) break;
 #endif
         }
-        
-        if(a_possible) collision->flag[entity_a] = COLLISION_FLAG_POSSIBLE;
     }
 }
 
@@ -884,7 +869,7 @@ bool physics_system_broadphase(dm_ecs_system* system, dm_context* context)
     physics_system_manager* manager = system->system_data;
     
     // sort axis
-    manager->broadphase_data.sort_axis = physics_system_broadphase_get_variance_axis(system);
+    manager->broadphase_data.sort_axis = physics_system_broadphase_get_variance_axis(system, context);
     component_collision* collision = &manager->cache.collision;
     
     float* min=NULL, *max=NULL;
@@ -949,11 +934,17 @@ uses GJK to determine collisions
 then EPA to determine penetration vector
 then generates contact manifolds
 *************/
-bool physics_system_narrowphase(dm_ecs_system* system)
+bool physics_system_narrowphase(dm_ecs_system* system, dm_context* context)
 {
     physics_system_manager* manager = system->system_data;
     
+    if(!manager->narrowphase_data.manifolds)
+    {
+        manager->narrowphase_data.manifold_capacity = 16;
+        manager->narrowphase_data.manifolds = dm_alloc(sizeof(dm_contact_manifold) * manager->narrowphase_data.manifold_capacity);
+    }
     manager->narrowphase_data.manifold_count = 0;
+    
     
     float              pos[2][3], rots[2][4], cens[2][3], internals[2][6], vels[2][3], ws[2][3];
     dm_collision_shape shapes[2];
@@ -977,54 +968,61 @@ bool physics_system_narrowphase(dm_ecs_system* system)
         entity_a = collision_pair.entity_a;
         entity_b = collision_pair.entity_b;
         
+        collision->flag[entity_a] = COLLISION_FLAG_POSSIBLE;
+        collision->flag[entity_b] = COLLISION_FLAG_POSSIBLE;
+        
         // entity a
         pos[0][0]       = transform->pos_x[entity_a];
-        pos[0][1]       = transform->pos_y[entity_a];
-        pos[0][2]       = transform->pos_z[entity_a];
-        rots[0][0]      = transform->rot_i[entity_a];
-        rots[0][1]      = transform->rot_j[entity_a];
-        rots[0][2]      = transform->rot_k[entity_a];
-        rots[0][3]      = transform->rot_r[entity_a];
-        cens[0][0]      = collision->center_x[entity_a];
-        cens[0][1]      = collision->center_y[entity_a];
-        cens[0][2]      = collision->center_z[entity_a];
-        internals[0][0] = collision->internal_0[entity_a];
-        internals[0][1] = collision->internal_1[entity_a];
-        internals[0][2] = collision->internal_2[entity_a];
-        internals[0][3] = collision->internal_3[entity_a];
-        internals[0][4] = collision->internal_4[entity_a];
-        internals[0][5] = collision->internal_5[entity_a];
-        shapes[0]       = collision->shape[entity_a];
-        vels[0][0]      = physics->vel_x[entity_a];
-        vels[0][1]      = physics->vel_y[entity_a];
-        vels[0][2]      = physics->vel_z[entity_a];
-        ws[0][0]        = physics->w_x[entity_a];
-        ws[0][1]        = physics->w_y[entity_a];
-        ws[0][2]        = physics->w_z[entity_a];
-        
-        // entity b
         pos[1][0]       = transform->pos_x[entity_b];
+        pos[0][1]       = transform->pos_y[entity_a];
         pos[1][1]       = transform->pos_y[entity_b];
+        pos[0][2]       = transform->pos_z[entity_a];
         pos[1][2]       = transform->pos_z[entity_b];
+        
+        rots[0][0]      = transform->rot_i[entity_a];
         rots[1][0]      = transform->rot_i[entity_b];
+        rots[0][1]      = transform->rot_j[entity_a];
         rots[1][1]      = transform->rot_j[entity_b];
+        rots[0][2]      = transform->rot_k[entity_a];
         rots[1][2]      = transform->rot_k[entity_b];
+        rots[0][3]      = transform->rot_r[entity_a];
         rots[1][3]      = transform->rot_r[entity_b];
+        
+        cens[0][0]      = collision->center_x[entity_a];
         cens[1][0]      = collision->center_x[entity_b];
+        cens[0][1]      = collision->center_y[entity_a];
         cens[1][1]      = collision->center_y[entity_b];
+        cens[0][2]      = collision->center_z[entity_a];
         cens[1][2]      = collision->center_z[entity_b];
+        
+        internals[0][0] = collision->internal_0[entity_a];
         internals[1][0] = collision->internal_0[entity_b];
+        internals[0][1] = collision->internal_1[entity_a];
         internals[1][1] = collision->internal_1[entity_b];
+        internals[0][2] = collision->internal_2[entity_a];
         internals[1][2] = collision->internal_2[entity_b];
+        internals[0][3] = collision->internal_3[entity_a];
         internals[1][3] = collision->internal_3[entity_b];
+        internals[0][4] = collision->internal_4[entity_a];
         internals[1][4] = collision->internal_4[entity_b];
+        internals[0][5] = collision->internal_5[entity_a];
         internals[1][5] = collision->internal_5[entity_b];
+        
+        shapes[0]       = collision->shape[entity_a];
         shapes[1]       = collision->shape[entity_b];
+        
+        vels[0][0]      = physics->vel_x[entity_a];
         vels[1][0]      = physics->vel_x[entity_b];
+        vels[0][1]      = physics->vel_y[entity_a];
         vels[1][1]      = physics->vel_y[entity_b];
+        vels[0][2]      = physics->vel_z[entity_a];
         vels[1][2]      = physics->vel_z[entity_b];
+        
+        ws[0][0]        = physics->w_x[entity_a];
         ws[1][0]        = physics->w_x[entity_b];
+        ws[0][1]        = physics->w_y[entity_a];
         ws[1][1]        = physics->w_y[entity_b];
+        ws[0][2]        = physics->w_z[entity_a];
         ws[1][2]        = physics->w_z[entity_b];
         
         //////
@@ -1035,44 +1033,102 @@ bool physics_system_narrowphase(dm_ecs_system* system)
         
         assert(simplex.size==4);
         
-        if(manager->narrowphase_data.manifold_count>PHYSICS_SYSTEM_MAX_MANIFOLD_COUNT) { DM_LOG_ERROR("Too many manifolds!"); break; }
         manifold = &manager->narrowphase_data.manifolds[manager->narrowphase_data.manifold_count++];
         *manifold = (dm_contact_manifold){ 0 };
         
+        manifold->entity_a = entity_a;
+        manifold->entity_b = entity_b;
         
         collision->flag[entity_a] = COLLISION_FLAG_YES;
-        
-        manifold->contact_data[0].vel_x         = &physics->vel_x[entity_b];
-        manifold->contact_data[0].vel_y         = &physics->vel_y[entity_a];
-        manifold->contact_data[0].vel_z         = &physics->vel_z[entity_a];
-        manifold->contact_data[0].w_x           = &physics->w_x[entity_a];
-        manifold->contact_data[0].w_y           = &physics->w_y[entity_a];
-        manifold->contact_data[0].w_z           = &physics->w_z[entity_a];
-        manifold->contact_data[0].mass          = physics->mass[entity_a];
-        manifold->contact_data[0].inv_mass      = physics->inv_mass[entity_a];
-        manifold->contact_data[0].v_damp        = physics->damping_v[entity_a];
-        manifold->contact_data[0].w_damp        = physics->damping_w[entity_a];
-        manifold->contact_data[0].i_body_inv_00 = rigid_body->i_body_inv_00[entity_a];
-        manifold->contact_data[0].i_body_inv_11 = rigid_body->i_body_inv_11[entity_a];
-        manifold->contact_data[0].i_body_inv_22 = rigid_body->i_body_inv_22[entity_a];
-        
         collision->flag[entity_b] = COLLISION_FLAG_YES;
         
-        manifold->contact_data[1].vel_x         = &physics->vel_x[entity_b];
-        manifold->contact_data[1].vel_y         = &physics->vel_y[entity_b];
-        manifold->contact_data[1].vel_z         = &physics->vel_z[entity_b];
-        manifold->contact_data[1].w_x           = &physics->w_x[entity_b];
-        manifold->contact_data[1].w_y           = &physics->w_y[entity_b];
-        manifold->contact_data[1].w_z           = &physics->w_z[entity_b];
+        manifold->contact_data[0].mass          = physics->mass[entity_a];
         manifold->contact_data[1].mass          = physics->mass[entity_b];
+        
+        manifold->contact_data[0].inv_mass      = physics->inv_mass[entity_a];
         manifold->contact_data[1].inv_mass      = physics->inv_mass[entity_b];
+        
+        manifold->contact_data[0].v_damp        = physics->damping_v[entity_a];
         manifold->contact_data[1].v_damp        = physics->damping_v[entity_b];
+        manifold->contact_data[0].w_damp        = physics->damping_w[entity_a];
         manifold->contact_data[1].w_damp        = physics->damping_w[entity_b];
+        
+        manifold->contact_data[0].movement_type = physics->movement_type[entity_a];
+        manifold->contact_data[1].movement_type = physics->movement_type[entity_b];
+        
+        manifold->contact_data[0].i_body_inv_00 = rigid_body->i_body_inv_00[entity_a];
         manifold->contact_data[1].i_body_inv_00 = rigid_body->i_body_inv_00[entity_b];
+        manifold->contact_data[0].i_body_inv_11 = rigid_body->i_body_inv_11[entity_a];
         manifold->contact_data[1].i_body_inv_11 = rigid_body->i_body_inv_11[entity_b];
+        manifold->contact_data[0].i_body_inv_22 = rigid_body->i_body_inv_22[entity_a];
         manifold->contact_data[1].i_body_inv_22 = rigid_body->i_body_inv_22[entity_b];
         
         if(!dm_physics_collide_entities(pos, rots, cens, internals, vels, ws, shapes, &simplex, manifold)) return false;
+        
+        float load = (float)manager->narrowphase_data.manifold_count / (float)manager->narrowphase_data.manifold_capacity;
+        if(load > 0.75f)
+        {
+            manager->narrowphase_data.manifold_capacity *= 2;
+            manager->narrowphase_data.manifolds = dm_realloc(manager->narrowphase_data.manifolds, sizeof(dm_contact_manifold) * manager->narrowphase_data.manifold_capacity);
+        }
+#ifdef DM_PHYSICS_DEBUG
+#if 0
+        for(uint32_t i=0; i<manifold->point_count; i++)
+        {
+            float d[N3];
+            debug_render_bilboard(manifold->points[i].global_pos[0], 0.1f,0.1f, (float[]){ 1,0,0,1 }, context);
+            
+            dm_vec3_add_vec3(manifold->points[i].global_pos[0], manifold->normal, d);
+            debug_render_arrow(manifold->points[i].global_pos[0], d, COLOR_RED, context);
+            
+            dm_vec3_add_vec3(manifold->points[i].global_pos[0], manifold->tangent_a, d);
+            debug_render_arrow(manifold->points[i].global_pos[0], d, COLOR_BLUE, context);
+            
+            dm_vec3_add_vec3(manifold->points[i].global_pos[0], manifold->tangent_b, d);
+            debug_render_arrow(manifold->points[i].global_pos[0], d, COLOR_GREEN, context);
+        }
+        
+        // clipped face
+        for(uint32_t i=0; i<manifold->clipped_point_count; i++)
+        {
+            debug_render_bilboard(manifold->clipped_face[i], 0.1f,0.1f, COLOR_WHITE, context);
+        }
+        
+        // face a
+        for(uint32_t i=0; i<manifold->face_count_a; i++)
+        {
+            debug_render_bilboard(manifold->face_a[i], 0.1f,0.1f, COLOR_MAGENTA, context);
+        }
+        for(uint32_t i=0; i<manifold->plane_count_a; i++)
+        {
+            int index = i - 1;
+            index = DM_MAX(index, 0);
+            
+            dm_plane plane = manifold->planes_a[i];
+            
+            float d[3];
+            dm_vec3_add_vec3(manifold->face_a[index], plane.normal, d);
+            debug_render_arrow(manifold->face_a[index], d, COLOR_MAGENTA, context);
+        }
+        
+        // face b
+        for(uint32_t i=0; i<manifold->face_count_b; i++)
+        {
+            debug_render_bilboard(manifold->face_b[i], 0.1f,0.1f, COLOR_YELLOW, context);
+        }
+        for(uint32_t i=0; i<manifold->plane_count_b; i++)
+        {
+            int index = i - 1;
+            index = DM_MAX(index, 0);
+            
+            dm_plane plane = manifold->planes_b[i];
+            
+            float d[3];
+            dm_vec3_add_vec3(manifold->face_b[index], plane.normal, d);
+            debug_render_arrow(manifold->face_b[index], d, COLOR_YELLOW, context);
+        }
+#endif
+#endif
     }
     
     return true;
@@ -1085,11 +1141,47 @@ using impulse solver
 **********************/
 void physics_system_solve_constraints(physics_system_manager* manager)
 {
+    component_physics* physics = &manager->cache.physics;
+    dm_contact_manifold* manifold = NULL;
+    
     for(uint32_t iter=0; iter<PHYSICS_SYSTEM_CONSTRAINT_ITER; iter++)
     {
         for(uint32_t m=0; m<manager->narrowphase_data.manifold_count; m++)
         {
-            dm_physics_apply_constraints(&manager->narrowphase_data.manifolds[m]);
+            manifold = &manager->narrowphase_data.manifolds[m];
+            
+            // set up velocities
+            manifold->contact_data[0].vel_x = physics->vel_x[manifold->entity_a];
+            manifold->contact_data[1].vel_x = physics->vel_x[manifold->entity_b];
+            manifold->contact_data[0].vel_y = physics->vel_y[manifold->entity_a];
+            manifold->contact_data[1].vel_y = physics->vel_y[manifold->entity_b];
+            manifold->contact_data[0].vel_z = physics->vel_z[manifold->entity_a];
+            manifold->contact_data[1].vel_z = physics->vel_z[manifold->entity_b];
+            
+            manifold->contact_data[0].w_x   = physics->w_x[manifold->entity_a];
+            manifold->contact_data[1].w_x   = physics->w_x[manifold->entity_b];
+            manifold->contact_data[0].w_y   = physics->w_y[manifold->entity_a];
+            manifold->contact_data[1].w_y   = physics->w_y[manifold->entity_b];
+            manifold->contact_data[0].w_z   = physics->w_z[manifold->entity_a];
+            manifold->contact_data[1].w_z   = physics->w_z[manifold->entity_b];
+            
+            // apply constraints
+            dm_physics_apply_constraints(manifold);
+            
+            // reset velocities
+            physics->vel_x[manifold->entity_a] = manifold->contact_data[0].vel_x;
+            physics->vel_x[manifold->entity_b] = manifold->contact_data[1].vel_x;
+            physics->vel_y[manifold->entity_a] = manifold->contact_data[0].vel_y;
+            physics->vel_y[manifold->entity_b] = manifold->contact_data[1].vel_y;
+            physics->vel_z[manifold->entity_a] = manifold->contact_data[0].vel_z;
+            physics->vel_z[manifold->entity_b] = manifold->contact_data[1].vel_z;
+            
+            physics->w_x[manifold->entity_a]   = manifold->contact_data[0].w_x;
+            physics->w_x[manifold->entity_b]   = manifold->contact_data[1].w_x;
+            physics->w_y[manifold->entity_a]   = manifold->contact_data[0].w_y;
+            physics->w_y[manifold->entity_b]   = manifold->contact_data[1].w_y;
+            physics->w_z[manifold->entity_a]   = manifold->contact_data[0].w_z;
+            physics->w_z[manifold->entity_b]   = manifold->contact_data[1].w_z;
         }
     }
 }
@@ -1302,7 +1394,7 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
     component_physics*    physics   = &manager->cache.physics;
     component_rigid_body* rigid_body = &manager->cache.rigid_body;
     
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
     dm_mm256_float pos_x, pos_y, pos_z;
     dm_mm256_float rot_i, rot_j, rot_k, rot_r;
     dm_mm256_float vel_x, vel_y, vel_z;
@@ -1356,17 +1448,17 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
     dm_mm_float body_inv_10, body_inv_11, body_inv_12;
     dm_mm_float body_inv_20, body_inv_21, body_inv_22;
     
-    dm_mm_float dt      = dm_mm_set1_ps(DM_PHYSICS_FIXED_DT);
-    dm_mm_float half_dt = dm_mm_set1_ps(0.5f * DM_PHYSICS_FIXED_DT);
-    dm_mm_float ones    = dm_mm_set1_ps(1);
-    dm_mm_float twos    = dm_mm_set1_ps(2);
-    dm_mm_float zeroes  = dm_mm_set1_ps(0);
+    const dm_mm_float dt      = dm_mm_set1_ps(DM_PHYSICS_FIXED_DT);
+    const dm_mm_float half_dt = dm_mm_set1_ps(0.5f * DM_PHYSICS_FIXED_DT);
+    const dm_mm_float ones    = dm_mm_set1_ps(1);
+    const dm_mm_float twos    = dm_mm_set1_ps(2);
+    const dm_mm_float zeroes  = dm_mm_set1_ps(0);
 #endif
     
     uint32_t i=0;
     for(; i<system->entity_count; i+=PHYSICS_SIMD_N)
     {
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
         pos_x = dm_mm256_load_ps(transform->pos_x + i);
         pos_y = dm_mm256_load_ps(transform->pos_y + i);
         pos_z = dm_mm256_load_ps(transform->pos_z + i);
@@ -1448,7 +1540,7 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
         new_rot_j = dm_mm256_sub_ps(zeroes, dm_mm256_mul_ps(w_x, rot_k));
         new_rot_j = dm_mm256_fmadd_ps(w_y, rot_r, new_rot_j);
         new_rot_j = dm_mm256_fmadd_ps(w_z, rot_i, new_rot_j);
-        new_rot_j = dm_mm256_fmadd_ps(new_rot_i, half_dt, rot_j);
+        new_rot_j = dm_mm256_fmadd_ps(new_rot_j, half_dt, rot_j);
         
         new_rot_k = dm_mm256_mul_ps(w_x, rot_j);
         new_rot_k = dm_mm256_sub_ps(new_rot_k, dm_mm256_mul_ps(w_y, rot_i));
@@ -1826,4 +1918,55 @@ void physics_system_update_entities_simd(dm_ecs_system* system)
         dm_mm_store_ps(rigid_body->i_inv_22 + i, i_inv_22);
 #endif
     }
+}
+
+/*******
+TIMINGS
+*********/
+double physics_system_get_broadphase_average(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->broadphase_avg;
+}
+
+double physics_system_get_narrowphase_average(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->narrowphase_avg;
+}
+
+double physics_system_get_constraints_average(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->constraints_avg;
+}
+
+double physics_system_get_update_average(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->update_avg;
+}
+
+double physics_system_get_total_time(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->total;
+}
+
+uint32_t physics_system_get_num_iterations(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* sys = &context->ecs_manager.systems[timing][sys_id];
+    physics_system_manager* manager = sys->system_data;
+    
+    return manager->num_iterations;
 }

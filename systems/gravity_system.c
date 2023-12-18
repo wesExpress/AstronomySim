@@ -7,7 +7,7 @@
 
 #define G 6.6743e-11f
 
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
 #define GRAV_SYSTEM_N DM_SIMD256_FLOAT_N
 #elif defined(DM_SIMD_ARM)
 #define GRAV_SYSTEM_N DM_SIMD_FLOAT_N
@@ -24,6 +24,8 @@ typedef struct gravity_system_manager_t
 {
     dm_ecs_id transform, physics;
     
+    double time;
+    
     gravity_system_cache cache;
 } gravity_system_manager;
 
@@ -33,17 +35,14 @@ void simd_gravity(dm_ecs_system*  system, dm_context* context);
 /************
 SYSTEM FUNCS
 **************/
-bool gravity_system_init(dm_ecs_id t_id, dm_ecs_id p_id, dm_context* context)
+bool gravity_system_init(dm_ecs_id t_id, dm_ecs_id p_id, dm_ecs_system_timing timing, dm_ecs_id* sys_id, dm_context* context)
 {
     dm_ecs_id comps[] = { t_id, p_id };
     
-    dm_ecs_system_timing timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
+    *sys_id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, gravity_system_run, gravity_system_shutdown, gravity_system_insert, context);
+    if(*sys_id==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not initialize graity system."); return false; }
     
-    dm_ecs_id id;
-    id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, gravity_system_run, gravity_system_shutdown, gravity_system_insert, context);
-    if(id==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not initialize graity system."); return false; }
-    
-    dm_ecs_system* gravity_system = &context->ecs_manager.systems[timing][id];
+    dm_ecs_system* gravity_system = &context->ecs_manager.systems[timing][*sys_id];
     
     gravity_system->system_data = dm_alloc(sizeof(gravity_system_manager));
     gravity_system_manager* manager = gravity_system->system_data;
@@ -122,9 +121,18 @@ bool gravity_system_run(void* s, void* c)
     
     gravity_system_update_values(system, context);
     
-    imgui_draw_text_fmt(20,120, 0,1,0,1, context, "Gravity took: %0.3lf ms (%u entities)", dm_timer_elapsed_ms(&t, context), system->entity_count);
-
+    gravity_system_manager* manager = system->system_data;
+    manager->time = dm_timer_elapsed_ms(&t, context);
+    
     return true;
+}
+
+double gravity_system_get_timing(dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context)
+{
+    dm_ecs_system* system = &context->ecs_manager.systems[timing][sys_id];
+    gravity_system_manager* manager = system->system_data;
+    
+    return manager->time;
 }
 
 /************
@@ -214,7 +222,7 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
     
     float* mass = manager->cache.mass;
     
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
     dm_mm256_float mass_i, mass_j;
     dm_mm256_float pos_i_x, pos_i_y, pos_i_z;
     dm_mm256_float pos_j_x, pos_j_y, pos_j_z;
@@ -241,13 +249,13 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
     const dm_mm_float grav_const = dm_mm_set1_ps(G);
     const dm_mm_float ones       = dm_mm_set1_ps(1.0f);
 #endif
-
+    
     uint32_t i=0, j=0;
     
     for(; i<system->entity_count; i++)
     {
         // load in entity_i data
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
         pos_i_x = dm_mm256_set1_ps(pos_x[i]);
         pos_i_y = dm_mm256_set1_ps(pos_y[i]);
         pos_i_z = dm_mm256_set1_ps(pos_z[i]);
@@ -268,11 +276,11 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
         
         mass_i = dm_mm_set1_ps(mass[i]);
 #endif
-
+        
         j = i+1;
         for(; j<system->entity_count; j+=GRAV_SYSTEM_N)
         {
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
             pos_j_x = dm_mm256_load_ps(pos_x + j);
             pos_j_y = dm_mm256_load_ps(pos_y + j);
             pos_j_z = dm_mm256_load_ps(pos_z + j);
@@ -376,7 +384,7 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
             dm_mm_store_ps(force_z + j, force_j_z);
 #endif
         }
-
+        
 #ifdef DM_SIMD_x86
         force_x[i] += dm_mm256_sum_elements(force_i_x);
         force_y[i] += dm_mm256_sum_elements(force_i_y);
