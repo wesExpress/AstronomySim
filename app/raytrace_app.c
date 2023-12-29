@@ -592,8 +592,11 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
         final_mask = dm_mm_and_ps(d_mask, hit_mask);
         
         hit_t     = dm_mm_blendv_ps(hit_t, closest_t, final_mask);
+#ifdef DM_SIMD_X86
         hit_index = dm_mm_blendv_i(hit_index, indices, dm_mm_cast_float_to_int(final_mask));
-        
+#else
+        hit_index = dm_mm_blendv_i(hit_index, indices, final_mask);
+#endif
         // iterate
         indices = dm_mm_add_i(indices, fours_i);
     }
@@ -778,25 +781,50 @@ void recreate_rays(application_data* app_data)
     dm_mm_float coords_mm, coords_x_mm, coords_y_mm, coords_z_mm, coords_w_mm;
     
     //////////// camera matrices are constant, so do them outside
-    dm_mm_float proj_row1 = dm_mm_load_ps(app_data->camera.inv_proj[0]);
-    dm_mm_float proj_row2 = dm_mm_load_ps(app_data->camera.inv_proj[1]);
-    dm_mm_float proj_row3 = dm_mm_load_ps(app_data->camera.inv_proj[2]);
-    dm_mm_float proj_row4 = dm_mm_load_ps(app_data->camera.inv_proj[3]);
+    dm_mm_float proj_row1, proj_row2, proj_row3, proj_row4;
+    dm_mm_float view_row1, view_row2, view_row3, view_row4;
+    
+#ifdef DM_SIMD_ARM
+    dm_mat4 temp;
+    dm_mat4_transpose(app_data->camera.inv_proj, temp);
+    
+    proj_row1 = dm_mm_load_ps(temp[0]);
+    proj_row2 = dm_mm_load_ps(temp[1]);
+    proj_row3 = dm_mm_load_ps(temp[2]);
+    proj_row4 = dm_mm_load_ps(temp[3]);
+    
+    dm_mat4_transpose(app_data->camera.inv_view, temp);
+    
+    view_row1 = dm_mm_load_ps(temp[0]);
+    view_row2 = dm_mm_load_ps(temp[1]);
+    view_row3 = dm_mm_load_ps(temp[2]);
+    view_row4 = dm_mm_load_ps(temp[3]);
+    
+#elif defined(DM_SIMD_X86)
+    proj_row1 = dm_mm_load_ps(app_data->camera.inv_proj[0]);
+    proj_row2 = dm_mm_load_ps(app_data->camera.inv_proj[1]);
+    proj_row3 = dm_mm_load_ps(app_data->camera.inv_proj[2]);
+    proj_row4 = dm_mm_load_ps(app_data->camera.inv_proj[3]);
     
     dm_mm_transpose_mat4(&proj_row1, &proj_row2, &proj_row3, &proj_row4);
     
-    dm_mm_float view_row1 = dm_mm_load_ps(app_data->camera.inv_view[0]);
-    dm_mm_float view_row2 = dm_mm_load_ps(app_data->camera.inv_view[1]);
-    dm_mm_float view_row3 = dm_mm_load_ps(app_data->camera.inv_view[2]);
-    dm_mm_float view_row4 = dm_mm_load_ps(app_data->camera.inv_view[3]);
+    view_row1 = dm_mm_load_ps(app_data->camera.inv_view[0]);
+    view_row2 = dm_mm_load_ps(app_data->camera.inv_view[1]);
+    view_row3 = dm_mm_load_ps(app_data->camera.inv_view[2]);
+    view_row4 = dm_mm_load_ps(app_data->camera.inv_view[3]);
     
     dm_mm_transpose_mat4(&view_row1, &view_row2, &view_row3, &view_row4);
+#endif
+    
     //////////////////////
-    
-    dm_vec4 coords = { 0,0,1,1 };
-    
     coords_z_mm = dm_mm_set1_ps(1);
     coords_w_mm = dm_mm_set1_ps(1);
+    
+    const dm_mm_float ones     = dm_mm_set1_ps(1.f);
+    const dm_mm_float neg_ones = dm_mm_set1_ps(-1.0f);
+    const dm_mm_float twos     = dm_mm_set1_ps(2.0f);
+    
+    dm_mm_float mag;
     
     for(uint32_t y=0; y<app_data->image.h; y++)
     {
@@ -804,29 +832,41 @@ void recreate_rays(application_data* app_data)
         
         coords_y_mm = dm_mm_set1_ps((float)y);
         coords_y_mm = dm_mm_mul_ps(coords_y_mm, dm_mm_set1_ps(height_f_inv));
-        coords_y_mm = dm_mm_mul_ps(coords_y_mm, dm_mm_set1_ps(2.0f));
-        coords_y_mm = dm_mm_sub_ps(coords_y_mm, dm_mm_set1_ps(1.0f));
+        coords_y_mm = dm_mm_mul_ps(coords_y_mm, twos);
+        coords_y_mm = dm_mm_add_ps(coords_y_mm, neg_ones);
         
         for(uint32_t x=0; x<app_data->image.w; x++)
         {
             /////////////////
             coords_x_mm = dm_mm_set1_ps((float)x);
             coords_x_mm = dm_mm_mul_ps(coords_x_mm, dm_mm_set1_ps(width_f_inv));
-            coords_x_mm = dm_mm_mul_ps(coords_x_mm, dm_mm_set1_ps(2.0f));
-            coords_x_mm = dm_mm_sub_ps(coords_x_mm, dm_mm_set1_ps(1.0f));
+            coords_x_mm = dm_mm_mul_ps(coords_x_mm, twos);
+            coords_x_mm = dm_mm_add_ps(coords_x_mm, neg_ones);
             
             target_mm = dm_mm_mul_ps(coords_x_mm, proj_row1);
             target_mm = dm_mm_fmadd_ps(coords_y_mm,proj_row2, target_mm);
-            target_mm = dm_mm_fmadd_ps(coords_z_mm,proj_row3, target_mm);
-            target_mm = dm_mm_fmadd_ps(coords_w_mm,proj_row4, target_mm);
+            //target_mm = dm_mm_fmadd_ps(coords_z_mm,proj_row3, target_mm);
+            //target_mm = dm_mm_fmadd_ps(coords_w_mm,proj_row4, target_mm);
+            target_mm = dm_mm_add_ps(target_mm, proj_row3);
+            target_mm = dm_mm_add_ps(target_mm, proj_row4);
             
             w_mm = dm_mm_broadcast_w_ps(target_mm);
-            target_mm = dm_mm_mul_ps(target_mm, w_mm);
-            target_mm = dm_mm_normalize_ps(target_mm);
+            target_mm = dm_mm_div_ps(target_mm, w_mm);
+            //target_mm = dm_mm_normalize_ps(target_mm);
             
             target_x_mm = dm_mm_broadcast_x_ps(target_mm);
             target_y_mm = dm_mm_broadcast_y_ps(target_mm);
             target_z_mm = dm_mm_broadcast_z_ps(target_mm);
+            
+            mag = dm_mm_mul_ps(target_x_mm, target_x_mm);
+            mag = dm_mm_fmadd_ps(target_y_mm, target_y_mm, mag);
+            mag = dm_mm_fmadd_ps(target_z_mm, target_z_mm, mag);
+            mag = dm_mm_sqrt_ps(mag);
+            mag = dm_mm_div_ps(ones, mag);
+            
+            target_x_mm = dm_mm_mul_ps(target_x_mm, mag);
+            target_y_mm = dm_mm_mul_ps(target_y_mm, mag);
+            target_z_mm = dm_mm_mul_ps(target_z_mm, mag);
             
             target_mm = dm_mm_mul_ps(target_x_mm, view_row1);
             target_mm = dm_mm_fmadd_ps(target_y_mm,view_row2, target_mm);
@@ -1109,10 +1149,17 @@ bool dm_application_init(dm_context* context)
 #elif defined(DM_OPENGL)
         .vertex="assets/shaders/quad_vertex.glsl",
         .pixel="assets/shaders/quad_pixel.glsl",
+#elif defined(DM_METAL)
+        .master="assets/shaders/quad.metallib",
 #endif
         .vb={ app_data->handles.vb },
         .vb_count=1
     };
+    
+#ifdef DM_METAL
+    strcpy(s_desc.vertex, "vertex_main");
+    strcpy(s_desc.pixel,  "fragment_main");
+#endif
     
     dm_vertex_attrib_desc attrib_descs[] = {
         { .name="POSITION", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, pos), .count=2, .index=0, .normalized=false },
@@ -1132,6 +1179,17 @@ bool dm_application_init(dm_context* context)
     app_data->image.frame_index = 1;
     
     app_data->image.random_numbers = dm_alloc(sizeof(uint32_t) * app_data->image.w * app_data->image.h);
+    
+    /*
+    for(uint32_t y=0; y<app_data->image.h; y++)
+    {
+        for(uint32_t x=0; x<app_data->image.w; x++)
+        {
+            app_data->image.data[x + y * app_data->image.w] = dm_random_uint32(context);
+            app_data->image.data[x + y * app_data->image.w] |= 0xFF000000;
+        }
+    }
+    */
     
     if(!dm_renderer_create_dynamic_texture(app_data->image.w, app_data->image.h, 4, app_data->image.data, "image_texture", &app_data->handles.texture, context)) return false;
     
@@ -1155,7 +1213,7 @@ bool dm_application_init(dm_context* context)
     // threadool
     if(!dm_threadpool_create("ray_tracer", 4, &app_data->threadpool)) return false;
     
-#if 1
+#if 0
     // materials
     for(uint32_t i=0; i<MAX_MATERIAL_COUNT; i++)
     {
@@ -1175,7 +1233,7 @@ bool dm_application_init(dm_context* context)
         app_data->materials.emission_power[i] = dm_random_float_range(0.5f,10, context);;
     }
     
-#define NUM_SPHERES 20
+#define NUM_SPHERES 8
     // spheres
     for(uint32_t i=0; i<NUM_SPHERES; i++)
     {
@@ -1345,6 +1403,17 @@ bool dm_application_update(dm_context* context)
     
     app_data->image_creation_t = dm_timer_elapsed_ms(&app_data->timer, context);
     
+    /* If this generates a random image each frame, updating texture works
+    for(uint32_t y=0; y<app_data->image.h; y++)
+    {
+        for(uint32_t x=0; x<app_data->image.w; x++)
+        {
+            app_data->image.data[x + y * app_data->image.w] = dm_random_uint32(context);
+            app_data->image.data[x + y * app_data->image.w] |= 0xFF000000;
+        }
+    }
+     */
+    
     dm_render_command_update_texture(app_data->handles.texture, app_data->image.w, app_data->image.h, app_data->image.data, app_data->image.data_size, context);
     
     return true;
@@ -1384,8 +1453,11 @@ bool dm_application_render(dm_context* context)
         nk_value_float(ctx, "Rays processed (millions per second)", num_rays);
         
         nk_layout_row_dynamic(ctx, 30, 2);
-        nk_checkbox_label(ctx, "Accumulate", &app_data->accumulate);
+        nk_bool acc = app_data->accumulate;
+        nk_checkbox_label(ctx, "Accumulate", &acc);
         if(nk_button_label(ctx, "Reset")) reset_frame_index(app_data);
+        
+        app_data->accumulate = acc;
         
         // emitter
         struct nk_colorf c;

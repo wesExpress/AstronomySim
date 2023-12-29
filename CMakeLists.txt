@@ -20,6 +20,7 @@ set(SOURCES
 	DarkMatter/dm_physics.c
 	DarkMatter/platform/dm_platform_mac.m
 	DarkMatter/rendering/dm_renderer_metal.m
+	DarkMatter/dm_imgui.c
 )
 add_executable(MacDebug ${SOURCES})
 target_include_directories(MacDebug
