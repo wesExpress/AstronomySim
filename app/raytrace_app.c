@@ -1396,7 +1396,7 @@ bool dm_application_update(dm_context* context)
     
     app_data->rays_processed = 0;
     //create_image(app_data, context);
-    create_image_mt(app_data, context);
+    //create_image_mt(app_data, context);
     
     if(app_data->accumulate) app_data->image.frame_index++;
     else                     app_data->image.frame_index = 1;
