@@ -1,4 +1,6 @@
 build/*
+bin/*
+
 mac_debug/*
 .DS_Store
 .vscode/*
