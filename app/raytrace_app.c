@@ -40,7 +40,7 @@ typedef struct app_image_t
     uint32_t* random_numbers;
 } app_image;
 
-#define MAX_MATERIAL_COUNT 100
+#define MAX_MATERIAL_COUNT 10
 typedef struct material_data_t
 {
     DM_ALIGN(16) float albedo_r[MAX_MATERIAL_COUNT];
@@ -740,7 +740,6 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
         
         // biased towards normal
         dm_vec3_add_vec3(sampling, world_norm, sampling);
-        //dm_vec3_norm(sampling, sampling);
         
         dm_vec3_add_vec3(r.direction, sampling, r.direction);
         dm_vec3_norm(r.direction, r.direction);
@@ -845,7 +844,6 @@ void recreate_rays(application_data* app_data)
             
             w_mm = dm_mm_broadcast_w_ps(target_mm);
             target_mm = dm_mm_div_ps(target_mm, w_mm);
-            //target_mm = dm_mm_normalize_ps(target_mm);
             
             target_x_mm = dm_mm_broadcast_x_ps(target_mm);
             target_y_mm = dm_mm_broadcast_y_ps(target_mm);
@@ -1377,8 +1375,8 @@ bool dm_application_update(dm_context* context)
     dm_timer_start(&app_data->timer, context);
     
     app_data->rays_processed = 0;
-    //create_image(app_data, context);
-    create_image_mt(app_data, context);
+    create_image(app_data, context);
+    //create_image_mt(app_data, context);
     
     if(app_data->accumulate) app_data->image.frame_index++;
     else                     app_data->image.frame_index = 1;
