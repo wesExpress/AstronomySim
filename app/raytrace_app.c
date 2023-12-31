@@ -697,11 +697,8 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
         *ray_count = *ray_count + 1;
         
         //payload = trace_ray(r, color, spheres);
-        trace_ray2(&r, color, spheres);
-        
-        //if(payload.hit_distance<0) break;
-        
-        //trace_ray3(&r, spheres, b);
+        //trace_ray2(&r, color, spheres);
+        trace_ray3(&r, spheres, b);
         if(r.hit_index==UINT_MAX) break;
         
         dm_vec3 origin;
