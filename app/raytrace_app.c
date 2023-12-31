@@ -517,7 +517,7 @@ hit_payload miss(const ray r)
     return payload;
 }
 
-hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
+void trace_ray2(ray* r, float color[4], sphere_data* spheres)
 {
     dm_mm_float origin_x, origin_y, origin_z;
     dm_mm_float sphere_r2;
@@ -525,13 +525,13 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
     dm_mm_float d_mask, hit_mask, final_mask, close_mask;
     dm_mm_float closest_t;
     
-    const dm_mm_float ray_origin_x = dm_mm_set1_ps(r.origin[0]);
-    const dm_mm_float ray_origin_y = dm_mm_set1_ps(r.origin[1]);
-    const dm_mm_float ray_origin_z = dm_mm_set1_ps(r.origin[2]);
+    const dm_mm_float ray_origin_x = dm_mm_set1_ps(r->origin[0]);
+    const dm_mm_float ray_origin_y = dm_mm_set1_ps(r->origin[1]);
+    const dm_mm_float ray_origin_z = dm_mm_set1_ps(r->origin[2]);
     
-    const dm_mm_float ray_dir_x = dm_mm_set1_ps(r.direction[0]);
-    const dm_mm_float ray_dir_y = dm_mm_set1_ps(r.direction[1]);
-    const dm_mm_float ray_dir_z = dm_mm_set1_ps(r.direction[2]);
+    const dm_mm_float ray_dir_x = dm_mm_set1_ps(r->direction[0]);
+    const dm_mm_float ray_dir_y = dm_mm_set1_ps(r->direction[1]);
+    const dm_mm_float ray_dir_z = dm_mm_set1_ps(r->direction[2]);
     
     static int starting_indices[] = { 0,1,2,3 };
     
@@ -601,9 +601,6 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
         indices = dm_mm_add_i(indices, fours_i);
     }
     
-    //dm_mm_float m = dm_mm_gt_ps(dm_mm_cast_int_to_float(hit_index), zeros);
-    //if(_mm_movemask_ps(m) == 0) return miss(r);
-    
     int     hit_inds[4];
     dm_vec4 hits;
     
@@ -621,9 +618,10 @@ hit_payload trace_ray2(const ray r, float color[4], sphere_data* spheres)
         nearest_index = hit_inds[i];
     }
     
-    if(nearest_index < 0) return miss(r);
+    if(nearest_index < 0) return;
     
-    return closest_hit(r, nearest_hit, nearest_index, color, spheres);
+    r->hit_distance = nearest_hit;
+    r->hit_index    = nearest_index;
 }
 
 void trace_ray3(ray* r, sphere_data* spheres, bvh* b)
@@ -699,11 +697,11 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
         *ray_count = *ray_count + 1;
         
         //payload = trace_ray(r, color, spheres);
-        //payload = trace_ray2(r, color, spheres);
+        trace_ray2(&r, color, spheres);
         
         //if(payload.hit_distance<0) break;
         
-        trace_ray3(&r, spheres, b);
+        //trace_ray3(&r, spheres, b);
         if(r.hit_index==UINT_MAX) break;
         
         dm_vec3 origin;
@@ -845,8 +843,6 @@ void recreate_rays(application_data* app_data)
             
             target_mm = dm_mm_mul_ps(coords_x_mm, proj_row1);
             target_mm = dm_mm_fmadd_ps(coords_y_mm,proj_row2, target_mm);
-            //target_mm = dm_mm_fmadd_ps(coords_z_mm,proj_row3, target_mm);
-            //target_mm = dm_mm_fmadd_ps(coords_w_mm,proj_row4, target_mm);
             target_mm = dm_mm_add_ps(target_mm, proj_row3);
             target_mm = dm_mm_add_ps(target_mm, proj_row4);
             
@@ -859,8 +855,8 @@ void recreate_rays(application_data* app_data)
             target_z_mm = dm_mm_broadcast_z_ps(target_mm);
             
             mag = dm_mm_mul_ps(target_x_mm, target_x_mm);
-            mag = dm_mm_fmadd_ps(target_y_mm, target_y_mm, mag);
-            mag = dm_mm_fmadd_ps(target_z_mm, target_z_mm, mag);
+            mag = dm_mm_fmadd_ps(target_y_mm,target_y_mm, mag);
+            mag = dm_mm_fmadd_ps(target_z_mm,target_z_mm, mag);
             mag = dm_mm_sqrt_ps(mag);
             mag = dm_mm_div_ps(ones, mag);
             
@@ -879,7 +875,7 @@ void recreate_rays(application_data* app_data)
 }
 
 #define SAMPLES 1
-static const float sample_inv = 1.0f / SAMPLES;;
+static const float sample_inv = 1.0f / SAMPLES;
 
 void create_image(application_data* app_data, dm_context* context)
 {
@@ -1180,17 +1176,6 @@ bool dm_application_init(dm_context* context)
     
     app_data->image.random_numbers = dm_alloc(sizeof(uint32_t) * app_data->image.w * app_data->image.h);
     
-    /*
-    for(uint32_t y=0; y<app_data->image.h; y++)
-    {
-        for(uint32_t x=0; x<app_data->image.w; x++)
-        {
-            app_data->image.data[x + y * app_data->image.w] = dm_random_uint32(context);
-            app_data->image.data[x + y * app_data->image.w] |= 0xFF000000;
-        }
-    }
-    */
-    
     if(!dm_renderer_create_dynamic_texture(app_data->image.w, app_data->image.h, 4, app_data->image.data, "image_texture", &app_data->handles.texture, context)) return false;
     
     // camera
@@ -1213,7 +1198,7 @@ bool dm_application_init(dm_context* context)
     // threadool
     if(!dm_threadpool_create("ray_tracer", 4, &app_data->threadpool)) return false;
     
-#if 0
+#if 1
     // materials
     for(uint32_t i=0; i<MAX_MATERIAL_COUNT; i++)
     {
@@ -1233,7 +1218,7 @@ bool dm_application_init(dm_context* context)
         app_data->materials.emission_power[i] = dm_random_float_range(0.5f,10, context);;
     }
     
-#define NUM_SPHERES 8
+#define NUM_SPHERES 32
     // spheres
     for(uint32_t i=0; i<NUM_SPHERES; i++)
     {
@@ -1395,8 +1380,8 @@ bool dm_application_update(dm_context* context)
     dm_timer_start(&app_data->timer, context);
     
     app_data->rays_processed = 0;
-    create_image(app_data, context);
-    //create_image_mt(app_data, context);
+    //create_image(app_data, context);
+    create_image_mt(app_data, context);
     
     if(app_data->accumulate) app_data->image.frame_index++;
     else                     app_data->image.frame_index = 1;
