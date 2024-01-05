@@ -27,7 +27,7 @@ vertex vertex_out vertex_main(
 
     v_out.position = float4(vertices[vid].position, 0,1);
     v_out.tex_coords = vertices[vid].tex_coords;
-    v_out.tex_coords.y = 1 - v_out.tex_coords.y;
+    //v_out.tex_coords.y = 1 - v_out.tex_coords.y;
 
     return v_out;
 }

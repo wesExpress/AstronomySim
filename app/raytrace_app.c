@@ -13,17 +13,25 @@
 
 #define SAMPLES           1
 #define SAMPLES_PER_PIXEL 4
-#define BOUNCES           10
+#define BOUNCES           50
 
-#define MATERIAL_COUNT 100
-#define OBJECT_COUNT   32
-
-#define BVH_NODE_COUNT    (OBJECT_COUNT * 2 - 1)
-#define BVH_INVALID_INDEX BVH_NODE_COUNT
+#define RAY_MIN 0.001f
 
 static const float sample_inv = 1.0f / SAMPLES;
 
 #define MT_IMAGE
+//#define RANDOM_SCENE
+
+#ifdef RANDOM_SCENE
+    #define MATERIAL_COUNT 100
+    #define OBJECT_COUNT   32
+#else
+    #define MATERIAL_COUNT 4
+    #define OBJECT_COUNT   4
+#endif
+
+#define BVH_NODE_COUNT    (OBJECT_COUNT * 2 - 1)
+#define BVH_INVALID_INDEX BVH_NODE_COUNT
 
 /****************************************************/
 
@@ -40,6 +48,7 @@ typedef enum material_type_t
     MATERIAL_TYPE_LAMBERT,
     MATERIAL_TYPE_METAL,
     MATERIAL_TYPE_DIALECTIC,
+    MATERIAL_TYPE_EMISSION,
     MATERIAL_TYPE_UNKNOWN
 } material_type;
 
@@ -75,22 +84,32 @@ typedef struct app_image_t
 
 typedef struct material_data_t
 {
-    DM_ALIGN(16) float albedo_r[MATERIAL_COUNT];
-    DM_ALIGN(16) float albedo_g[MATERIAL_COUNT];
-    DM_ALIGN(16) float albedo_b[MATERIAL_COUNT];
+    union
+    {
+        DM_ALIGN(16) float albedo_r[MATERIAL_COUNT];
+        DM_ALIGN(16) float emission_r[MATERIAL_COUNT];
+    };
     
+    union
+    {
+        DM_ALIGN(16) float albedo_g[MATERIAL_COUNT];
+        DM_ALIGN(16) float emission_g[MATERIAL_COUNT];
+    };
+    
+    union
+    {
+        DM_ALIGN(16) float albedo_b[MATERIAL_COUNT];
+        DM_ALIGN(16) float emission_b[MATERIAL_COUNT];
+    };
+    
+    // type parameters
     union
     {
         DM_ALIGN(16) float roughness[MATERIAL_COUNT];
         DM_ALIGN(16) float metallic[MATERIAL_COUNT];
         DM_ALIGN(16) float index_refraction[MATERIAL_COUNT];
+        DM_ALIGN(16) float emission_power[MATERIAL_COUNT];
     };
-    
-    DM_ALIGN(16) float emission_r[MATERIAL_COUNT];
-    DM_ALIGN(16) float emission_g[MATERIAL_COUNT];
-    DM_ALIGN(16) float emission_b[MATERIAL_COUNT];
-    
-    DM_ALIGN(16) float emission_power[MATERIAL_COUNT];
     
     DM_ALIGN(16) material_type type[MATERIAL_COUNT];
 } material_data;
@@ -238,24 +257,35 @@ bool ray_intersects_aabb(const ray* r, const dm_vec3 aabb_min, const dm_vec3 aab
 }
 
 DM_INLINE
-void ray_intersects_sphere(ray* r, const uint32_t index, const float sphere_x, const float sphere_y, const float sphere_z, const float sphere_r2)
+void ray_intersects_sphere(ray* r, const uint32_t index, const float sphere_x, const float sphere_y, const float sphere_z, const float radius, const float sphere_r2)
 {
-    dm_vec3 origin;
+    const dm_vec3 origin = {
+        r->origin[0] - sphere_x,
+        r->origin[1] - sphere_y,
+        r->origin[2] - sphere_z
+    };
     
-    origin[0] = r->origin[0] - sphere_x;
-    origin[1] = r->origin[1] - sphere_y;
-    origin[2] = r->origin[2] - sphere_z;
+    const float half_b = dm_vec3_dot(origin, r->direction);
+    const float c      = dm_vec3_dot(origin, origin) - sphere_r2;
     
-    float half_b = dm_vec3_dot(origin, r->direction);
-    float c      = dm_vec3_dot(origin, origin) - sphere_r2;
+    const float dis       =   half_b * half_b -  c;
+    const float closest_t = -(half_b + dm_sqrtf(dis));
     
-    float dis = half_b * half_b -  c;
-    float closest_t = -(half_b + dm_sqrtf(dis));
+    if (dis < 0 || closest_t > r->hit_distance || closest_t < 0 || closest_t < RAY_MIN) return;
     
-    if (dis < 0 || closest_t > r->hit_distance || closest_t < 0) return;
+    const float f = 1.0f / radius;
     
     r->hit_distance = closest_t;
     r->hit_index    = index;
+    
+    dm_vec3_scale(r->direction, r->hit_distance, r->hit_pos);
+    dm_vec3_add_vec3(r->hit_pos, r->origin, r->hit_pos);
+    
+    r->hit_normal[0] = r->hit_pos[0] - sphere_x;
+    r->hit_normal[1] = r->hit_pos[1] - sphere_y;
+    r->hit_normal[2] = r->hit_pos[2] - sphere_z;
+    dm_vec3_scale(r->hit_normal, f, r->hit_normal);
+    dm_vec3_norm(r->hit_normal, r->hit_normal);
 }
 
 void ray_intersect_bvh(ray* r, uint32_t index, object_data* objects, bvh* b)
@@ -272,7 +302,7 @@ void ray_intersect_bvh(ray* r, uint32_t index, object_data* objects, bvh* b)
             switch(objects->shape[o_index])
             {
                 case OBJECT_SHAPE_SPHERE:
-                    ray_intersects_sphere(r, o_index, objects->x[o_index], objects->y[o_index], objects->z[o_index], objects->radius_2[o_index]);
+                    ray_intersects_sphere(r, o_index, objects->x[o_index], objects->y[o_index], objects->z[o_index], objects->radius[o_index], objects->radius_2[o_index]);
                     break;
                     
                 default:
@@ -307,13 +337,13 @@ void bvh_update_node_bounds(uint32_t index, object_data* objects, bvh* b)
     {
         s_index = b->indices[i + b->nodes[index].start];
         
-        min_x = objects->aabb_min_x[s_index];
-        min_y = objects->aabb_min_y[s_index];
-        min_z = objects->aabb_min_z[s_index];
+        min_x = objects->aabb_min_x[s_index] + objects->x[s_index];
+        min_y = objects->aabb_min_y[s_index] + objects->y[s_index];
+        min_z = objects->aabb_min_z[s_index] + objects->z[s_index];
         
-        max_x = objects->aabb_max_x[s_index];
-        max_y = objects->aabb_max_y[s_index];
-        max_z = objects->aabb_max_z[s_index];
+        max_x = objects->aabb_max_x[s_index] + objects->x[s_index];
+        max_y = objects->aabb_max_y[s_index] + objects->y[s_index];
+        max_z = objects->aabb_max_z[s_index] + objects->z[s_index];
         
         aabb_min_x = (min_x < aabb_min_x) ? min_x : aabb_min_x;
         aabb_min_y = (min_y < aabb_min_y) ? min_y : aabb_min_y;
@@ -529,9 +559,6 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
     {
         seed += i;
         
-        r.hit_distance = FLT_MAX;
-        r.hit_index    = UINT_MAX;
-        
         trace_ray(&r, objects, b);
         if(r.hit_index==UINT_MAX)
         {
@@ -545,26 +572,10 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
         }
         
         o_index = r.hit_index;
-        mat_id = objects->material_id[o_index];
-        
-        dm_vec3 origin;
-        origin[0] = r.origin[0] - objects->x[o_index];
-        origin[1] = r.origin[1] - objects->y[o_index];
-        origin[2] = r.origin[2] - objects->z[o_index];
-        
-        dm_vec3_scale(r.direction, r.hit_distance, r.hit_pos);
-        dm_vec3_add_vec3(r.hit_pos, origin, r.hit_pos);
-        dm_vec3_norm(r.hit_pos, r.hit_normal);
-        
-        r.hit_pos[0] += objects->x[o_index];
-        r.hit_pos[1] += objects->y[o_index];
-        r.hit_pos[2] += objects->z[o_index];
-        
-        dm_vec3_scale(r.hit_normal, 0.0001f, offset);
-        dm_vec3_add_vec3(r.hit_pos, offset, r.origin);
+        mat_id  = objects->material_id[o_index];
     
-        bool front_face = dm_vec3_same_direction(r.hit_normal, r.direction);
-        if(front_face) dm_vec3_negate(r.hit_normal, r.hit_normal);
+        bool back_face = dm_vec3_same_direction(r.hit_normal, r.direction);
+        if(back_face)    dm_vec3_negate(r.hit_normal, r.hit_normal);
         
         if(sample)
         {
@@ -597,25 +608,28 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
                 case MATERIAL_TYPE_DIALECTIC:
                 {
                     float ir = materials->index_refraction[mat_id];
-                    
-                    if(front_face) ir = 1.0f / ir;
+                    if(!back_face) ir = 1.0f / ir;
                     
                     float cos_theta, sin_theta;
-                    dm_vec3 neg_v, n;
+                    dm_vec3 neg_d;
                     
-                    dm_vec3_negate(r.direction, neg_v);
-                    dm_vec3_norm(neg_v, neg_v);
-                    cos_theta = dm_vec3_dot(neg_v, n);
+                    dm_vec3_negate(r.direction, neg_d);
+                    cos_theta = dm_vec3_dot(neg_d, r.hit_normal);
                     cos_theta = DM_MIN(cos_theta, 1);
                     
                     sin_theta = cos_theta * cos_theta;
                     sin_theta = 1 - sin_theta;
                     sin_theta = dm_sqrtf(sin_theta);
                     
-                    const bool cannot_refract = ir * sin_theta > 1;
+                    const bool cannot = ir * sin_theta > 0;
                     
-                    if(cannot_refract) dm_vec3_reflect(r.direction, r.hit_normal, r.direction);
-                    else               dm_vec3_refract(r.direction, r.hit_normal, ir, r.direction);
+                    // schlick approx
+                    float r0 = (1-ir) / (1+ir);
+                    r0 *= r0;
+                    r0 += (1-r0)*dm_powf(1-cos_theta, 5);
+                    
+                    if(!cannot || (r0 > random_float(&seed))) dm_vec3_reflect(r.direction, r.hit_normal, r.direction);
+                    else                                      dm_vec3_refract(r.direction, r.hit_normal, ir, r.direction);
                     
                     dm_vec3_norm(r.direction, r.direction);
                 } break;
@@ -643,18 +657,20 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
                 break;
                 
             case MATERIAL_TYPE_DIALECTIC:
-                //attenuation[0] = attenuation[1] = attenuation[2] = 1;
+                attenuation[0] = attenuation[1] = attenuation[2] = 1;
                 break;
         }
         
         light_r *= attenuation[0];
         light_g *= attenuation[1];
         light_b *= attenuation[2];
+        
+        r.origin[0] = r.hit_pos[0]; r.origin[1] = r.hit_pos[1]; r.origin[2] = r.hit_pos[2];
     }
     
-    color[0] = dm_sqrtf(light_r);
-    color[1] = dm_sqrtf(light_g);
-    color[2] = dm_sqrtf(light_b);
+    color[0] = light_r;
+    color[1] = light_g;
+    color[2] = light_b;
     color[3] = 1;
 }
 
@@ -872,9 +888,9 @@ void* image_mt_func(void* func_data)
             sample_color[1] *= sample_inv;
             sample_color[2] *= sample_inv;
             
-            data->accumulated_data[x + y * data->width][0] += sample_color[0];
-            data->accumulated_data[x + y * data->width][1] += sample_color[1];
-            data->accumulated_data[x + y * data->width][2] += sample_color[2];
+            data->accumulated_data[x + y * data->width][0] += dm_sqrtf(sample_color[0]);
+            data->accumulated_data[x + y * data->width][1] += dm_sqrtf(sample_color[1]);
+            data->accumulated_data[x + y * data->width][2] += dm_sqrtf(sample_color[2]);
             data->accumulated_data[x + y * data->width][3] += 1;
             
             color[0] = data->accumulated_data[x + y * data->width][0];
@@ -1083,7 +1099,7 @@ bool dm_application_init(dm_context* context)
     if(!dm_renderer_create_dynamic_texture(app_data->image.w, app_data->image.h, 4, app_data->image.data, "image_texture", &app_data->handles.texture, context)) return false;
     
     // camera
-    float camera_p[] = { 0,0,5 };
+    float camera_p[] = { 0,0,2 };
     float camera_f[] = { 0,0,-1 };
     camera_init(camera_p, camera_f, 0.01f, 100.0f, 75.0f, app_data->image.w, app_data->image.h, 5.0f, 0.1f, &app_data->camera);
     
@@ -1102,6 +1118,7 @@ bool dm_application_init(dm_context* context)
     // threadool
     if(!dm_threadpool_create("ray_tracer", dm_get_available_processor_count(context), &app_data->threadpool)) return false;
     
+#ifdef RANDOM_SCENE
     // materials
     for(uint32_t i=0; i<MATERIAL_COUNT; i++)
     {
@@ -1132,13 +1149,15 @@ bool dm_application_init(dm_context* context)
         
         app_data->materials.type[i] = type;
         
+        /*
         if(dm_random_float(context) < 0.8f) continue;
         
         app_data->materials.emission_r[i] = app_data->materials.albedo_r[i];
         app_data->materials.emission_g[i] = app_data->materials.albedo_g[i];
         app_data->materials.emission_b[i] = app_data->materials.albedo_b[i];
         
-        app_data->materials.emission_power[i] = dm_random_float_range(0.5f,10, context);;
+        app_data->materials.emission_power[i] = dm_random_float_range(0.5f,10, context);
+         */
     }
     
     // spheres
@@ -1146,7 +1165,71 @@ bool dm_application_init(dm_context* context)
     {
         make_random_sphere(app_data, i, context);
     }
+#else
+    app_data->materials.albedo_r[0]  = 0.8f;
+    app_data->materials.albedo_g[0]  = 0.8f;
+    app_data->materials.albedo_b[0]  = 0.0f;
+    app_data->materials.type[0]      = MATERIAL_TYPE_LAMBERT;
+    app_data->materials.roughness[0] = 0.5f;
     
+    app_data->materials.albedo_r[1]  = 0.1f;
+    app_data->materials.albedo_g[1]  = 0.2f;
+    app_data->materials.albedo_b[1]  = 0.5f;
+    app_data->materials.type[1]      = MATERIAL_TYPE_LAMBERT;
+    app_data->materials.roughness[1] = 0.5f;
+    
+    app_data->materials.albedo_r[2]         = 1.0f;
+    app_data->materials.albedo_g[2]         = 1.0f;
+    app_data->materials.albedo_b[2]         = 1.0f;
+    app_data->materials.type[2]             = MATERIAL_TYPE_DIALECTIC;
+    app_data->materials.index_refraction[2] = 1.5f;
+    
+    app_data->materials.albedo_r[3] = 0.8f;
+    app_data->materials.albedo_g[3] = 0.6f;
+    app_data->materials.albedo_b[3] = 0.2f;
+    app_data->materials.type[3]     = MATERIAL_TYPE_METAL;
+    app_data->materials.metallic[3] = 0;
+    
+    app_data->objects.x[0] = 0.0f;
+    app_data->objects.y[0] = -100.5f;
+    app_data->objects.z[0] = -1.0f;
+    app_data->objects.shape[0] = OBJECT_SHAPE_SPHERE;
+    app_data->objects.radius[0] = 100.0f;
+    app_data->objects.radius_2[0] = 100.0f * 100.0f;
+    app_data->objects.aabb_min_x[0] = -100.0f; app_data->objects.aabb_min_y[0] = -100.0f; app_data->objects.aabb_min_z[0] = -100.0f;
+    app_data->objects.aabb_max_x[0] =  100.0f; app_data->objects.aabb_max_y[0] =  100.0f; app_data->objects.aabb_max_z[0] =  100.0f;
+    app_data->objects.material_id[0] = 0;
+    
+    app_data->objects.x[1] = 0.0f;
+    app_data->objects.y[1] = 0.0;
+    app_data->objects.z[1] = -1.0f;
+    app_data->objects.shape[1] = OBJECT_SHAPE_SPHERE;
+    app_data->objects.radius[1] = 0.5f;
+    app_data->objects.radius_2[1] = 0.5f * 0.5f;
+    app_data->objects.aabb_min_x[1] = -0.5f; app_data->objects.aabb_min_y[1] = -0.5f; app_data->objects.aabb_min_z[1] = -0.5f;
+    app_data->objects.aabb_max_x[1] =  0.5f; app_data->objects.aabb_max_y[1] =  0.5f; app_data->objects.aabb_max_z[1] =  0.5f;
+    app_data->objects.material_id[1] = 1;
+    
+    app_data->objects.x[2] = -1.0f;
+    app_data->objects.y[2] = 0.0;
+    app_data->objects.z[2] = -1.0f;
+    app_data->objects.shape[2] = OBJECT_SHAPE_SPHERE;
+    app_data->objects.radius[2] = 0.5f;
+    app_data->objects.radius_2[2] = 0.5f * 0.5f;
+    app_data->objects.aabb_min_x[2] = -0.5f; app_data->objects.aabb_min_y[2] = -0.5f; app_data->objects.aabb_min_z[2] = -0.5f;
+    app_data->objects.aabb_max_x[2] =  0.5f; app_data->objects.aabb_max_y[2] =  0.5f; app_data->objects.aabb_max_z[2] =  0.5f;
+    app_data->objects.material_id[2] = 2;
+    
+    app_data->objects.x[3] = 1.0f;
+    app_data->objects.y[3] = 0.0;
+    app_data->objects.z[3] = -1.0f;
+    app_data->objects.shape[3] = OBJECT_SHAPE_SPHERE;
+    app_data->objects.radius[3] = 0.5f;
+    app_data->objects.radius_2[3] = 0.5f * 0.5f;
+    app_data->objects.aabb_min_x[3] = -0.5f; app_data->objects.aabb_min_y[3] = -0.5f; app_data->objects.aabb_min_z[3] = -0.5f;
+    app_data->objects.aabb_max_x[3] =  0.5f; app_data->objects.aabb_max_y[3] =  0.5f; app_data->objects.aabb_max_z[3] =  0.5f;
+    app_data->objects.material_id[3] = 3;
+#endif
     // bvh
     bvh_populate(&app_data->objects, &app_data->b);
     
@@ -1155,6 +1238,8 @@ bool dm_application_init(dm_context* context)
     app_data->sky_color[1] = 0.7f;
     app_data->sky_color[2] = 0.9f;
     app_data->sky_color[3] = 1;
+    
+    app_data->sample = true;
     
     // copy over object data
     for(uint32_t i=0; i<NUM_TASKS; i++)
