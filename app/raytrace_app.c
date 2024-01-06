@@ -11,13 +11,12 @@
 
 #define DIMENSION 20
 
-#define SAMPLES           1
 #define SAMPLES_PER_PIXEL 4
 #define BOUNCES           50
 
 #define RAY_MIN 0.001f
 
-static const float sample_inv = 1.0f / SAMPLES;
+static const float sample_inv = 1.0f / SAMPLES_PER_PIXEL;
 
 #define MT_IMAGE
 //#define RANDOM_SCENE
@@ -74,11 +73,9 @@ typedef struct app_image_t
     uint32_t  w,h;
     size_t    data_size;
     
-    uint32_t frame_index;
-    bool     resized;
+    bool resized;
     
     uint32_t* data;
-    dm_vec4*  accumulated_data;
     uint32_t* random_numbers;
 } app_image;
 
@@ -167,14 +164,14 @@ typedef struct bvh_t
 
 typedef struct mt_data_t
 {
-    uint32_t y_incr, width;
+    uint32_t y_incr, y_start, height, width;
+    
+    dm_mat4 inv_proj, inv_view;
+    
     dm_vec4  sky_color;
     dm_vec3  ray_pos;
-    uint32_t frame_index;
     
     uint32_t rays_processed;
-    
-    bool samp;
     
     bvh      b;
     
@@ -182,10 +179,7 @@ typedef struct mt_data_t
     material_data* materials;
     
     uint32_t*    image_data;
-    dm_vec4*     accumulated_data;
     uint32_t*    random_numbers;
-    
-    dm_vec4*     ray_dirs;
 } mt_data;
 
 typedef struct application_data_t
@@ -207,12 +201,6 @@ typedef struct application_data_t
     dm_threadpool  threadpool;
     dm_thread_task tasks[NUM_TASKS];
     mt_data        thread_data[NUM_TASKS];
-    
-    bool accumulate;
-    bool sample;
-    
-    // ray directions
-    dm_vec4* ray_dirs;
     
     // objects
     object_data objects;
@@ -491,12 +479,6 @@ void make_random_sphere(application_data* app_data, uint32_t index, dm_context* 
 }
 
 DM_INLINE
-void reset_frame_index(application_data* app_data)
-{
-    app_data->image.frame_index = 1;
-}
-
-DM_INLINE
 uint32_t vec4_to_uint32(const float vec[4])
 {
     const uint8_t r = (uint8_t)(255.0f * vec[0]);
@@ -532,7 +514,7 @@ void trace_ray(ray* r, object_data* objects, bvh* b)
     ray_intersect_bvh(r, 0, objects, b);
 }
 
-void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3 pos, dm_vec3 dir, uint32_t seed, bool sample, uint32_t* ray_count, object_data* objects, material_data* materials, bvh* b)
+void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3 pos, dm_vec3 dir, uint32_t seed, uint32_t* ray_count, object_data* objects, material_data* materials, bvh* b)
 {
     *ray_count = *ray_count + 1;
     
@@ -546,10 +528,6 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
     r.direction[1] = dir[1];
     r.direction[2] = dir[2];
     
-    float light_r = 1;
-    float light_g = 1;
-    float light_b = 1;
-    
     uint32_t mat_id, o_index;
     dm_vec3 offset;
     
@@ -557,16 +535,12 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
     
     for(uint32_t i=0; i<BOUNCES; i++)
     {
-        seed += i;
+        //seed += i;
         
         trace_ray(&r, objects, b);
         if(r.hit_index==UINT_MAX)
         {
             dm_vec3_mul_vec3(attenuation, sky_color, attenuation);
-            
-            light_r *= attenuation[0];
-            light_g *= attenuation[1];
-            light_b *= attenuation[2];
             
             break;
         }
@@ -577,73 +551,70 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
         bool back_face = dm_vec3_same_direction(r.hit_normal, r.direction);
         if(back_face)    dm_vec3_negate(r.hit_normal, r.hit_normal);
         
-        if(sample)
+        switch(materials->type[mat_id])
         {
-            switch(materials->type[mat_id])
+            case MATERIAL_TYPE_LAMBERT:
             {
-                case MATERIAL_TYPE_LAMBERT:
-                {
-                    r.direction[0] = random_float(&seed) * 2.f - 1.f;
-                    r.direction[1] = random_float(&seed) * 2.f - 1.f;
-                    r.direction[2] = random_float(&seed) * 2.f - 1.f;
-                    dm_vec3_norm(r.direction, r.direction);
-                    dm_vec3_scale(r.direction, materials->roughness[mat_id], r.direction);
-                    dm_vec3_add_vec3(r.hit_normal, r.direction, r.direction);
-                    dm_vec3_norm(r.direction, r.direction);
-                } break;
-                    
-                case MATERIAL_TYPE_METAL:
-                {
-                    dm_vec3_reflect(r.direction, r.hit_normal, r.direction);
-                    dm_vec3 fuzziness;
-                    fuzziness[0] = random_float(&seed) * 2.0f - 1.f;
-                    fuzziness[1] = random_float(&seed) * 2.0f - 1.f;
-                    fuzziness[2] = random_float(&seed) * 2.0f - 1.f;
-                    dm_vec3_norm(fuzziness, fuzziness);
-                    dm_vec3_scale(fuzziness, materials->metallic[mat_id], fuzziness);
-                    dm_vec3_add_vec3(r.direction, fuzziness, r.direction);
-                    dm_vec3_norm(r.direction, r.direction);
-                } break;
-                    
-                case MATERIAL_TYPE_DIALECTIC:
-                {
-                    float ir = materials->index_refraction[mat_id];
-                    if(!back_face) ir = 1.0f / ir;
-                    
-                    float cos_theta, sin_theta;
-                    dm_vec3 neg_d;
-                    
-                    dm_vec3_negate(r.direction, neg_d);
-                    cos_theta = dm_vec3_dot(neg_d, r.hit_normal);
-                    cos_theta = DM_MIN(cos_theta, 1);
-                    
-                    sin_theta = cos_theta * cos_theta;
-                    sin_theta = 1 - sin_theta;
-                    sin_theta = dm_sqrtf(sin_theta);
-                    
-                    const bool cannot = ir * sin_theta > 0;
-                    
-                    // schlick approx
-                    float r0 = (1-ir) / (1+ir);
-                    r0 *= r0;
-                    r0 += (1-r0)*dm_powf(1-cos_theta, 5);
-                    
-                    if(!cannot || (r0 > random_float(&seed))) dm_vec3_reflect(r.direction, r.hit_normal, r.direction);
-                    else                                      dm_vec3_refract(r.direction, r.hit_normal, ir, r.direction);
-                    
-                    dm_vec3_norm(r.direction, r.direction);
-                } break;
-                    
-                default:
-                    DM_LOG_ERROR("Unknown material type!");
-                    return;
-            }
-        }
-        else
-        {
-            r.direction[0] = r.hit_normal[0];
-            r.direction[1] = r.hit_normal[1];
-            r.direction[2] = r.hit_normal[2];
+                r.direction[0] = random_float(&seed) * 2.f - 1.f;
+                r.direction[1] = random_float(&seed) * 2.f - 1.f;
+                r.direction[2] = random_float(&seed) * 2.f - 1.f;
+                
+                dm_vec3_norm(r.direction, r.direction);
+                
+                dm_vec3_scale(r.direction, materials->roughness[mat_id], r.direction);
+                dm_vec3_add_vec3(r.hit_normal, r.direction, r.direction);
+                dm_vec3_norm(r.direction, r.direction);
+            } break;
+                
+            case MATERIAL_TYPE_METAL:
+            {
+                dm_vec3 fuzziness;
+                fuzziness[0] = random_float(&seed) * 2.0f - 1.f;
+                fuzziness[1] = random_float(&seed) * 2.0f - 1.f;
+                fuzziness[2] = random_float(&seed) * 2.0f - 1.f;
+                
+                dm_vec3_norm(fuzziness, fuzziness);
+                if(!dm_vec3_same_direction(fuzziness, r.hit_normal)) dm_vec3_negate(fuzziness, fuzziness);
+                
+                dm_vec3_reflect(r.direction, r.hit_normal, r.direction);
+                
+                dm_vec3_scale(fuzziness, materials->metallic[mat_id], fuzziness);
+                dm_vec3_add_vec3(r.direction, fuzziness, r.direction);
+                dm_vec3_norm(r.direction, r.direction);
+            } break;
+                
+            case MATERIAL_TYPE_DIALECTIC:
+            {
+                float ir = materials->index_refraction[mat_id];
+                if(!back_face) ir = 1.0f / ir;
+                
+                float cos_theta, sin_theta;
+                dm_vec3 neg_d;
+                
+                dm_vec3_negate(r.direction, neg_d);
+                cos_theta = dm_vec3_dot(neg_d, r.hit_normal);
+                cos_theta = DM_MIN(cos_theta, 1);
+                
+                sin_theta = cos_theta * cos_theta;
+                sin_theta = 1 - sin_theta;
+                sin_theta = dm_sqrtf(sin_theta);
+                
+                const bool cannot = ir * sin_theta > 0;
+                
+                // schlick approx
+                float r0 = (1-ir) / (1+ir);
+                r0 *= r0;
+                r0 += (1-r0)*dm_powf(1-cos_theta, 5);
+                
+                if(!cannot || (r0 > random_float(&seed))) dm_vec3_reflect(r.direction, r.hit_normal, r.direction);
+                else                                      dm_vec3_refract(r.direction, r.hit_normal, ir, r.direction);
+                
+                dm_vec3_norm(r.direction, r.direction);
+            } break;
+                
+            default:
+                DM_LOG_ERROR("Unknown material type!");
+                return;
         }
         
         switch(materials->type[mat_id])
@@ -661,193 +632,12 @@ void per_pixel(uint32_t x, uint32_t y, dm_vec4 color, dm_vec4 sky_color, dm_vec3
                 break;
         }
         
-        light_r *= attenuation[0];
-        light_g *= attenuation[1];
-        light_b *= attenuation[2];
-        
         r.origin[0] = r.hit_pos[0]; r.origin[1] = r.hit_pos[1]; r.origin[2] = r.hit_pos[2];
     }
     
-    color[0] = light_r;
-    color[1] = light_g;
-    color[2] = light_b;
-    color[3] = 1;
-}
-
-void recreate_rays(application_data* app_data)
-{
-    if(app_data->image.resized && app_data->ray_dirs)
-    {
-        app_data->ray_dirs = dm_realloc(app_data->ray_dirs, DM_VEC4_SIZE * app_data->image.w * app_data->image.h);
-    }
-    else
-    {
-        app_data->ray_dirs = dm_alloc(DM_VEC4_SIZE * app_data->image.w * app_data->image.h);
-    }
-    
-    const float height_f_inv = 1.0f / (float)app_data->image.h;
-    const float width_f_inv  = 1.0f / (float)app_data->image.w;
-    
-    uint32_t index;
-    
-    dm_simd_float w_mm, target_mm, row1,row2,row3,row4;
-    dm_simd_float target_x_mm, target_y_mm, target_z_mm;
-    dm_simd_float coords_mm, coords_x_mm, coords_y_mm, coords_z_mm, coords_w_mm;
-    
-    //////////// camera matrices are constant, so do them outside
-    dm_simd_float proj_row1, proj_row2, proj_row3, proj_row4;
-    dm_simd_float view_row1, view_row2, view_row3, view_row4;
-    
-#ifdef DM_SIMD_ARM
-    dm_mat4 temp;
-    dm_mat4_transpose(app_data->camera.inv_proj, temp);
-    
-    proj_row1 = dm_simd_load_float(temp[0]);
-    proj_row2 = dm_simd_load_float(temp[1]);
-    proj_row3 = dm_simd_load_float(temp[2]);
-    proj_row4 = dm_simd_load_float(temp[3]);
-    
-    dm_mat4_transpose(app_data->camera.inv_view, temp);
-    
-    view_row1 = dm_simd_load_float(temp[0]);
-    view_row2 = dm_simd_load_float(temp[1]);
-    view_row3 = dm_simd_load_float(temp[2]);
-    view_row4 = dm_simd_load_float(temp[3]);
-    
-#elif defined(DM_SIMD_X86)
-    proj_row1 = dm_simd_load_float(app_data->camera.inv_proj[0]);
-    proj_row2 = dm_simd_load_float(app_data->camera.inv_proj[1]);
-    proj_row3 = dm_simd_load_float(app_data->camera.inv_proj[2]);
-    proj_row4 = dm_simd_load_float(app_data->camera.inv_proj[3]);
-    
-    dm_simd_transpose_mat4(&proj_row1, &proj_row2, &proj_row3, &proj_row4);
-    
-    view_row1 = dm_simd_load_float(app_data->camera.inv_view[0]);
-    view_row2 = dm_simd_load_float(app_data->camera.inv_view[1]);
-    view_row3 = dm_simd_load_float(app_data->camera.inv_view[2]);
-    view_row4 = dm_simd_load_float(app_data->camera.inv_view[3]);
-    
-    dm_simd_transpose_mat4(&view_row1, &view_row2, &view_row3, &view_row4);
-#endif
-    
-    //////////////////////
-    coords_z_mm = dm_simd_set1_float(1);
-    coords_w_mm = dm_simd_set1_float(1);
-    
-    const dm_simd_float ones     = dm_simd_set1_float(1.f);
-    const dm_simd_float neg_ones = dm_simd_set1_float(-1.0f);
-    const dm_simd_float twos     = dm_simd_set1_float(2.0f);
-    
-    dm_simd_float mag;
-    
-    for(uint32_t y=0; y<app_data->image.h; y++)
-    {
-        index = y * app_data->image.w;
-        
-        coords_y_mm = dm_simd_set1_float((float)y);
-        coords_y_mm = dm_simd_mul_float(coords_y_mm, dm_simd_set1_float(height_f_inv));
-        coords_y_mm = dm_simd_mul_float(coords_y_mm, twos);
-        coords_y_mm = dm_simd_add_float(coords_y_mm, neg_ones);
-        
-        for(uint32_t x=0; x<app_data->image.w; x++)
-        {
-            /////////////////
-            coords_x_mm = dm_simd_set1_float((float)x);
-            coords_x_mm = dm_simd_mul_float(coords_x_mm, dm_simd_set1_float(width_f_inv));
-            coords_x_mm = dm_simd_mul_float(coords_x_mm, twos);
-            coords_x_mm = dm_simd_add_float(coords_x_mm, neg_ones);
-            
-            target_mm = dm_simd_mul_float(coords_x_mm, proj_row1);
-            target_mm = dm_simd_fmadd_float(coords_y_mm,proj_row2, target_mm);
-            target_mm = dm_simd_add_float(target_mm, proj_row3);
-            target_mm = dm_simd_add_float(target_mm, proj_row4);
-            
-            w_mm = dm_simd_broadcast_w_float(target_mm);
-            target_mm = dm_simd_div_float(target_mm, w_mm);
-            
-            target_x_mm = dm_simd_broadcast_x_float(target_mm);
-            target_y_mm = dm_simd_broadcast_y_float(target_mm);
-            target_z_mm = dm_simd_broadcast_z_float(target_mm);
-            
-            mag = dm_simd_mul_float(target_x_mm, target_x_mm);
-            mag = dm_simd_fmadd_float(target_y_mm,target_y_mm, mag);
-            mag = dm_simd_fmadd_float(target_z_mm,target_z_mm, mag);
-            mag = dm_simd_sqrt_float(mag);
-            mag = dm_simd_div_float(ones, mag);
-            
-            target_x_mm = dm_simd_mul_float(target_x_mm, mag);
-            target_y_mm = dm_simd_mul_float(target_y_mm, mag);
-            target_z_mm = dm_simd_mul_float(target_z_mm, mag);
-            
-            target_mm = dm_simd_mul_float(target_x_mm, view_row1);
-            target_mm = dm_simd_fmadd_float(target_y_mm,view_row2, target_mm);
-            target_mm = dm_simd_fmadd_float(target_z_mm,view_row3, target_mm);
-            
-            dm_simd_store_float(app_data->ray_dirs[index++], target_mm);
-            /////
-        }
-    }
-}
-
-void create_image(application_data* app_data, dm_context* context)
-{
-    float color[N4] = { 1,1,1,1 };
-    dm_vec3 dir;
-    uint32_t seed;
-    
-    if(app_data->image.frame_index==1)
-    {
-        dm_memzero(app_data->image.accumulated_data, sizeof(dm_vec4) * app_data->image.w * app_data->image.h);
-    }
-    
-    const float inv_frame_index = 1.0f / (float)app_data->image.frame_index;
-    
-    for(uint32_t y=0; y<app_data->image.h; y++)
-    {
-        for(uint32_t x=0; x<app_data->image.w; x++)
-        {
-            seed = app_data->image.random_numbers[x + y * app_data->image.w];
-            
-            color[0] = 0;
-            color[1] = 0;
-            color[2] = 0;
-            color[3] = 1;
-            
-            for(uint32_t i=0; i<SAMPLES; i++)
-            {
-                seed *= app_data->image.frame_index;
-                
-                dir[0] = app_data->ray_dirs[x + y * app_data->image.w][0];
-                dir[1] = app_data->ray_dirs[x + y * app_data->image.w][1];
-                dir[2] = app_data->ray_dirs[x + y * app_data->image.w][2];
-                per_pixel(x,y, color, app_data->sky_color, app_data->camera.pos, dir, seed, app_data->sample, &app_data->rays_processed, &app_data->objects, &app_data->materials, &app_data->b);
-            }
-            color[0] *= sample_inv;
-            color[1] *= sample_inv;
-            color[2] *= sample_inv;
-            
-            app_data->image.accumulated_data[x + y * app_data->image.w][0] += color[0];
-            app_data->image.accumulated_data[x + y * app_data->image.w][1] += color[1];
-            app_data->image.accumulated_data[x + y * app_data->image.w][2] += color[2];
-            app_data->image.accumulated_data[x + y * app_data->image.w][3] += 1;
-            
-            color[0] = app_data->image.accumulated_data[x + y * app_data->image.w][0];
-            color[1] = app_data->image.accumulated_data[x + y * app_data->image.w][1];
-            color[2] = app_data->image.accumulated_data[x + y * app_data->image.w][2];
-            color[3] = app_data->image.accumulated_data[x + y * app_data->image.w][3];
-            
-            color[0] *= inv_frame_index;
-            color[1] *= inv_frame_index;
-            color[2] *= inv_frame_index;
-            color[3] *= inv_frame_index;
-            
-            color[0] = dm_clamp(color[0], 0, 1);
-            color[1] = dm_clamp(color[1], 0, 1);
-            color[2] = dm_clamp(color[2], 0, 1);
-            
-            app_data->image.data[x + y * app_data->image.w] = vec4_to_uint32(color);
-        }
-    }
+    color[0] += attenuation[0];
+    color[1] += attenuation[1];
+    color[2] += attenuation[2];
 }
 
 void* image_mt_func(void* func_data)
@@ -859,12 +649,22 @@ void* image_mt_func(void* func_data)
     
     uint32_t seed;
     
-    const float inv_frame_index = 1.0f / (float)data->frame_index;
-    
     dm_vec4 sample_color;
+    
+    const float height_f_inv = 1.0f / (float)data->height;
+    const float width_f_inv  = 1.0f / (float)data->width;
+    
+    uint32_t y_start = data->y_start;
+    
+    dm_vec4 coords = { 0,0,1,1 };
+    dm_vec4 target;
+    
+    float y_offset, x_offset;
     
     for(uint32_t y=0; y<data->y_incr; y++)
     {
+        y_start += 1;
+        
         for(uint32_t x=0; x<data->width; x++)
         {
             seed = data->random_numbers[x + y * data->width];
@@ -874,40 +674,48 @@ void* image_mt_func(void* func_data)
             sample_color[2] = 0;
             sample_color[3] = 1;
             
-            for(uint32_t i=0; i<SAMPLES; i++)
+            for(uint32_t i=0; i<SAMPLES_PER_PIXEL; i++)
             {
-                seed++;
+                y_offset = random_float(&seed) + (float)y_start;
+                x_offset = random_float(&seed) + (float)x;
+                // direction
+                coords[0] = x_offset * width_f_inv;
+                coords[0] *= 2.0f;
+                coords[0] -= 1.0f;
                 
-                dir[0] = data->ray_dirs[x + y * data->width][0];
-                dir[1] = data->ray_dirs[x + y * data->width][1];
-                dir[2] = data->ray_dirs[x + y * data->width][2];
-                per_pixel(x,y, sample_color, data->sky_color, data->ray_pos, dir, seed, data->samp, &data->rays_processed, data->objects, data->materials, &data->b);
+                coords[1] = y_offset * height_f_inv;
+                coords[1] *= 2.0f;
+                coords[1] -= 1.0f;
+                
+                dm_mat4_mul_vec4(data->inv_proj, coords, target);
+                dm_vec4_scale(target, 1.0f / target[3], target);
+                target[3] = 0;
+                dm_vec4_norm(target, target);
+                dm_mat4_mul_vec4(data->inv_view, target, target);
+                //
+                
+                seed += i;
+                
+                dir[0] = target[0];
+                dir[1] = target[1];
+                dir[2] = target[2];
+                
+                per_pixel(x,y, sample_color, data->sky_color, data->ray_pos, dir, seed, &data->rays_processed, data->objects, data->materials, &data->b);
             }
             
             sample_color[0] *= sample_inv;
             sample_color[1] *= sample_inv;
             sample_color[2] *= sample_inv;
             
-            data->accumulated_data[x + y * data->width][0] += dm_sqrtf(sample_color[0]);
-            data->accumulated_data[x + y * data->width][1] += dm_sqrtf(sample_color[1]);
-            data->accumulated_data[x + y * data->width][2] += dm_sqrtf(sample_color[2]);
-            data->accumulated_data[x + y * data->width][3] += 1;
-            
-            color[0] = data->accumulated_data[x + y * data->width][0];
-            color[1] = data->accumulated_data[x + y * data->width][1];
-            color[2] = data->accumulated_data[x + y * data->width][2];
-            color[3] = data->accumulated_data[x + y * data->width][3];
-            
-            color[0] *= inv_frame_index;
-            color[1] *= inv_frame_index;
-            color[2] *= inv_frame_index;
-            color[3] *= inv_frame_index;
+            sample_color[0] = dm_sqrtf(sample_color[0]);
+            sample_color[1] = dm_sqrtf(sample_color[1]);
+            sample_color[2] = dm_sqrtf(sample_color[2]);
             
             // clamp to 255
-            color[0] = dm_clamp(color[0], 0, 1);
-            color[1] = dm_clamp(color[1], 0, 1);
-            color[2] = dm_clamp(color[2], 0, 1);
-            color[3] = dm_clamp(color[3], 0, 1);
+            color[0] = dm_clamp(sample_color[0], 0, 1);
+            color[1] = dm_clamp(sample_color[1], 0, 1);
+            color[2] = dm_clamp(sample_color[2], 0, 1);
+            color[3] = 1;
             
             data->image_data[x + y * data->width] = vec4_to_uint32(color);
         }
@@ -925,24 +733,21 @@ void create_image_mt(application_data* app_data, dm_context* context)
     
     uint32_t offset;
     
-    if(app_data->image.frame_index==1)
-    {
-        dm_memzero(app_data->image.accumulated_data, sizeof(dm_vec4) * app_data->image.w * app_data->image.h);
-    }
-    
     mt_data* thread_data = NULL;
     for(uint32_t i=0; i<NUM_TASKS; i++)
     {
         thread_data = &app_data->thread_data[i];
         
-        thread_data->y_incr      = y_incr;
-        thread_data->width       = app_data->image.w;
+        thread_data->y_incr  = y_incr;
+        thread_data->y_start = y_incr * i;
+        thread_data->width   = app_data->image.w;
+        thread_data->height  = app_data->image.h;
         
-        thread_data->frame_index  = app_data->image.frame_index;
-        thread_data->b            = app_data->b;
+        dm_memcpy(thread_data->inv_proj, app_data->camera.inv_proj, sizeof(dm_mat4));
+        dm_memcpy(thread_data->inv_view, app_data->camera.inv_view, sizeof(dm_mat4));
         
-        thread_data->samp = app_data->sample;
-        
+        thread_data->b = app_data->b;
+
         thread_data->sky_color[0] = app_data->sky_color[0];
         thread_data->sky_color[1] = app_data->sky_color[1];
         thread_data->sky_color[2] = app_data->sky_color[2];
@@ -960,36 +765,20 @@ void create_image_mt(application_data* app_data, dm_context* context)
         if(!thread_data->image_data)
         {
             thread_data->image_data       = dm_alloc(data_size);
-            thread_data->accumulated_data = dm_alloc(acc_size);
             thread_data->random_numbers   = dm_alloc(data_size);
         }
         else
         {
             thread_data->image_data       = dm_realloc(thread_data->image_data, data_size);
-            thread_data->accumulated_data = dm_realloc(thread_data->accumulated_data, acc_size);
             thread_data->random_numbers   = dm_realloc(thread_data->random_numbers, data_size);
         }
         
         // copy over data
         void* src = app_data->image.data + offset;
         dm_memcpy(thread_data->image_data, src, data_size);
-        
-        src = app_data->image.accumulated_data + offset;
-        dm_memcpy(thread_data->accumulated_data, src, acc_size);
-        
+
         src = app_data->image.random_numbers + offset;
         dm_memcpy(thread_data->random_numbers, src, data_size);
-        
-        // ray directions
-        if(!thread_data->ray_dirs)
-        {
-            thread_data->ray_dirs = dm_alloc(ray_size);
-        }
-        else
-        {
-            thread_data->ray_dirs = dm_realloc(thread_data->ray_dirs, ray_size);
-        }
-        dm_memcpy(thread_data->ray_dirs, app_data->ray_dirs + offset, ray_size);
         
         // objects and materials
         dm_memcpy(thread_data->objects, &app_data->objects, sizeof(object_data));
@@ -1014,8 +803,7 @@ void create_image_mt(application_data* app_data, dm_context* context)
         offset = y_incr * i * app_data->image.w;
         
         dm_memcpy(app_data->image.data + offset, app_data->thread_data[i].image_data, data_size);
-        dm_memcpy(app_data->image.accumulated_data + offset, app_data->thread_data[i].accumulated_data, acc_size);
-        
+
         app_data->rays_processed += app_data->thread_data[i].rays_processed;
     }
 }
@@ -1091,9 +879,6 @@ bool dm_application_init(dm_context* context)
     app_data->image.data_size = sizeof(uint32_t) * app_data->image.w * app_data->image.h;
     
     app_data->image.data = dm_alloc(app_data->image.data_size);
-    app_data->image.accumulated_data = dm_alloc(sizeof(dm_vec4) * app_data->image.w * app_data->image.h);
-    app_data->image.frame_index = 1;
-    
     app_data->image.random_numbers = dm_alloc(sizeof(uint32_t) * app_data->image.w * app_data->image.h);
     
     if(!dm_renderer_create_dynamic_texture(app_data->image.w, app_data->image.h, 4, app_data->image.data, "image_texture", &app_data->handles.texture, context)) return false;
@@ -1101,9 +886,9 @@ bool dm_application_init(dm_context* context)
     // camera
     float camera_p[] = { 0,0,2 };
     float camera_f[] = { 0,0,-1 };
-    camera_init(camera_p, camera_f, 0.01f, 100.0f, 75.0f, app_data->image.w, app_data->image.h, 5.0f, 0.1f, &app_data->camera);
+    camera_init(camera_p, camera_f, 0.001f, 100.0f, 75.0f, app_data->image.w, app_data->image.h, 5.0f, 0.1f, &app_data->camera);
     
-    recreate_rays(app_data);
+    //recreate_rays(app_data);
     
     for(uint32_t i=0; i<OBJECT_COUNT; i++)
     {
@@ -1111,7 +896,7 @@ bool dm_application_init(dm_context* context)
         app_data->objects.y[i] = FLT_MAX;
         app_data->objects.z[i] = FLT_MAX;
         
-        app_data->objects.radius[i] = FLT_MAX;
+        app_data->objects.radius[i]   = FLT_MAX;
         app_data->objects.radius_2[i] = FLT_MAX;
     }
     
@@ -1126,7 +911,7 @@ bool dm_application_init(dm_context* context)
         app_data->materials.albedo_g[i] = dm_random_float(context);
         app_data->materials.albedo_b[i] = dm_random_float(context);
         
-        material_type type = (int)dm_random_float_range(0, MATERIAL_TYPE_UNKNOWN, context);
+        material_type type = (int)dm_random_float_range(0, MATERIAL_TYPE_UNKNOWN-1, context);
         
         switch(type)
         {
@@ -1148,16 +933,6 @@ bool dm_application_init(dm_context* context)
         };
         
         app_data->materials.type[i] = type;
-        
-        /*
-        if(dm_random_float(context) < 0.8f) continue;
-        
-        app_data->materials.emission_r[i] = app_data->materials.albedo_r[i];
-        app_data->materials.emission_g[i] = app_data->materials.albedo_g[i];
-        app_data->materials.emission_b[i] = app_data->materials.albedo_b[i];
-        
-        app_data->materials.emission_power[i] = dm_random_float_range(0.5f,10, context);
-         */
     }
     
     // spheres
@@ -1234,17 +1009,15 @@ bool dm_application_init(dm_context* context)
     bvh_populate(&app_data->objects, &app_data->b);
     
     // misc
-    app_data->sky_color[0] = 0.6f;
+    app_data->sky_color[0] = 0.5f;
     app_data->sky_color[1] = 0.7f;
-    app_data->sky_color[2] = 0.9f;
+    app_data->sky_color[2] = 1.f;
     app_data->sky_color[3] = 1;
-    
-    app_data->sample = true;
     
     // copy over object data
     for(uint32_t i=0; i<NUM_TASKS; i++)
     {
-        app_data->thread_data[i].objects = dm_alloc(sizeof(object_data));
+        app_data->thread_data[i].objects   = dm_alloc(sizeof(object_data));
         app_data->thread_data[i].materials = dm_alloc(sizeof(material_data));
     }
     
@@ -1257,9 +1030,7 @@ void dm_application_shutdown(dm_context* context)
     
     for(uint32_t i=0; i<NUM_TASKS; i++)
     {
-        dm_free(app_data->thread_data[i].ray_dirs);
         dm_free(app_data->thread_data[i].image_data);
-        dm_free(app_data->thread_data[i].accumulated_data);
         dm_free(app_data->thread_data[i].random_numbers);
         dm_free(app_data->thread_data[i].objects);
         dm_free(app_data->thread_data[i].materials);
@@ -1267,8 +1038,6 @@ void dm_application_shutdown(dm_context* context)
     
     dm_threadpool_destroy(&app_data->threadpool);
     
-    dm_free(app_data->ray_dirs);
-    dm_free(app_data->image.accumulated_data);
     dm_free(app_data->image.data);
     dm_free(app_data->image.random_numbers);
     dm_free(context->app_data);
@@ -1290,8 +1059,6 @@ bool dm_application_update(dm_context* context)
         app_data->image.data_size = sizeof(uint32_t) * app_data->image.w * app_data->image.h;
         app_data->image.data = dm_realloc(app_data->image.data, app_data->image.data_size);
         
-        app_data->image.accumulated_data = dm_realloc(app_data->image.accumulated_data, sizeof(dm_vec4) * app_data->image.w * app_data->image.h);
-        
         app_data->image.random_numbers = dm_realloc(app_data->image.random_numbers, app_data->image.data_size);
         
         camera_resize(app_data->image.w, app_data->image.h, &app_data->camera, context);
@@ -1310,23 +1077,16 @@ bool dm_application_update(dm_context* context)
     
     dm_timer_start(&app_data->timer, context);
     const bool camera_updated = camera_update(&app_data->camera, context);
-    if(width_changed || height_changed || camera_updated) recreate_rays(app_data);
+    //if(width_changed || height_changed || camera_updated) recreate_rays(app_data);
     app_data->ray_creation_t = dm_timer_elapsed_ms(&app_data->timer, context);
     
-    if(camera_updated) reset_frame_index(app_data);
     
     // update image
     dm_timer_start(&app_data->timer, context);
     
     app_data->rays_processed = 0;
-#ifdef MT_IMAGE
+
     create_image_mt(app_data, context);
-#else
-    create_image(app_data, context);
-#endif
-    
-    if(app_data->accumulate) app_data->image.frame_index++;
-    else                     app_data->image.frame_index = 1;
     
     app_data->image_creation_t = dm_timer_elapsed_ms(&app_data->timer, context);
     
@@ -1367,33 +1127,18 @@ bool dm_application_render(dm_context* context)
     dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
     struct nk_context* ctx = &imgui_nk_ctx->ctx;
     
-    if(nk_begin(ctx, "Ray Trace App", nk_rect(950,50, 300,450), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE |
+    if(nk_begin(ctx, "Ray Trace App", nk_rect(950,50, 300,250), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE |
                 NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
     {
         nk_layout_row_dynamic(ctx, 30, 1);
         nk_value_uint(ctx, "Object count", OBJECT_COUNT);
         
         nk_layout_row_dynamic(ctx, 30, 1);
-        nk_value_float(ctx, "Ray creation (ms)", app_data->ray_creation_t);
-        nk_layout_row_dynamic(ctx, 30, 1);
         nk_value_float(ctx, "Image creation (ms)", app_data->image_creation_t);
         
         nk_layout_row_dynamic(ctx, 30, 1);
         const float num_rays = (float)app_data->rays_processed / app_data->image_creation_t / 1e3f;
         nk_value_float(ctx, "Rays processed (millions per second)", num_rays);
-        
-        nk_layout_row_dynamic(ctx, 30, 2);
-        nk_bool acc = app_data->accumulate;
-        nk_checkbox_label(ctx, "Accumulate", &acc);
-        if(nk_button_label(ctx, "Reset")) reset_frame_index(app_data);
-        
-        app_data->accumulate = acc;
-        
-        nk_layout_row_dynamic(ctx, 30, 1);
-        nk_bool samp = app_data->sample;
-        nk_checkbox_label(ctx, "Sample", &samp);
-        
-        app_data->sample = samp;
         
         struct nk_colorf bg;
         bg.r = app_data->sky_color[0];
