@@ -6,15 +6,9 @@ project(MacDebug)
 set(SOURCES
 	#app/app.c
 	#app/components.c
-	app/raytrace_app.c
-	app/camera.c
-
-	#rendering/render_pass.c
-	#rendering/debug_render_pass.c
-	#rendering/imgui_render_pass.c
-
-	#systems/physics_system.c
-	#systems/gravity_system.c    
+	#app/raytrace_app.c
+	#app/camera.c
+	app/compute_test.c
 
 	DarkMatter/dm_impl.c
 	DarkMatter/dm_physics.c
