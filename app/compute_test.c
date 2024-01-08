@@ -3,12 +3,12 @@
 #include <assert.h>
 #include <string.h>
 
-#define ARRAY_LENGTH 1 << 24
+#define ARRAY_LENGTH (1 << 24)
 
 typedef struct stuff_data_t
 {
-    float scale_a, scale_b;
     float offset_a, offset_b;
+    float scale_a, scale_b;
 } stuff_data;
 
 typedef struct application_data_t
@@ -38,7 +38,7 @@ bool dm_application_init(dm_context* context)
     
     dm_compute_create_shader(desc, &app_data->shader, context);
     
-    size_t data_size = sizeof(float) * ARRAY_LENGTH;
+    static const size_t data_size = sizeof(float) * ARRAY_LENGTH;
     
     if(!dm_compute_create_buffer(data_size, sizeof(float), &app_data->in_a, context))   return false;
     if(!dm_compute_create_buffer(data_size, sizeof(float), &app_data->in_b, context))   return false;
@@ -83,19 +83,21 @@ bool dm_application_update(dm_context* context)
     }
     DM_LOG_WARN("Generating data took: %lf ms", dm_timer_elapsed_ms(&t, context));
     
+    static const float mil_elems = (float)ARRAY_LENGTH / 1e6f;
+    
     dm_timer_start(&t, context);
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
-        app_data->result_buffer[i] = app_data->a_buffer[i] * s.scale_a + app_data->b_buffer[i] * s.scale_b + s.offset_a + s.offset_b;
+        app_data->result_buffer[i] = (app_data->a_buffer[i] + s.offset_a) * s.scale_a + (app_data->b_buffer[i] + s.offset_b) * s.scale_b;
     }
-    DM_LOG_WARN("CPU calculation for %u elements took: %lf ms", ARRAY_LENGTH, dm_timer_elapsed_ms(&t, context));
+    DM_LOG_WARN("CPU calculation for %f million elements took: %lf ms", mil_elems, dm_timer_elapsed_ms(&t, context));
     
     if(!dm_compute_command_bind_shader(app_data->shader, context)) return false;
     
     static const size_t data_size = sizeof(float) * ARRAY_LENGTH;
     if(!dm_compute_command_update_buffer(app_data->in_a, app_data->a_buffer, data_size, 0, context)) return false;
     if(!dm_compute_command_update_buffer(app_data->in_b, app_data->b_buffer, data_size, 0, context)) return false;
-    if(!dm_compute_command_update_buffer(app_data->stuff, &s, sizeof(s), 0, context))     return false;
+    if(!dm_compute_command_update_buffer(app_data->stuff, &s, sizeof(s), 0, context))                return false;
     
     if(!dm_compute_command_bind_buffer(app_data->in_a, 0, 0, context))   return false;
     if(!dm_compute_command_bind_buffer(app_data->in_b, 0, 1, context))   return false;
@@ -106,7 +108,7 @@ bool dm_application_update(dm_context* context)
     
     dm_timer_start(&t, context);
     float* result_2 = dm_compute_command_get_buffer_data(app_data->result, context);
-    DM_LOG_INFO("Compute shader calculation for %u elements took: %lf ms", ARRAY_LENGTH, dm_timer_elapsed_ms(&t, context));
+    DM_LOG_INFO("Compute shader calculation for %f million elements took: %lf ms", mil_elems, dm_timer_elapsed_ms(&t, context));
     
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
