@@ -5,9 +5,15 @@
 
 #define ARRAY_LENGTH 1 << 24
 
+typedef struct stuff_data_t
+{
+    float scale_a, scale_b;
+    float offset_a, offset_b;
+} stuff_data;
+
 typedef struct application_data_t
 {
-    dm_compute_handle in_a, in_b, result;
+    dm_compute_handle in_a, in_b, stuff, result;
     dm_compute_handle shader;
     
     float *a_buffer, *b_buffer, *result_buffer;
@@ -34,9 +40,10 @@ bool dm_application_init(dm_context* context)
     
     size_t data_size = sizeof(float) * ARRAY_LENGTH;
     
-    dm_compute_create_buffer(data_size, sizeof(float), &app_data->in_a, context);
-    dm_compute_create_buffer(data_size, sizeof(float), &app_data->in_b, context);
-    dm_compute_create_buffer(data_size, sizeof(float), &app_data->result, context);
+    if(!dm_compute_create_buffer(data_size, sizeof(float), &app_data->in_a, context))   return false;
+    if(!dm_compute_create_buffer(data_size, sizeof(float), &app_data->in_b, context))   return false;
+    if(!dm_compute_create_uniform(sizeof(stuff_data), &app_data->stuff, context))       return false;
+    if(!dm_compute_create_buffer(data_size, sizeof(float), &app_data->result, context)) return false;
     
     app_data->a_buffer      = dm_alloc(sizeof(float) * ARRAY_LENGTH);
     app_data->b_buffer      = dm_alloc(sizeof(float) * ARRAY_LENGTH);
@@ -60,33 +67,46 @@ bool dm_application_update(dm_context* context)
 {
     application_data* app_data = context->app_data;
     
+    stuff_data s = { 0 };
+    s.offset_a = 10.0f;
+    s.offset_b = -2.5f;
+    s.scale_a = 123.4f;
+    s.scale_b = 2.0f;
+    
     dm_timer t = { 0 };
     
     dm_timer_start(&t, context);
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
-        float a = dm_random_float(context);
-        float b = dm_random_float(context);
-        app_data->a_buffer[i] = a;
-        app_data->b_buffer[i] = b;
-        
-        app_data->result_buffer[i] = a + b;
+        app_data->a_buffer[i] = dm_random_float(context);
+        app_data->b_buffer[i] = dm_random_float(context);
     }
-    double ms = dm_timer_elapsed_ms(&t, context);
+    DM_LOG_WARN("Generating data took: %lf ms", dm_timer_elapsed_ms(&t, context));
+    
+    dm_timer_start(&t, context);
+    for(uint32_t i=0; i<ARRAY_LENGTH; i++)
+    {
+        app_data->result_buffer[i] = app_data->a_buffer[i] * s.scale_a + app_data->b_buffer[i] * s.scale_b + s.offset_a + s.offset_b;
+    }
+    DM_LOG_WARN("CPU calculation for %u elements took: %lf ms", ARRAY_LENGTH, dm_timer_elapsed_ms(&t, context));
     
     if(!dm_compute_command_bind_shader(app_data->shader, context)) return false;
     
     static const size_t data_size = sizeof(float) * ARRAY_LENGTH;
     if(!dm_compute_command_update_buffer(app_data->in_a, app_data->a_buffer, data_size, 0, context)) return false;
     if(!dm_compute_command_update_buffer(app_data->in_b, app_data->b_buffer, data_size, 0, context)) return false;
+    if(!dm_compute_command_update_buffer(app_data->stuff, &s, sizeof(s), 0, context))     return false;
     
-    if(!dm_compute_command_bind_buffer(app_data->in_a, 0, 0, context)) return false;
-    if(!dm_compute_command_bind_buffer(app_data->in_b, 0, 1, context)) return false;
-    if(!dm_compute_command_bind_buffer(app_data->result, 0, 2, context)) return false;
+    if(!dm_compute_command_bind_buffer(app_data->in_a, 0, 0, context))   return false;
+    if(!dm_compute_command_bind_buffer(app_data->in_b, 0, 1, context))   return false;
+    if(!dm_compute_command_bind_buffer(app_data->stuff, 0, 2, context))  return false;
+    if(!dm_compute_command_bind_buffer(app_data->result, 0, 3, context)) return false;
     
     if(!dm_compute_command_dispatch(ARRAY_LENGTH,1,1, 1024,1,1, context)) return false;
     
+    dm_timer_start(&t, context);
     float* result_2 = dm_compute_command_get_buffer_data(app_data->result, context);
+    DM_LOG_INFO("Compute shader calculation for %u elements took: %lf ms", ARRAY_LENGTH, dm_timer_elapsed_ms(&t, context));
     
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
