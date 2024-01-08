@@ -14,12 +14,12 @@ SET /A math_tests=0
 SET app=%SRC_DIR%\app\raytrace_app.c
 REM SET rendering=%SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c
 
-SET c_filenames=%app% %rendering% %SRC_DIR%\app\camera.c %SRC_DIR%\app\components.c %SRC_DIR%\systems\gravity_system.c
+SET c_filenames=%app% %rendering% %SRC_DIR%\app\camera.c
 
 IF /I "%physics_mt%" EQU "1" (
-	SET c_filenames=%c_filenames% %SRC_DIR%\systems\physics_system_multi_th.c
+	REM SET c_filenames=%c_filenames% %SRC_DIR%\systems\physics_system_multi_th.c
 ) ELSE (
-	SET c_filenames=%c_filenames% %SRC_DIR%\systems\physics_system.c
+	REM SET c_filenames=%c_filenames% %SRC_DIR%\systems\physics_system.c
 )
 
 SET dm_filenames=%DM_DIR%\dm_impl.c %DM_DIR%\platform\dm_platform_win32.c %DM_DIR%\dm_physics.c %DM_DIR%\dm_imgui.c

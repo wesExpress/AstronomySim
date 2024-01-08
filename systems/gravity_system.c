@@ -223,18 +223,18 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
     float* mass = manager->cache.mass;
     
 #ifdef DM_SIMD_X86
-    dm_mm256_float mass_i, mass_j;
-    dm_mm256_float pos_i_x, pos_i_y, pos_i_z;
-    dm_mm256_float pos_j_x, pos_j_y, pos_j_z;
+    dm_simd256_float mass_i, mass_j;
+    dm_simd256_float pos_i_x, pos_i_y, pos_i_z;
+    dm_simd256_float pos_j_x, pos_j_y, pos_j_z;
     
-    dm_mm256_float local_x, local_y, local_z;
-    dm_mm256_float force_i_x, force_i_y, force_i_z;
-    dm_mm256_float force_j_x, force_j_y, force_j_z;
-    dm_mm256_float dir_x, dir_y, dir_z;
-    dm_mm256_float grav, dis2;
+    dm_simd256_float local_x, local_y, local_z;
+    dm_simd256_float force_i_x, force_i_y, force_i_z;
+    dm_simd256_float force_j_x, force_j_y, force_j_z;
+    dm_simd256_float dir_x, dir_y, dir_z;
+    dm_simd256_float grav, dis2;
     
-    const dm_mm256_float grav_const = dm_mm256_set1_ps(G);
-    const dm_mm256_float ones       = dm_mm256_set1_ps(1.0f);
+    const dm_simd256_float grav_const = dm_simd256_set1_float(G);
+    const dm_simd256_float ones       = dm_simd256_set1_float(1.0f);
 #elif defined(DM_SIMD_ARM)
     dm_mm_float mass_i, mass_j;
     dm_mm_float pos_i_x, pos_i_y, pos_i_z;
@@ -256,81 +256,81 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
     {
         // load in entity_i data
 #ifdef DM_SIMD_X86
-        pos_i_x = dm_mm256_set1_ps(pos_x[i]);
-        pos_i_y = dm_mm256_set1_ps(pos_y[i]);
-        pos_i_z = dm_mm256_set1_ps(pos_z[i]);
+        pos_i_x = dm_simd256_set1_float(pos_x[i]);
+        pos_i_y = dm_simd256_set1_float(pos_y[i]);
+        pos_i_z = dm_simd256_set1_float(pos_z[i]);
         
-        force_i_x = dm_mm256_set1_ps(0);
-        force_i_y = dm_mm256_set1_ps(0);
-        force_i_z = dm_mm256_set1_ps(0);
+        force_i_x = dm_simd256_set1_float(0);
+        force_i_y = dm_simd256_set1_float(0);
+        force_i_z = dm_simd256_set1_float(0);
         
-        mass_i = dm_mm256_set1_ps(mass[i]);
+        mass_i = dm_simd256_set1_float(mass[i]);
 #elif defined DM_SIMD_ARM
-        pos_i_x = dm_mm_set1_ps(pos_x[i]);
-        pos_i_y = dm_mm_set1_ps(pos_y[i]);
-        pos_i_z = dm_mm_set1_ps(pos_z[i]);
+        pos_i_x = dm_mm_set1_float(pos_x[i]);
+        pos_i_y = dm_mm_set1_float(pos_y[i]);
+        pos_i_z = dm_mm_set1_float(pos_z[i]);
         
-        force_i_x = dm_mm_set1_ps(0);
-        force_i_y = dm_mm_set1_ps(0);
-        force_i_z = dm_mm_set1_ps(0);
+        force_i_x = dm_mm_set1_float(0);
+        force_i_y = dm_mm_set1_float(0);
+        force_i_z = dm_mm_set1_float(0);
         
-        mass_i = dm_mm_set1_ps(mass[i]);
+        mass_i = dm_mm_set1_float(mass[i]);
 #endif
         
         j = i+1;
         for(; j<system->entity_count; j+=GRAV_SYSTEM_N)
         {
 #ifdef DM_SIMD_X86
-            pos_j_x = dm_mm256_load_ps(pos_x + j);
-            pos_j_y = dm_mm256_load_ps(pos_y + j);
-            pos_j_z = dm_mm256_load_ps(pos_z + j);
+            pos_j_x = dm_simd256_load_float(pos_x + j);
+            pos_j_y = dm_simd256_load_float(pos_y + j);
+            pos_j_z = dm_simd256_load_float(pos_z + j);
             
-            force_j_x = dm_mm256_load_ps(force_x + j);
-            force_j_y = dm_mm256_load_ps(force_y + j);
-            force_j_z = dm_mm256_load_ps(force_z + j);
+            force_j_x = dm_simd256_load_float(force_x + j);
+            force_j_y = dm_simd256_load_float(force_y + j);
+            force_j_z = dm_simd256_load_float(force_z + j);
             
-            mass_j = dm_mm256_load_ps(mass + j);
+            mass_j = dm_simd256_load_float(mass + j);
             
             // rij = pos_j - pos_i
-            dir_x = dm_mm256_sub_ps(pos_j_x, pos_i_x);
-            dir_y = dm_mm256_sub_ps(pos_j_y, pos_i_y);
-            dir_z = dm_mm256_sub_ps(pos_j_z, pos_i_z);
+            dir_x = dm_simd256_sub_float(pos_j_x, pos_i_x);
+            dir_y = dm_simd256_sub_float(pos_j_y, pos_i_y);
+            dir_z = dm_simd256_sub_float(pos_j_z, pos_i_z);
             
             // r^2 = sep_x * sep_x + sep_y * sep_y + sep_z * sep_z
-            dis2 = dm_mm256_mul_ps(dir_x, dir_x);
-            dis2 = dm_mm256_fmadd_ps(dir_y, dir_y, dis2);
-            dis2 = dm_mm256_fmadd_ps(dir_z, dir_z, dis2);
+            dis2 = dm_simd256_mul_float(dir_x, dir_x);
+            dis2 = dm_simd256_fmadd_float(dir_y, dir_y, dis2);
+            dis2 = dm_simd256_fmadd_float(dir_z, dir_z, dis2);
             
             // G mi * mj 
-            grav = dm_mm256_mul_ps(grav_const, mass_i);
-            grav = dm_mm256_mul_ps(grav, mass_j);
-            grav = dm_mm256_div_ps(grav, dis2);
+            grav = dm_simd256_mul_float(grav_const, mass_i);
+            grav = dm_simd256_mul_float(grav, mass_j);
+            grav = dm_simd256_div_float(grav, dis2);
             
-            dis2 = dm_mm256_sqrt_ps(dis2);
-            dis2 = dm_mm256_div_ps(ones, dis2);
+            dis2 = dm_simd256_sqrt_float(dis2);
+            dis2 = dm_simd256_div_float(ones, dis2);
             
-            dir_x = dm_mm256_mul_ps(dir_x, dis2);
-            dir_y = dm_mm256_mul_ps(dir_y, dis2);
-            dir_z = dm_mm256_mul_ps(dir_z, dis2);
+            dir_x = dm_simd256_mul_float(dir_x, dis2);
+            dir_y = dm_simd256_mul_float(dir_y, dis2);
+            dir_z = dm_simd256_mul_float(dir_z, dis2);
             
             // local force
-            local_x = dm_mm256_mul_ps(grav, dir_x);
-            local_y = dm_mm256_mul_ps(grav, dir_y);
-            local_z = dm_mm256_mul_ps(grav, dir_z);
+            local_x = dm_simd256_mul_float(grav, dir_x);
+            local_y = dm_simd256_mul_float(grav, dir_y);
+            local_z = dm_simd256_mul_float(grav, dir_z);
             
             // entity i has all j forces acting on it
             // j entities have negative local force
-            force_i_x = dm_mm256_add_ps(force_i_x, local_x);
-            force_i_y = dm_mm256_add_ps(force_i_y, local_y);
-            force_i_z = dm_mm256_add_ps(force_i_z, local_z);
+            force_i_x = dm_simd256_add_ps(force_i_x, local_x);
+            force_i_y = dm_simd256_add_ps(force_i_y, local_y);
+            force_i_z = dm_simd256_add_ps(force_i_z, local_z);
             
-            force_j_x = dm_mm256_sub_ps(force_j_x, local_x);
-            force_j_y = dm_mm256_sub_ps(force_j_y, local_y);
-            force_j_z = dm_mm256_sub_ps(force_j_z, local_z);
+            force_j_x = dm_simd256_sub_ps(force_j_x, local_x);
+            force_j_y = dm_simd256_sub_ps(force_j_y, local_y);
+            force_j_z = dm_simd256_sub_ps(force_j_z, local_z);
             
-            dm_mm256_store_ps(force_x + j, force_j_x);
-            dm_mm256_store_ps(force_y + j, force_j_y);
-            dm_mm256_store_ps(force_z + j, force_j_z);
+            dm_simd256_store_ps(force_x + j, force_j_x);
+            dm_simd256_store_ps(force_y + j, force_j_y);
+            dm_simd256_store_ps(force_z + j, force_j_z);
 #elif defined(DM_SIMD_ARM)
             pos_j_x = dm_mm_load_ps(pos_x + j);
             pos_j_y = dm_mm_load_ps(pos_y + j);
@@ -386,9 +386,9 @@ void simd_gravity(dm_ecs_system* system, dm_context* context)
         }
         
 #ifdef DM_SIMD_x86
-        force_x[i] += dm_mm256_sum_elements(force_i_x);
-        force_y[i] += dm_mm256_sum_elements(force_i_y);
-        force_z[i] += dm_mm256_sum_elements(force_i_z);
+        force_x[i] += dm_simd256_sum_elements(force_i_x);
+        force_y[i] += dm_simd256_sum_elements(force_i_y);
+        force_z[i] += dm_simd256_sum_elements(force_i_z);
 #elif defined(DM_SIMD_ARM)
         force_x[i] += dm_mm_sum_elements(force_i_x);
         force_y[i] += dm_mm_sum_elements(force_i_y);
