@@ -3,6 +3,14 @@
 #include "../app/app.h"
 #include "dm.h"
 
+typedef enum debug_render_shapes_t
+{
+    DEBUG_RENDER_SHAPE_LINE,
+    DEBUG_RENDER_SHAPE_CUBE,
+    DEBUG_RENDER_SHAPE_BILBOARD,
+    DEBUG_RENDER_SHAPE_UNKNOWN
+} debug_render_shapes;
+
 typedef struct debug_render_vertex_t
 {
     float pos[N3];
@@ -22,7 +30,7 @@ typedef struct debug_render_uniform_t
 #define MAX_INSTS_PER_FRAME 2048
 typedef struct debug_render_pass_data_t
 {
-    dm_render_handle vb, instb, ib, shader, pipe, uni;
+    dm_render_handle vb, instb[DEBUG_RENDER_SHAPE_UNKNOWN], ib, shader, pipe, uni;
     
     uint32_t line_count, line_vertex_count, line_vertex_offset, line_index_count, line_index_offset;
     uint32_t cube_count, cube_vertex_count,cube_vertex_offset, cube_index_count, cube_index_offset;
@@ -152,12 +160,13 @@ bool debug_render_pass_init(dm_context* context)
     pass_data->bilboard_vertex_count = 4;
     pass_data->bilboard_index_count  = 6;
     
-    index_offset = vertex_count;
-    
     // buffers
     if(!dm_renderer_create_static_vertex_buffer(vertices, sizeof(vertices), sizeof(debug_render_vertex), &pass_data->vb, context)) return false;
-    if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(debug_render_instance) * MAX_INSTS_PER_FRAME, sizeof(debug_render_instance), &pass_data->instb, context)) return false;
-    if(!dm_renderer_create_static_index_buffer(indices, sizeof(indices), &pass_data->ib, context)) return false;
+    for(uint32_t i=0; i<DEBUG_RENDER_SHAPE_UNKNOWN; i++)
+    {
+        if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(debug_render_instance) * MAX_INSTS_PER_FRAME, sizeof(debug_render_instance), &pass_data->instb[i], context)) return false;
+    }
+    if(!dm_renderer_create_static_index_buffer(indices, sizeof(indices), sizeof(uint32_t), &pass_data->ib, context)) return false;
     if(!dm_renderer_create_uniform(sizeof(debug_render_uniform), DM_UNIFORM_STAGE_VERTEX, &pass_data->uni, context)) return false;
     
     dm_shader_desc shader_desc = { 0 };
@@ -170,7 +179,7 @@ bool debug_render_pass_init(dm_context* context)
     
     shader_desc.vb_count = 2;
     shader_desc.vb[0] = pass_data->vb;
-    shader_desc.vb[1] = pass_data->instb;
+    shader_desc.vb[1] = pass_data->instb[0];
 #elif defined(DM_DIRECTX)
     strcpy(shader_desc.vertex, "assets/shaders/debug_vertex.fxc");
     strcpy(shader_desc.pixel, "assets/shaders/debug_pixel.fxc");
@@ -196,7 +205,8 @@ bool debug_render_lines(dm_context* context)
     application_data*       app_data = context->app_data;
     debug_render_pass_data* pass_data = app_data->debug_render_pass_data;
     
-    dm_render_command_update_buffer(pass_data->instb, pass_data->line_insts, sizeof(pass_data->line_insts), 0, context);
+    dm_render_command_bind_buffer(pass_data->instb[DEBUG_RENDER_SHAPE_LINE], 1, context);
+    dm_render_command_update_buffer(pass_data->instb[DEBUG_RENDER_SHAPE_LINE], pass_data->line_insts, sizeof(pass_data->line_insts), 0, context);
     dm_render_command_draw_instanced(pass_data->line_index_count, pass_data->line_count, pass_data->line_index_offset, 0, 0, context);
     
     pass_data->line_count = 0;
@@ -209,7 +219,8 @@ bool debug_render_cubes(dm_context* context)
     application_data*       app_data = context->app_data;
     debug_render_pass_data* pass_data = app_data->debug_render_pass_data;
     
-    dm_render_command_update_buffer(pass_data->instb, pass_data->cube_insts, sizeof(pass_data->cube_insts), 0, context);
+    dm_render_command_bind_buffer(pass_data->instb[DEBUG_RENDER_SHAPE_CUBE], 1, context);
+    dm_render_command_update_buffer(pass_data->instb[DEBUG_RENDER_SHAPE_CUBE], pass_data->cube_insts, sizeof(pass_data->cube_insts), 0, context);
     dm_render_command_draw_instanced(pass_data->cube_index_count, pass_data->cube_count, pass_data->cube_index_offset, 0, 0, context);
     
     pass_data->cube_count = 0;
@@ -224,7 +235,8 @@ bool debug_render_bilboards(dm_context* context)
     
     dm_render_command_set_primitive_topology(DM_TOPOLOGY_TRIANGLE_LIST, context);
     dm_render_command_toggle_wireframe(false, context);
-    dm_render_command_update_buffer(pass_data->instb, pass_data->bilboard_insts, sizeof(pass_data->bilboard_insts), 0, context);
+    dm_render_command_bind_buffer(pass_data->instb[DEBUG_RENDER_SHAPE_BILBOARD], 1, context);
+    dm_render_command_update_buffer(pass_data->instb[DEBUG_RENDER_SHAPE_BILBOARD], pass_data->bilboard_insts, sizeof(pass_data->bilboard_insts), 0, context);
     dm_render_command_draw_instanced(pass_data->bilboard_index_count, pass_data->bilboard_count, pass_data->bilboard_index_offset, 0, 0, context);
     
     pass_data->bilboard_count = 0;
@@ -250,7 +262,6 @@ bool debug_render_pass_render(dm_context* context)
     dm_render_command_bind_pipeline(pass_data->pipe, context);
     dm_render_command_bind_buffer(pass_data->ib,    0, context);
     dm_render_command_bind_buffer(pass_data->vb,    0, context);
-    dm_render_command_bind_buffer(pass_data->instb, 1, context);
     
     dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_VERTEX, 0, context);
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);

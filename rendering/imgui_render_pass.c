@@ -5,6 +5,7 @@
 #include "stb_truetype/stb_truetype.h"
 
 #include <stdarg.h>
+#include <float.h>
 
 typedef struct imgui_pass_vertex_t
 {
@@ -29,7 +30,7 @@ typedef struct imgui_pass_text_data_packet_t
 
 typedef struct imgui_pass_data_t
 {
-    dm_render_handle instb, uni;
+    dm_render_handle vb, ib, uni;
     dm_render_handle shader, pipe;
     dm_render_handle default_font, active_font;
     
@@ -37,7 +38,7 @@ typedef struct imgui_pass_data_t
     uint32_t text_count;
     
     imgui_pass_vertex text_vertices[IMGUI_PASS_MAX_INST_COUNT];
-    uint32_t text_vertex_count;
+    uint32_t text_vertex_count, num_glyphs;
 } imgui_pass_data;
 
 /************
@@ -66,15 +67,20 @@ bool imgui_render_pass_init(dm_context* context)
     pipeline_desc.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
     
     pipeline_desc.blend = true;
-    pipeline_desc.blend_eq = DM_BLEND_EQUATION_ADD;
-    pipeline_desc.blend_src_f = DM_BLEND_FUNC_SRC_ALPHA;
-    pipeline_desc.blend_dest_f = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
+    pipeline_desc.blend_eq           = DM_BLEND_EQUATION_ADD;
+    pipeline_desc.blend_src_f        = DM_BLEND_FUNC_SRC_ALPHA;
+    pipeline_desc.blend_dest_f       = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
+    pipeline_desc.blend_src_alpha_f  = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
+    pipeline_desc.blend_dest_alpha_f = DM_BLEND_FUNC_ZERO;
+    pipeline_desc.blend_alpha_eq     = DM_BLEND_EQUATION_ADD;
     
     pipeline_desc.sampler_comp = DM_COMPARISON_ALWAYS;
     pipeline_desc.sampler_filter = DM_FILTER_LINEAR;
-    pipeline_desc.u_mode = pipeline_desc.v_mode = pipeline_desc.w_mode = DM_TEXTURE_MODE_WRAP;
+    pipeline_desc.u_mode = pipeline_desc.v_mode = pipeline_desc.w_mode = DM_TEXTURE_MODE_EDGE;
+    pipeline_desc.max_lod = FLT_MAX;
     
-    if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(imgui_pass_vertex) * IMGUI_PASS_MAX_INST_COUNT, sizeof(imgui_pass_vertex), &pass_data->instb, context)) return false;
+    if(!dm_renderer_create_dynamic_vertex_buffer(NULL, IMGUI_MAX_VERTEX_BUFFER, 0, &pass_data->vb, context)) return false;
+    if(!dm_renderer_create_dynamic_index_buffer(NULL, IMGUI_MAX_INDEX_BUFFER, 0, &pass_data->ib, context)) return false;
     if(!dm_renderer_create_uniform(sizeof(imgui_pass_uniform), DM_UNIFORM_STAGE_VERTEX, &pass_data->uni, context)) return false;
     
     dm_shader_desc shader_desc = { 0 };
@@ -148,6 +154,12 @@ bool imgui_render_pass_render(dm_context* context)
     {
         imgui_draw_text_internal(pass_data->text_packets[i], context);
     }
+    
+    dm_render_command_update_buffer(pass_data->instb, pass_data->text_vertices, pass_data->num_glyphs * sizeof(imgui_pass_vertex), 0, context);
+    dm_render_command_draw_arrays(0, pass_data->num_glyphs, context);
+    
+    pass_data->text_vertex_count = 0;
+    pass_data->num_glyphs = 0;
     
     pass_data->text_count = 0;
     
@@ -233,6 +245,8 @@ void imgui_draw_text_internal(imgui_pass_text_data_packet text_packet, dm_contex
         runner++;
     }
     num_glyphs *= 6;
+    pass_data->num_glyphs += num_glyphs;
+    
     runner = text_packet.text;
     
     while(*runner)
@@ -312,9 +326,4 @@ void imgui_draw_text_internal(imgui_pass_text_data_packet text_packet, dm_contex
         
         runner++;
     }
-    
-    dm_render_command_update_buffer(pass_data->instb, pass_data->text_vertices, num_glyphs * sizeof(imgui_pass_vertex), 0, context);
-    dm_render_command_draw_arrays(0, num_glyphs, context);
-    
-    pass_data->text_vertex_count = 0;
 }

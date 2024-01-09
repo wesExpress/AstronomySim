@@ -4,26 +4,23 @@ set(CMAKE_C_STANDARD 99)
 project(MacDebug)
 
 set(SOURCES
-	app/app.c
-	app/components.c
-	app/camera.c
+	#app/app.c
+	#app/components.c
+	#app/raytrace_app.c
+	#app/camera.c
+	app/compute_test.c
 
-	rendering/render_pass.c
-	rendering/debug_render_pass.c
-	rendering/imgui_render_pass.c
-
-	systems/physics_system.c
-	systems/gravity_system.c    
-
-	dm_impl.c
-	dm_physics.c
-    DarkMatter/platform/dm_platform_mac.m
-    DarkMatter/rendering/dm_renderer_metal.m
+	DarkMatter/dm_impl.c
+	DarkMatter/dm_physics.c
+	DarkMatter/platform/dm_platform_mac.m
+	DarkMatter/rendering/dm_renderer_metal.m
+	DarkMatter/dm_imgui.c
 )
 add_executable(MacDebug ${SOURCES})
 target_include_directories(MacDebug
     PUBLIC
-        lib/
+		DarkMatter/
+		DarkMatter/lib/
 )
 
 find_library(APPLE_FWK_COCOA Cocoa REQUIRED)

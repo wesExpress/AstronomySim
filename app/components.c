@@ -10,6 +10,14 @@ void entity_add_transform(dm_entity entity, dm_ecs_id t_id, float pos_x,float po
     dm_ecs_get_component_insert_index(t_id, &index, context);
     if(index==DM_ECS_INVALID_ENTITY) return;
     
+    float s = rot_i * rot_i + rot_j * rot_j + rot_k * rot_k + rot_r * rot_r;
+    if(s==0)
+    {
+        rot_r = 1;
+        s = 1;
+    }
+    else s = 1 / dm_sqrtf(s);
+    
     transform->pos_x[index] = pos_x;
     transform->pos_y[index] = pos_y;
     transform->pos_z[index] = pos_z;
@@ -18,10 +26,10 @@ void entity_add_transform(dm_entity entity, dm_ecs_id t_id, float pos_x,float po
     transform->scale_y[index] = scale_y;
     transform->scale_z[index] = scale_z;
     
-    transform->rot_i[index] = rot_i;
-    transform->rot_j[index] = rot_j;
-    transform->rot_k[index] = rot_k;
-    transform->rot_r[index] = rot_r;
+    transform->rot_i[index] = rot_i * s;
+    transform->rot_j[index] = rot_j * s;
+    transform->rot_k[index] = rot_k * s;
+    transform->rot_r[index] = rot_r * s;
     
     dm_ecs_entity_add_component(entity, t_id, context);
 }
@@ -42,11 +50,28 @@ void entity_add_kinematics(dm_entity entity, dm_ecs_id p_id, float mass, float v
     physics->mass[index]     = mass;
     physics->inv_mass[index] = 1.0f / mass;
     
-    physics->damping_v[index] = damping_v;
-    physics->damping_w[index] = damping_w;
+    physics->damping_v[index] = 1.0f / (1.0f + damping_v * DM_PHYSICS_FIXED_DT);
+    physics->damping_w[index] = 1.0f / (1.0f + damping_w * DM_PHYSICS_FIXED_DT);
+    
+    physics->movement_type[index] = DM_PHYSICS_MOVEMENT_TYPE_KINEMATIC;
+    
+    dm_ecs_entity_add_component(entity, p_id, context);
+}
+
+void entity_add_statics(dm_entity entity, dm_ecs_id p_id, float mass, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
+    
+    uint32_t index;
+    component_physics* physics = dm_ecs_get_component_block(p_id, context);
+    dm_ecs_get_component_insert_index(p_id, &index, context);
+    if(index==DM_ECS_INVALID_ENTITY) return;
+    
+    physics->mass[index]     = mass;
+    physics->inv_mass[index] = 1.0f / mass;
     
     // default for now
-    physics->movement_type[index] = PHYSICS_MOVEMENT_KINEMATIC;
+    physics->movement_type[index] = DM_PHYSICS_MOVEMENT_TYPE_STATIC;
     
     dm_ecs_entity_add_component(entity, p_id, context);
 }
@@ -215,6 +240,20 @@ void entity_add_rigid_body_sphere(dm_entity entity, dm_ecs_id r_id, float mass, 
     dm_ecs_entity_add_component(entity, r_id, context);
 }
 
+void entity_add_mesh(dm_entity entity, uint32_t m_id, uint32_t mesh, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
+    
+    uint32_t index;
+    component_mesh* mesh_component = dm_ecs_get_component_block(m_id, context);
+    dm_ecs_get_component_insert_index(m_id, &index, context);
+    if(index==DM_ECS_INVALID_ENTITY) return;
+    
+    mesh_component->mesh_id[index] = mesh;
+    
+    dm_ecs_entity_add_component(entity, m_id, context);
+}
+
 /************
 HELPER FUNCS
 **************/
@@ -251,6 +290,8 @@ void entity_apply_force(dm_entity entity, dm_ecs_id p_id, float f_x, float f_y, 
     
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][p_id];
+    
+    if(physics->movement_type[comp_index]==DM_PHYSICS_MOVEMENT_TYPE_STATIC) return;
     
     physics->force_x[comp_index] += f_x;
     physics->force_y[comp_index] += f_y;
@@ -293,5 +334,14 @@ bool register_rigid_body(dm_ecs_id* id, dm_context* context)
     if(*id!=DM_ECS_INVALID_ID) return true; 
     
     DM_LOG_FATAL("Could not register rigidbody component"); 
+    return false;
+}
+
+bool register_mesh(dm_ecs_id* id, dm_context* context)
+{
+    *id = dm_ecs_register_component(sizeof(component_mesh), context);
+    if(*id!=DM_ECS_INVALID_ID) return true; 
+    
+    DM_LOG_FATAL("Could not register mesh component"); 
     return false;
 }
