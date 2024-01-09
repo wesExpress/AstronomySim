@@ -16,7 +16,9 @@ typedef struct application_data_t
     dm_compute_handle in_a, in_b, stuff, result;
     dm_compute_handle shader;
     
-    float *a_buffer, *b_buffer, *result_buffer;
+    DM_ALIGN(16) float *a_buffer;
+    DM_ALIGN(16) float *b_buffer;
+    DM_ALIGN(16) float *result_buffer;
 } application_data;
 
 void dm_application_setup(dm_context_init_packet* init_packet) {}
@@ -77,18 +79,20 @@ bool dm_application_update(dm_context* context)
     
     dm_timer t = { 0 };
     
+    static const float mil_elems = (float)ARRAY_LENGTH / 1e6f;
+    
+    DM_LOG_WARN("%0.2f million elements", mil_elems);
+    
     dm_timer_start(&t, context);
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
         app_data->a_buffer[i] = dm_random_float(context);
         app_data->b_buffer[i] = dm_random_float(context);
     }
-    DM_LOG_WARN("Generating data took: %lf ms", dm_timer_elapsed_ms(&t, context));
-    
-    static const float mil_elems = (float)ARRAY_LENGTH / 1e6f;
+    DM_LOG_WARN("Generating: %0.2lf ms", dm_timer_elapsed_ms(&t, context));
     
     dm_timer_start(&t, context);
-#if 1
+#if 0
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
         //app_data->result_buffer[i] = (app_data->a_buffer[i] + s.offset_a) * s.scale_a + (app_data->b_buffer[i] + s.offset_b) * s.scale_b;
@@ -132,18 +136,22 @@ bool dm_application_update(dm_context* context)
         a = dm_simd_load_float(app_data->a_buffer + i);
         b = dm_simd_load_float(app_data->b_buffer + i);
         
+#if 0
         temp_a = dm_simd_add_float(a, offset_a);
         temp_a = dm_simd_mul_float(temp_a, scale_a);
         temp_b = dm_simd_add_float(b, offset_b);
         temp_b = dm_simd_mul_float(temp_b, scale_b);
         
         result = dm_simd_add_float(temp_a, temp_b);
+#else
+        result = dm_simd_add_float(a, b);
+#endif
         
         dm_simd_store_float(app_data->result_buffer + i, result);
     }
 #endif
 #endif
-    DM_LOG_WARN("CPU calculation for %f million elements took: %lf ms", mil_elems, dm_timer_elapsed_ms(&t, context));
+    DM_LOG_WARN("CPU: %0.2lf ms", dm_timer_elapsed_ms(&t, context));
     
     if(!dm_compute_command_bind_shader(app_data->shader, context)) return false;
     
@@ -159,18 +167,15 @@ bool dm_application_update(dm_context* context)
     
     dm_timer_start(&t, context);
 #ifdef DM_METAL
-    if(!dm_compute_command_dispatch(ARRAY_LENGTH,1,1, 1024,1,1, context)) return false;
+    if(!dm_compute_command_dispatch(ARRAY_LENGTH,1,1, 1,1,1, context)) return false;
 #elif defined(DM_DIRECTX)
     if(!dm_compute_command_dispatch(65535,1,1, 1024,1,1, context)) return false;
 #endif
-    
-    DM_LOG_INFO("Compute shader calculation for %f million elements took: %lf ms", mil_elems, dm_timer_elapsed_ms(&t, context));
-    
-    float* test = dm_compute_command_get_buffer_data(app_data->in_a, context);
-    test = dm_compute_command_get_buffer_data(app_data->in_b, context);
+    DM_LOG_INFO("Compute shader: %0.2lf ms", dm_timer_elapsed_ms(&t, context));
     
     float* result_2 = dm_compute_command_get_buffer_data(app_data->result, context);
     
+    dm_timer_start(&t, context);
     float r1, r2;
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
@@ -182,11 +187,21 @@ bool dm_application_update(dm_context* context)
         DM_LOG_FATAL("Compute shader output does not match CPU output");
         return false;
     }
+    DM_LOG_INFO("Checking: %lf ms\n", dm_timer_elapsed(&t, context));
     
     return true;
 }
 
 bool dm_application_render(dm_context* context)
 {
+    dm_imgui_nuklear_context* imgui_ctx = &context->imgui_context.internal_context;
+    struct nk_context* ctx = &imgui_ctx->ctx;
+    
+    if(nk_begin(ctx, "Test", nk_rect(100, 100, 100, 100), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE |
+                NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
+    {
+        nk_end(ctx);
+    }
+    
     return true;
 }
