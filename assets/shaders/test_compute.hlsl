@@ -1,26 +1,10 @@
-struct INPUT
+StructuredBuffer<float> in_a : register(t0);
+StructuredBuffer<float> in_b : register(t1);
+
+RWStructuredBuffer<float> buffer_out : register(u0);
+
+[numthreads(8,1,1)]
+void c_main(uint3 id : SV_DispatchThreadID)
 {
-	float x;
-	float y;
-	float z;
-};
-
-struct OUTPUT
-{
-	float x;
-	float y;
-	float z;
-};
-
-cbuffer globals : register(b0)
-{
-	uint array_len;
-};
-
-RWStructuredBuffer<INPUT> input_array : register(t0);
-
-[numthreads(8,8,1)]
-void c_main(uint3 id : SV_DispatchTreadID)
-{
-
+	buffer_out[id.x] = in_a[id.x] + in_b[id.x];
 }

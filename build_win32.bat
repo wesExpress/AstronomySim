@@ -4,14 +4,15 @@ SetLocal EnableDelayedExpansion
 SET SRC_DIR=%cd%
 SET DM_DIR=%SRC_DIR%\DarkMatter
 
-SET /A debug=0
+SET /A debug=1
 REM SET /A vulkan=0
 SET /A opengl=0
 SET /A physics_mt=0
 SET /A physics_debug=0
 SET /A math_tests=0
 
-SET app=%SRC_DIR%\app\raytrace_app.c
+//SET app=%SRC_DIR%\app\raytrace_app.c
+SET app=%SRC_DIR%\app\compute_test.c
 REM SET rendering=%SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c
 
 SET c_filenames=%app% %rendering% %SRC_DIR%\app\camera.c

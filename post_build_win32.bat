@@ -5,7 +5,7 @@ SET SRC_DIR=%cd%
 SET DM_DIR=%SRC_DIR%\DarkMatter
 
 REM SET /A vulkan=0
-SET /A opengl=1
+SET /A opengl=0
 
 IF NOT EXIST "build\assets\shaders" mkdir build\assets\shaders
 
@@ -111,6 +111,6 @@ COPY /y "assets\textures" build\assets\textures
 IF NOT EXIST "build\assets\fonts" mkdir build\assets\fonts
 COPY /y "assets\fonts" build\assets\fonts
 
-IF NOT EXIST "build\assets\models" mkdir build\assets\models
-COPY /y "assets\models" build\assets\models
+REM IF NOT EXIST "build\assets\models" mkdir build\assets\models
+REM COPY /y "assets\models" build\assets\models
 
