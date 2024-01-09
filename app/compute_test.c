@@ -88,10 +88,33 @@ bool dm_application_update(dm_context* context)
     static const float mil_elems = (float)ARRAY_LENGTH / 1e6f;
     
     dm_timer_start(&t, context);
+#if 1
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
         app_data->result_buffer[i] = (app_data->a_buffer[i] + s.offset_a) * s.scale_a + (app_data->b_buffer[i] + s.offset_b) * s.scale_b;
     }
+#else
+    dm_simd_float a, b, result, temp_a, temp_b;
+    const dm_simd_float offset_a = dm_simd_set1_float(s.offset_a);
+    const dm_simd_float offset_b = dm_simd_set1_float(s.offset_b);
+    const dm_simd_float scale_a  = dm_simd_set1_float(s.scale_a);
+    const dm_simd_float scale_b  = dm_simd_set1_float(s.scale_b);
+    
+    for(uint32_t i=0; i<ARRAY_LENGTH; i+=4)
+    {
+        a = dm_simd_load_float(app_data->a_buffer + i);
+        b = dm_simd_load_float(app_data->b_buffer + i);
+        
+        temp_a = dm_simd_add_float(a, offset_a);
+        temp_a = dm_simd_mul_float(temp_a, scale_a);
+        temp_b = dm_simd_add_float(b, offset_b);
+        temp_b = dm_simd_mul_float(temp_b, scale_b);
+        
+        result = dm_simd_add_float(temp_a, temp_b);
+        
+        dm_simd_store_float(app_data->result_buffer + i, result);
+    }
+#endif
     DM_LOG_WARN("CPU calculation for %f million elements took: %lf ms", mil_elems, dm_timer_elapsed_ms(&t, context));
     
     if(!dm_compute_command_bind_shader(app_data->shader, context)) return false;
