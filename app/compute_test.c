@@ -91,7 +91,34 @@ bool dm_application_update(dm_context* context)
 #if 1
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
-        app_data->result_buffer[i] = (app_data->a_buffer[i] + s.offset_a) * s.scale_a + (app_data->b_buffer[i] + s.offset_b) * s.scale_b;
+        //app_data->result_buffer[i] = (app_data->a_buffer[i] + s.offset_a) * s.scale_a + (app_data->b_buffer[i] + s.offset_b) * s.scale_b;
+        app_data->result_buffer[i] = app_data->a_buffer[i] + app_data->b_buffer[i];
+    }
+#else
+#ifdef DM_SIMD_X86
+    dm_simd256_float a, b, result, temp_a, temp_b;
+    const dm_simd256_float offset_a = dm_simd256_set1_float(s.offset_a);
+    const dm_simd256_float offset_b = dm_simd256_set1_float(s.offset_b);
+    const dm_simd256_float scale_a  = dm_simd256_set1_float(s.scale_a);
+    const dm_simd256_float scale_b  = dm_simd256_set1_float(s.scale_b);
+    
+    for(uint32_t i=0; i<ARRAY_LENGTH; i+=DM_SIMD256_FLOAT_N)
+    {
+        a = dm_simd256_load_float(app_data->a_buffer + i);
+        b = dm_simd256_load_float(app_data->b_buffer + i);
+        
+#if 0
+        temp_a = dm_simd256_add_float(a, offset_a);
+        temp_a = dm_simd256_mul_float(temp_a, scale_a);
+        temp_b = dm_simd256_add_float(b, offset_b);
+        temp_b = dm_simd256_mul_float(temp_b, scale_b);
+        
+        result = dm_simd256_add_float(temp_a, temp_b);
+#else
+        result = dm_simd256_add_float(a, b);
+#endif
+        
+        dm_simd256_store_float(app_data->result_buffer + i, result);
     }
 #else
     dm_simd_float a, b, result, temp_a, temp_b;
@@ -100,7 +127,7 @@ bool dm_application_update(dm_context* context)
     const dm_simd_float scale_a  = dm_simd_set1_float(s.scale_a);
     const dm_simd_float scale_b  = dm_simd_set1_float(s.scale_b);
     
-    for(uint32_t i=0; i<ARRAY_LENGTH; i+=4)
+    for(uint32_t i=0; i<ARRAY_LENGTH; i+=DM_SIMD_FLOAT_N)
     {
         a = dm_simd_load_float(app_data->a_buffer + i);
         b = dm_simd_load_float(app_data->b_buffer + i);
@@ -114,6 +141,7 @@ bool dm_application_update(dm_context* context)
         
         dm_simd_store_float(app_data->result_buffer + i, result);
     }
+#endif
 #endif
     DM_LOG_WARN("CPU calculation for %f million elements took: %lf ms", mil_elems, dm_timer_elapsed_ms(&t, context));
     
@@ -129,19 +157,27 @@ bool dm_application_update(dm_context* context)
     //if(!dm_compute_command_bind_buffer(app_data->stuff, 0, 2, context))  return false;
     if(!dm_compute_command_bind_buffer(app_data->result, 0, 2, context)) return false;
     
+    dm_timer_start(&t, context);
 #ifdef DM_METAL
     if(!dm_compute_command_dispatch(ARRAY_LENGTH,1,1, 1024,1,1, context)) return false;
 #elif defined(DM_DIRECTX)
-    if(!dm_compute_command_dispatch(1024,1,1, 1024,1,1, context)) return false;
+    if(!dm_compute_command_dispatch(65535,1,1, 1024,1,1, context)) return false;
 #endif
     
-    dm_timer_start(&t, context);
-    float* result_2 = dm_compute_command_get_buffer_data(app_data->result, context);
     DM_LOG_INFO("Compute shader calculation for %f million elements took: %lf ms", mil_elems, dm_timer_elapsed_ms(&t, context));
     
+    float* test = dm_compute_command_get_buffer_data(app_data->in_a, context);
+    test = dm_compute_command_get_buffer_data(app_data->in_b, context);
+    
+    float* result_2 = dm_compute_command_get_buffer_data(app_data->result, context);
+    
+    float r1, r2;
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
-        if(app_data->result_buffer[i] == result_2[i]) continue;
+        r1 = app_data->result_buffer[i];
+        r2 = result_2[i];
+        if(r1 == r2) continue;
+        if(dm_fabs(r1 - r2) < 0.001f) continue;
         
         DM_LOG_FATAL("Compute shader output does not match CPU output");
         return false;
