@@ -21,8 +21,8 @@ kernel void add_arrays(device const float* inA [[buffer(0)]],
     result[index] = (inA[index] + stuff.offset_a) * stuff.scale_a + (inB[index] + stuff.offset_b) * stuff.scale_b;
 }
 #else
-kernel void add_arrays(constant const float* inA [[buffer(0)]],
-                       constant const float* inB [[buffer(1)]],
+kernel void add_arrays(device const float* inA [[buffer(0)]],
+                       device const float* inB [[buffer(1)]],
                        device float* result [[buffer(2)]],
                        uint index [[thread_position_in_grid]])
 {
