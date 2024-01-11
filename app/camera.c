@@ -22,7 +22,7 @@ void camera_init(const dm_vec3 pos, const dm_vec3 forward, float near_plane, flo
     dm_mat_perspective(dm_deg_to_rad(camera->fov), (float)width / (float)height, camera->near_plane, camera->far_plane, camera->proj);
     dm_mat4_inverse(camera->proj, camera->inv_proj);
     
-    dm_mat4_mul_mat4(camera->proj, camera->view, camera->view_proj);
+    dm_mat4_mul_mat4(camera->view, camera->proj, camera->view_proj);
     
     dm_vec3_cross(camera->forward, camera->up, camera->right);
 }
@@ -37,7 +37,7 @@ void update_camera_view(basic_camera* camera)
     dm_mat_view(camera->pos, look, camera->up, camera->view);
     dm_mat4_inverse(camera->view, camera->inv_view);
     
-    dm_mat4_mul_mat4(camera->proj, camera->view, camera->view_proj);
+    dm_mat4_mul_mat4(camera->view, camera->proj, camera->view_proj);
 }
 
 void update_camera_proj(basic_camera* camera)
@@ -45,7 +45,7 @@ void update_camera_proj(basic_camera* camera)
     dm_mat_perspective(dm_deg_to_rad(camera->fov), (float)camera->width / (float)camera->height, camera->near_plane, camera->far_plane, camera->proj);
     dm_mat4_inverse(camera->proj, camera->inv_proj);
     
-    dm_mat4_mul_mat4(camera->proj, camera->view, camera->view_proj);
+    dm_mat4_mul_mat4(camera->view, camera->proj, camera->view_proj);
 }
 
 void camera_resize(const uint32_t width, const uint32_t height, basic_camera* camera, dm_context* context)
