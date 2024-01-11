@@ -21,7 +21,10 @@ for file in *.metal; do
 	cp $output_air      $SRC_DIR/build/assets/shaders
 	cp $output_metallib $SRC_DIR/build/assets/shaders
 
-	mv $output_air      $SRC_DIR/bin/Debug/assets/shaders
+	cp $output_air      $SRC_DIR/bin/Debug/assets/shaders
+	cp $output_metallib $SRC_DIR/bin/Debug/assets/shaders
+
+	mv $output_air      $SRC_DIR/bin/Release/assets/shaders
 	mv $output_metallib $SRC_DIR/bin/Release/assets/shaders
 done
 
@@ -39,14 +42,28 @@ for file in *.metal; do
 	cp $output_air      $SRC_DIR/build/assets/shaders
 	cp $output_metallib $SRC_DIR/build/assets/shaders
 
-	mv $output_air      $SRC_DIR/bin/Debug/assets/shaders
+	cp $output_air      $SRC_DIR/bin/Debug/assets/shaders
+	cp $output_metallib $SRC_DIR/bin/Debug/assets/shaders
+
+	mv $output_air      $SRC_DIR/bin/Release/assets/shaders
 	mv $output_metallib $SRC_DIR/bin/Release/assets/shaders
 done
 
 cd ../../..
 
 mkdir -p $SRC_DIR/build/assets/textures
-cp "assets/textures/default_texture.png" $SRC_DIR/build/assets/textures
+cp -R "assets/textures" $SRC_DIR/build/assets/
+cp -R "assets/textures" $SRC_DIR/bin/Debug/assets/
+cp -R "assets/textures" $SRC_DIR/bin/Release/assets/
 
 mkdir -p $SRC_DIR/build/assets/fonts
-cp "assets/fonts/Chicago.ttf" $SRC_DIR/build/assets/fonts
+cp -R "assets/fonts" $SRC_DIR/build/assets/
+cp -R "assets/fonts" $SRC_DIR/bin/Debug/assets/
+cp -R "assets/fonts" $SRC_DIR/bin/Release/assets/
+
+mkdir -p $SRC_DIR/build/assets/models
+mkdir -p $SRC_DIR/bin/Debug/assets/models
+mkdir -p $SRC_DIR/bin/Release/assets/models
+cp "assets/models/Planet_2.glb" $SRC_DIR/build/assets/models/
+cp "assets/models/Planet_2.glb" $SRC_DIR/bin/Debug/assets/models
+cp "assets/models/Planet_2.glb" $SRC_DIR/bin/Release/assets/models
