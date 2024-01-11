@@ -7,6 +7,10 @@
 #define ARRAY_LENGTH 15000
 #define FIXED_DT     0.016666f
 
+#ifdef DM_DIRECTX
+#define NO_COMPUTE
+#endif
+
 typedef struct render_vertex_t
 {
     dm_vec3 pos;
@@ -66,6 +70,7 @@ bool dm_application_init(dm_context* context)
     context->app_data = dm_alloc(sizeof(application_data));
     application_data* app_data = context->app_data;
     
+#ifndef NO_COMPUTE
     // compute data
     {
         dm_compute_shader_desc gravity_desc = { 0 };
@@ -136,6 +141,7 @@ bool dm_application_init(dm_context* context)
         
         if(!dm_compute_command_update_buffer(app_data->mb, app_data->m_buffer, data_size, 0, context)) return false;
     }
+#endif
     
     // render data
     {
@@ -215,6 +221,7 @@ void dm_application_shutdown(dm_context* context)
 {
     application_data* app_data = context->app_data;
     
+#ifndef NO_COMPUTE
     dm_free(app_data->x_buffer);
     dm_free(app_data->y_buffer);
     dm_free(app_data->z_buffer);
@@ -227,6 +234,7 @@ void dm_application_shutdown(dm_context* context)
     dm_free(app_data->vx_buffer);
     dm_free(app_data->vy_buffer);
     dm_free(app_data->vz_buffer);
+#endif
     
     dm_free(context->app_data);
 }
@@ -239,6 +247,7 @@ bool dm_application_update(dm_context* context)
     
     static const size_t data_size = sizeof(float) * ARRAY_LENGTH;
     
+#ifndef NO_COMPUTE
     // gravity force calculation
     {
         if(!dm_compute_command_bind_shader(app_data->gravity, context)) return false;
@@ -317,6 +326,7 @@ bool dm_application_update(dm_context* context)
     }
     
     app_data->physics_timing /= (double)app_data->physics_iters;
+#endif
     
     // camera
     camera_update(&app_data->camera, context);
