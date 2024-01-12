@@ -11,6 +11,8 @@
 #define NO_COMPUTE
 #endif
 
+#define DRAW_BILBOARDS
+
 typedef struct render_vertex_t
 {
     dm_vec3 pos;
@@ -215,7 +217,7 @@ bool dm_application_init(dm_context* context)
     dm_vec3 cam_pos = { 0,0,5 };
     dm_vec3 cam_for = { 0,0,-1 };
     
-    camera_init(cam_pos, cam_for, 0.001f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), 10.0f, 5.0f, &app_data->camera);
+    camera_init(cam_pos, cam_for, 0.001f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), 10.0f, 1.0f, &app_data->camera);
     
     return true;
 }
@@ -314,13 +316,13 @@ bool dm_application_update(dm_context* context)
 #endif
         app_data->physics_timing += dm_timer_elapsed_ms(&t, context);
         
-        app_data->x_buffer = dm_compute_command_get_buffer_data(app_data->xb, context);
-        app_data->y_buffer = dm_compute_command_get_buffer_data(app_data->yb, context);
-        app_data->z_buffer = dm_compute_command_get_buffer_data(app_data->zb, context);
+        dm_memcpy(app_data->x_buffer, dm_compute_command_get_buffer_data(app_data->xb, context), data_size);
+        dm_memcpy(app_data->y_buffer, dm_compute_command_get_buffer_data(app_data->yb, context), data_size);
+        dm_memcpy(app_data->z_buffer, dm_compute_command_get_buffer_data(app_data->zb, context), data_size);
         
-        app_data->vx_buffer = dm_compute_command_get_buffer_data(app_data->vx_b, context);
-        app_data->vy_buffer = dm_compute_command_get_buffer_data(app_data->vy_b, context);
-        app_data->vz_buffer = dm_compute_command_get_buffer_data(app_data->vz_b, context);
+        dm_memcpy(app_data->vx_buffer, dm_compute_command_get_buffer_data(app_data->vx_b, context), data_size);
+        dm_memcpy(app_data->vy_buffer, dm_compute_command_get_buffer_data(app_data->vy_b, context), data_size);
+        dm_memcpy(app_data->vz_buffer, dm_compute_command_get_buffer_data(app_data->vz_b, context), data_size);
         
         if(!app_data->x_buffer || !app_data->y_buffer || !app_data->z_buffer)    return false;
         if(!app_data->vx_buffer || !app_data->vy_buffer || !app_data->vz_buffer) return false;
@@ -355,9 +357,11 @@ bool dm_application_render(dm_context* context)
         //pos[1] = app_data->y_buffer[i];
         //pos[2] = app_data->z_buffer[i];
         
+#ifndef DRAW_BILBOARDS
         dm_mat_scale_make(scale, inst->model);
-        //dm_mat_scale(app_data->camera.inv_view, scale, inst->model);
-        dm_mat_scale(inst->model, scale, inst->model);
+#else
+        dm_mat_scale(app_data->camera.inv_view, scale, inst->model);
+#endif
         dm_mat_translate(inst->model, pos, inst->model);
 #ifdef DM_DIRECTX
         dm_mat4_transpose(inst->model, inst->model);
@@ -367,9 +371,18 @@ bool dm_application_render(dm_context* context)
     }
     
     uniform_data uniform = { 0 };
+#ifndef DRAW_BILBOARDS
+    #ifdef DM_DIRECTX
+    dm_mat4_transpose(app_data->camera.view_proj, uniform.view_proj);
+    #else
     dm_memcpy(uniform.view_proj, app_data->camera.view_proj, sizeof(dm_mat4));
-#ifdef DM_DIRECTX
-    dm_mat4_transpose(uniform.view_proj, uniform.view_proj);
+    #endif
+#else
+    #ifdef DM_DIRECTX
+    dm_mat4_transpose(app_data->camera.proj, uniform.view_proj);
+    #else
+    dm_memcpy(uniform.view_proj, app_data->camera.proj, sizeof(dm_mat4));
+    #endif
 #endif
     
     dm_render_command_set_default_viewport(context);
