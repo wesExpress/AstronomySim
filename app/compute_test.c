@@ -171,6 +171,9 @@ bool dm_application_init(dm_context* context)
         shader_desc.vb[0] = app_data->vb;
         shader_desc.vb[1] = app_data->instb;
         shader_desc.vb_count = 2;
+#elif defined(DM_DIRECTX)
+        strcpy(shader_desc.vertex, "assets/shaders/persp_vertex.fxc");
+        strcpy(shader_desc.pixel, "assets/shaders/persp_pixel.fxc");
 #endif
         
         dm_pipeline_desc pipe_desc = dm_renderer_default_pipeline();
@@ -178,11 +181,11 @@ bool dm_application_init(dm_context* context)
         dm_vertex_attrib_desc attrib_descs[] = {
             { .name="POSITION", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(render_vertex), .offset=offsetof(render_vertex, pos), .count=3, .index=0, .normalized=false },
             { .name="TEXCOORDS", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(render_vertex), .offset=offsetof(render_vertex, tex_coords), .count=2, .index=0, .normalized=false },
-            { .name="MODEL", .data_t=DM_VERTEX_DATA_T_MATRIX_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(render_instance), .offset=offsetof(render_instance, model), .count=4, .index=0, .normalized=false },
+            { .name="OBJ_MODEL", .data_t=DM_VERTEX_DATA_T_MATRIX_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(render_instance), .offset=offsetof(render_instance, model), .count=4, .index=0, .normalized=false },
             { .name="COLOR", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(render_instance), .offset=offsetof(render_instance, color), .count=4, .index=0, .normalized=false },
         };
         
-        if(!dm_renderer_create_shader_and_pipeline(shader_desc, pipe_desc, attrib_descs, 2, &app_data->shader, &app_data->pipeline, context)) return false;
+        if(!dm_renderer_create_shader_and_pipeline(shader_desc, pipe_desc, attrib_descs, DM_ARRAY_LEN(attrib_descs), &app_data->shader, &app_data->pipeline, context)) return false;
         
         
         static const uint32_t tex_width  = 500;
@@ -342,7 +345,7 @@ bool dm_application_render(dm_context* context)
     render_instance* instances = dm_alloc(sizeof(render_instance) * ARRAY_LENGTH);
     render_instance* inst = NULL;
     
-    dm_vec4 pos = { 0,0,0 };
+    dm_vec4 pos = { 0,0,0};
     dm_vec3 scale = { 1,1,1 };
     for(uint32_t i=0; i<1; i++)
     {
@@ -352,7 +355,7 @@ bool dm_application_render(dm_context* context)
         //pos[1] = app_data->y_buffer[i];
         //pos[2] = app_data->z_buffer[i];
         
-        dm_mat4_identity(inst->model);
+        dm_mat_scale_make(scale, inst->model);
         //dm_mat_scale(app_data->camera.inv_view, scale, inst->model);
         dm_mat_scale(inst->model, scale, inst->model);
         dm_mat_translate(inst->model, pos, inst->model);

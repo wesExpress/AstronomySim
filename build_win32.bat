@@ -11,7 +11,7 @@ SET /A physics_mt=0
 SET /A physics_debug=0
 SET /A math_tests=0
 
-//SET app=%SRC_DIR%\app\raytrace_app.c
+REM SET app=%SRC_DIR%\app\raytrace_app.c
 SET app=%SRC_DIR%\app\compute_test.c
 REM SET rendering=%SRC_DIR%\rendering\render_pass.c %SRC_DIR%\rendering\debug_render_pass.c
 
