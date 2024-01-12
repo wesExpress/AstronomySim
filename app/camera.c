@@ -20,7 +20,6 @@ void camera_init(const dm_vec3 pos, const dm_vec3 forward, float near_plane, flo
     dm_mat_view(camera->pos, look, camera->up, camera->view);
     dm_mat4_inverse(camera->view, camera->inv_view);
     dm_mat_perspective(dm_deg_to_rad(camera->fov), (float)width / (float)height, camera->near_plane, camera->far_plane, camera->proj);
-    dm_mat4_transpose(camera->proj, camera->proj);
     dm_mat4_inverse(camera->proj, camera->inv_proj);
     
     dm_mat4_mul_mat4(camera->view, camera->proj, camera->view_proj);
@@ -36,7 +35,6 @@ void update_camera_view(basic_camera* camera)
     dm_vec3_cross(camera->right, camera->forward, camera->up);
     
     dm_mat_view(camera->pos, look, camera->up, camera->view);
-    dm_mat4_transpose(camera->view, camera->view);
     dm_mat4_inverse(camera->view, camera->inv_view);
     
     dm_mat4_mul_mat4(camera->view, camera->proj, camera->view_proj);
@@ -45,7 +43,6 @@ void update_camera_view(basic_camera* camera)
 void update_camera_proj(basic_camera* camera)
 {
     dm_mat_perspective(dm_deg_to_rad(camera->fov), (float)camera->width / (float)camera->height, camera->near_plane, camera->far_plane, camera->proj);
-    dm_mat4_transpose(camera->proj, camera->proj);
     dm_mat4_inverse(camera->proj, camera->inv_proj);
     
     dm_mat4_mul_mat4(camera->view, camera->proj, camera->view_proj);

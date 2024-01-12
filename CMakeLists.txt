@@ -7,7 +7,7 @@ set(SOURCES
 	#app/app.c
 	#app/components.c
 	#app/raytrace_app.c
-	#app/camera.c
+	app/camera.c
 	app/compute_test.c
 
 	DarkMatter/dm_impl.c
