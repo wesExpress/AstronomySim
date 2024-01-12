@@ -171,7 +171,7 @@ bool dm_application_update(dm_context* context)
 #elif defined(DM_DIRECTX)
     if(!dm_compute_command_dispatch(65535,1,1, 1024,1,1, context)) return false;
 #endif
-    DM_LOG_INFO("Compute shader: %0.2lf ms", dm_timer_elapsed_ms(&t, context));
+    DM_LOG_INFO("Compute shader: %0.4lf ms", dm_timer_elapsed_ms(&t, context));
     
     float* result_2 = dm_compute_command_get_buffer_data(app_data->result, context);
     
