@@ -359,10 +359,12 @@ bool dm_application_render(dm_context* context)
         
 #ifndef DRAW_BILBOARDS
         dm_mat_scale_make(scale, inst->model);
-#else
-        dm_mat_scale(app_data->camera.inv_view, scale, inst->model);
-#endif
         dm_mat_translate(inst->model, pos, inst->model);
+#else
+        //dm_memcpy(inst->model, app_data->camera.inv_view, sizeof(dm_mat4));
+        dm_mat_scale(app_data->camera.inv_view, scale, inst->model);
+        DM_VEC3_COPY(inst->model[3], pos);
+#endif
 #ifdef DM_DIRECTX
         dm_mat4_transpose(inst->model, inst->model);
 #endif
@@ -371,18 +373,10 @@ bool dm_application_render(dm_context* context)
     }
     
     uniform_data uniform = { 0 };
-#ifndef DRAW_BILBOARDS
-    #ifdef DM_DIRECTX
+#ifdef DM_DIRECTX
     dm_mat4_transpose(app_data->camera.view_proj, uniform.view_proj);
-    #else
-    dm_memcpy(uniform.view_proj, app_data->camera.view_proj, sizeof(dm_mat4));
-    #endif
 #else
-    #ifdef DM_DIRECTX
-    dm_mat4_transpose(app_data->camera.proj, uniform.view_proj);
-    #else
-    dm_memcpy(uniform.view_proj, app_data->camera.proj, sizeof(dm_mat4));
-    #endif
+    dm_memcpy(uniform.view_proj, app_data->camera.view_proj, sizeof(dm_mat4));
 #endif
     
     dm_render_command_set_default_viewport(context);
