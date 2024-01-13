@@ -1,7 +1,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-#define FIXED_DT     0.01666f
+#define FIXED_DT     0.00833f
 
 kernel void physics_update(constant const float* force_x [[buffer(0)]],
                            constant const float* force_y [[buffer(1)]],

@@ -1,8 +1,9 @@
 #include <metal_stdlib>
 using namespace metal;
 
-#define OBJECT_COUNT 5000
+#define OBJECT_COUNT 1 << 14
 #define G            6.67e-11f
+#define MIN_RADIUS   0.5f
 
 kernel void gravity_calc(constant const float* x [[buffer(0)]],
                          constant const float* y [[buffer(1)]],
@@ -32,13 +33,13 @@ kernel void gravity_calc(constant const float* x [[buffer(0)]],
         r_y = y[i] - y_i;
         r_z = z[i] - z_i;
 
-        distance_2 = r_x * r_x;
+        distance_2 =  r_x * r_x;
         distance_2 += r_y * r_y;
         distance_2 += r_z * r_z;
         mag = sqrt(distance_2);
         distance_2 = 1.f / distance_2;
 
-        f = m[i] * m_i;
+        f  = m[i] * m_i;
         f *= G;
         f *= distance_2;
 
@@ -47,6 +48,8 @@ kernel void gravity_calc(constant const float* x [[buffer(0)]],
         r_x *= mag;
         r_y *= mag;
         r_z *= mag;
+
+        if (mag < MIN_RADIUS) continue;
 
         f_x += f * r_x;
         f_y += f * r_y;
@@ -60,13 +63,13 @@ kernel void gravity_calc(constant const float* x [[buffer(0)]],
         r_y = y[i] - y_i;
         r_z = z[i] - z_i;
 
-        distance_2 = r_x * r_x;
+        distance_2  = r_x * r_x;
         distance_2 += r_y * r_y;
         distance_2 += r_z * r_z;
         mag = sqrt(distance_2);
         distance_2 = 1.f / distance_2;
 
-        f = m[i] * m_i;
+        f  = m[i] * m_i;
         f *= G;
         f *= distance_2;
 
@@ -75,6 +78,8 @@ kernel void gravity_calc(constant const float* x [[buffer(0)]],
         r_x *= mag;
         r_y *= mag;
         r_z *= mag;
+
+        if (mag < MIN_RADIUS) continue;
 
         f_x += f * r_x;
         f_y += f * r_y;
