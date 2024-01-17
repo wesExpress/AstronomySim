@@ -1,5 +1,6 @@
 build/*
 bin/*
+.vs/*
 
 mac_debug/*
 .DS_Store

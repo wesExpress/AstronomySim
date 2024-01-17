@@ -7,10 +7,11 @@
 #define BIG_SIM
 
 #ifdef BIG_SIM
-    #define ARRAY_LENGTH 1 << 14
-
     #ifdef DM_DIRECTX
+        #define ARRAY_LENGTH 3
         #define NO_COMPUTE
+    #else
+        #define ARRAY_LENGTH 1 << 14
     #endif
 #else
     #define ARRAY_LENGTH 3
@@ -323,7 +324,7 @@ bool dm_application_init(dm_context* context)
     }
     
     // camera
-#ifndef BIG_SIM
+#ifdef NO_COMPUTE
     dm_vec3 cam_pos = { 0,0,2 };
     float move_sens = 5.f;
 #else
@@ -544,7 +545,7 @@ bool dm_application_render(dm_context* context)
         pos[1] = app_data->star_data->pos_y[i];
         pos[2] = app_data->star_data->pos_z[i];
         
-#ifdef BIG_SIM
+#ifndef NO_COMPUTE
         switch(i)
         {
             case 0:

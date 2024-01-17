@@ -8,6 +8,7 @@ REM SET /A vulkan=0
 SET /A opengl=0
 
 IF NOT EXIST "build\assets\shaders" mkdir build\assets\shaders
+IF NOT EXIST "bin\vs2019\assets\shaders" mkdir bin\vs2019\assets\shaders
 
 REM shaders
 CD assets/shaders
@@ -52,8 +53,11 @@ IF /I "%vulkan%" EQU "1" (
 
 		fxc %fxc_flags% !shader_flags! !fname! /Zi /Fd /Fo !output!
 
-		MOVE !output! %SRC_DIR%\build\assets\shaders
-		MOVE !debug_shader! %SRC_DIR%\build\assets\shaders
+		COPY !output! %SRC_DIR%\build\assets\shaders
+		COPY !debug_shader! %SRC_DIR%\build\assets\shaders
+		
+		MOVE !output! %SRC_DIR%\bin\vs2019\assets\shaders
+		MOVE !debug_shader! %SRC_DIR%\bin\vs2019\assets\shaders
 	)
 )
 
@@ -98,19 +102,27 @@ IF /I "%vulkan%" EQU "1" (
 
 		fxc %fxc_flags% !shader_flags! !fname! /Zi /Fd /Fo !output!
 
-		MOVE !output! %SRC_DIR%\build\assets\shaders
-		MOVE !debug_shader! %SRC_DIR%\build\assets\shaders
+		COPY !output! %SRC_DIR%\build\assets\shaders
+		COPY !debug_shader! %SRC_DIR%\build\assets\shaders
+		
+		MOVE !output! %SRC_DIR%\bin\vs2019\assets\shaders
+		MOVE !debug_shader! %SRC_DIR%\bin\vs2019\assets\shaders
 	)
 )
 
 CD ..\..\..
 
 IF NOT EXIST "build\assets\textures" mkdir build\assets\textures
+IF NOT exist "bin\vs2019\assets\textures" mkdir bin\vs2019\assets\textures
+
 COPY /y "assets\textures" build\assets\textures
+COPY /y "assets\textures" bin\vs2019\assets\textures
 
 IF NOT EXIST "build\assets\fonts" mkdir build\assets\fonts
-COPY /y "assets\fonts" build\assets\fonts
+IF NOT exist "bin\vs2019\assets\fonts" mkdir bin\vs2019\assets\fonts
 
-REM IF NOT EXIST "build\assets\models" mkdir build\assets\models
-REM COPY /y "assets\models" build\assets\models
+COPY /y "assets\fonts" build\assets\fonts
+COPY /y "assets\textures" bin\vs2019\assets\fonts
+
+
 
