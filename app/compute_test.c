@@ -4,16 +4,38 @@
 #include <assert.h>
 #include <string.h>
 
-#define ARRAY_LENGTH 1 << 14
-#define FIXED_DT     0.008333f
+#define BIG_SIM
 
-#define G 6.67e-11f
+#ifdef BIG_SIM
+    #define ARRAY_LENGTH 1 << 14
 
-#define WORLD_CUBE_SIZE 100
-#define MASS_SCALE      1e10f
+    #ifdef DM_DIRECTX
+        #define NO_COMPUTE
+    #endif
+#else
+    #define ARRAY_LENGTH 3
 
-#ifdef DM_DIRECTX
     #define NO_COMPUTE
+#endif
+
+#define FIXED_DT 0.008333
+
+//#define USE_ASTRO_UNITS
+
+#ifndef USE_ASTRO_UNITS
+    #define G 6.67e-11f                        // N m^2 / kg^2
+
+    #define WORLD_CUBE_SIZE 50                 // m
+
+    #define MASS_SCALE      1e10f              // kg
+    #define SMBH_MASS       MASS_SCALE * 1.f  // kg
+#else
+    #define G          4.3e-3f                 // pc Msun^-1 km^2 / s^2
+
+    #define WORLD_CUBE_SIZE 10                 // pc
+
+    #define MASS_SCALE 1.f                     // Msun
+    #define SMBH_MASS  MASS_SCALE * 1e3f       // MSUN
 #endif
 
 #define DRAW_BILBOARDS
@@ -83,6 +105,7 @@ bool dm_application_init(dm_context* context)
 {
     context->app_data = dm_alloc(sizeof(application_data));
     application_data* app_data = context->app_data;
+    app_data->star_data = dm_alloc(sizeof(star_data_soa));
     
 #ifndef NO_COMPUTE
     // compute data
@@ -127,67 +150,107 @@ bool dm_application_init(dm_context* context)
         if(!dm_compute_create_buffer(data_size, sizeof(float), DM_COMPUTE_BUFFER_TYPE_OUTPUT, &app_data->vy_b, context))   return false;
         if(!dm_compute_create_buffer(data_size, sizeof(float), DM_COMPUTE_BUFFER_TYPE_OUTPUT, &app_data->vz_b, context))   return false;
         
-        app_data->star_data = dm_alloc(sizeof(star_data_soa));
-        
         dm_vec3 p, dir;
         float radius;
         const dm_vec3 up = { 0,1,0 };
         
-        float theta, phi;
+        app_data->star_data->mass[0] = SMBH_MASS;
         
-        for(uint32_t i=0; i<ARRAY_LENGTH; i++)
+        app_data->star_data->pos_x[0] = 0;
+        app_data->star_data->pos_y[0] = 0;
+        app_data->star_data->pos_z[0] = 0;
+        
+        app_data->star_data->vel_x[0] = 0;
+        app_data->star_data->vel_y[0] = 0;
+        app_data->star_data->vel_z[0] = 0;
+        
+        float r_i, vc;
+        
+        for(uint32_t i=1; i<ARRAY_LENGTH; i++)
         {
-    #if 0
-            app_data->star_data->pos_x[i] = dm_random_float(context) * WORLD_CUBE_SIZE - WORLD_CUBE_SIZE * 0.5f;
-            app_data->star_data->pos_y[i] = dm_random_float(context) * WORLD_CUBE_SIZE - WORLD_CUBE_SIZE * 0.5f;
-            app_data->star_data->pos_z[i] = dm_random_float(context) * WORLD_CUBE_SIZE - WORLD_CUBE_SIZE * 0.5f;
-    #else
-            
-            theta  = dm_random_float(context) * DM_MATH_PI;
-            phi    = dm_random_float(context) * DM_MATH_2PI;
-            radius = dm_fabs(dm_random_float_normal(0,0.5f,context)) * WORLD_CUBE_SIZE;
-            
-            p[0] = radius * dm_sin(theta) * dm_cos(phi);
-            p[1] = radius * dm_sin(theta) * dm_sin(phi);
-            p[2] = radius * dm_cos(theta);
+            p[0] = dm_random_float_normal(0, .5f, context) * WORLD_CUBE_SIZE;
+            p[1] = dm_random_float_normal(0, .5f, context) * WORLD_CUBE_SIZE;
+            p[2] = dm_random_float_normal(0, .5f, context) * WORLD_CUBE_SIZE;
             
             app_data->star_data->pos_x[i] = p[0];
             app_data->star_data->pos_y[i] = p[1];
             app_data->star_data->pos_z[i] = p[2];
-    #endif
             
             app_data->star_data->mass[i] = dm_random_float(context) * MASS_SCALE;
             
-            p[1] = 0;
+            //p[1] = 0;
+            dm_vec3_negate(p, p);
             
             dm_vec3_cross(p, up, dir);
             dm_vec3_norm(dir, dir);
             
-            app_data->star_data->vel_x[i] = dir[0];
-            app_data->star_data->vel_z[i] = dir[2];
-            app_data->star_data->vel_y[i] = 0;
-        }
-        
-        float interior_mass, vc;
-        for(uint32_t i=0; i<ARRAY_LENGTH; i++)
-        {
-            interior_mass = 0.0f;
+            r_i  = app_data->star_data->pos_x[i] * app_data->star_data->pos_x[i];
+            r_i += app_data->star_data->pos_y[i] * app_data->star_data->pos_y[i];
+            r_i += app_data->star_data->pos_z[i] * app_data->star_data->pos_z[i];
+            r_i  = dm_sqrtf(r_i);
             
-            for(uint32_t j=0; j<ARRAY_LENGTH; j++)
-            {
-                if(i==j) continue;
-                
-                interior_mass += app_data->star_data->mass[j];
-            }
+            vc = G * app_data->star_data->mass[0];
+            vc /= r_i;
+            vc = dm_sqrtf(vc) * 10.f;
             
-            vc = G * interior_mass / (radius * radius);
-            vc = dm_sqrtf(vc) * 0.5f;
-            
-            app_data->star_data->vel_x[i] *= vc;
-            app_data->star_data->vel_z[i] *= vc;
+            app_data->star_data->vel_x[i] = dir[0] * vc;
+            app_data->star_data->vel_y[i] = dir[1] * vc;
+            app_data->star_data->vel_z[i] = dir[2] * vc;
         }
         
         if(!dm_compute_command_update_buffer(app_data->mb, app_data->star_data->mass, data_size, 0, context)) return false;
+        
+        if(!dm_compute_command_update_buffer(app_data->vx_b, app_data->star_data->vel_x, data_size, 0, context)) return false;
+        if(!dm_compute_command_update_buffer(app_data->vy_b, app_data->star_data->vel_y, data_size, 0, context)) return false;
+        if(!dm_compute_command_update_buffer(app_data->vz_b, app_data->star_data->vel_z, data_size, 0, context)) return false;
+    }
+#else
+    {
+#if 0
+        r[0][0] = 0.9700436;
+        r[0][1] = -0.24308753;
+        r[0][2] = 0;
+        v[0][0] = 0.466203685;
+        v[0][1] = 0.43236573;
+        v[0][2] = 0;
+
+        r[1][0] = -r[0][0];
+        r[1][1] = -r[0][1];
+        r[1][2] = -r[0][2];
+        v[1][0] = v[0][0];
+        v[1][1] = v[0][1];
+        v[1][2] = v[0][2];
+
+        r[2][0] = 0;
+        r[2][1] = 0;
+        r[2][2] = 0;
+        v[2][0] = -2*v[0][0];
+        v[2][1] = -2*v[0][1];
+        v[2][2] = -2*v[0][2];
+#endif
+        app_data->star_data->pos_x[0] =  0.9700436f;
+        app_data->star_data->pos_y[0] =  0.0f;
+        app_data->star_data->pos_z[0] =  -0.24308753f;
+        app_data->star_data->mass[0]  =  MASS_SCALE;
+        
+        app_data->star_data->vel_x[0] = 0.466203685f;
+        app_data->star_data->vel_z[0] = 0.43236573f;
+        
+        app_data->star_data->pos_x[1] =  -0.9700436f;
+        app_data->star_data->pos_y[1] =  0.0f;
+        app_data->star_data->pos_z[1] =  0.24308753f;
+        app_data->star_data->mass[1]  =  MASS_SCALE;
+        
+        app_data->star_data->vel_x[1] = 0.466203685f;
+        app_data->star_data->vel_z[1] = 0.43236573f;
+        
+        app_data->star_data->pos_x[2] =  0;
+        app_data->star_data->pos_y[2] =  0;
+        app_data->star_data->pos_z[2] =  0;
+        app_data->star_data->mass[2]  =  MASS_SCALE;
+        
+        app_data->star_data->vel_x[2] = -2.f * 0.466203685f;
+        app_data->star_data->vel_z[2] = -2.f * 0.43236573f;
     }
 #endif
     
@@ -260,10 +323,16 @@ bool dm_application_init(dm_context* context)
     }
     
     // camera
+#ifndef BIG_SIM
+    dm_vec3 cam_pos = { 0,0,2 };
+    float move_sens = 5.f;
+#else
     dm_vec3 cam_pos = { 0,0,WORLD_CUBE_SIZE };
+    float move_sens = 10.f;
+#endif
     dm_vec3 cam_for = { 0,0,-1 };
     
-    camera_init(cam_pos, cam_for, 0.001f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), 10.0f, 1.0f, &app_data->camera);
+    camera_init(cam_pos, cam_for, 0.001f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), move_sens, 1.0f, &app_data->camera);
     
     app_data->pause = true;
     
@@ -293,10 +362,20 @@ bool dm_application_update(dm_context* context)
     if(app_data->pause) return true;
     
     app_data->accumulated_time += context->delta;
+    app_data->physics_timing = 0;
+    app_data->physics_iters  = 0;
     
     static const size_t data_size = sizeof(float) * ARRAY_LENGTH;
     
 #ifndef NO_COMPUTE
+    dm_memzero(app_data->star_data->force_x, data_size);
+    dm_memzero(app_data->star_data->force_y, data_size);
+    dm_memzero(app_data->star_data->force_z, data_size);
+    
+    if(!dm_compute_command_update_buffer(app_data->fx_b, app_data->star_data->force_x, data_size, 0, context)) return false;
+    if(!dm_compute_command_update_buffer(app_data->fy_b, app_data->star_data->force_y, data_size, 0, context)) return false;
+    if(!dm_compute_command_update_buffer(app_data->fz_b, app_data->star_data->force_z, data_size, 0, context)) return false;
+    
     // gravity force calculation
     {
         if(!dm_compute_command_bind_shader(app_data->gravity, context)) return false;
@@ -320,21 +399,19 @@ bool dm_application_update(dm_context* context)
     #elif defined(DM_DIRECTX)
         if(!dm_compute_command_dispatch(65535,1,1, 1024,1,1, context)) return false;
     #endif
-        app_data->gravity_timing = dm_timer_elapsed_ms(&t, context);\
+        app_data->gravity_timing = dm_timer_elapsed_ms(&t, context);
+        
+        dm_memcpy(app_data->star_data->force_x, dm_compute_command_get_buffer_data(app_data->fx_b, context), data_size);
+        dm_memcpy(app_data->star_data->force_y, dm_compute_command_get_buffer_data(app_data->fy_b, context), data_size);
+        dm_memcpy(app_data->star_data->force_z, dm_compute_command_get_buffer_data(app_data->fz_b, context), data_size);
         
         if(!app_data->star_data->force_x || !app_data->star_data->force_y || !app_data->star_data->force_z) return false;
     }
     
     // physics update
-    app_data->physics_timing = 0;
-    app_data->physics_iters = 0;
-    while(app_data->accumulated_time > FIXED_DT)
+    while(app_data->accumulated_time >= FIXED_DT)
     {
         app_data->physics_iters++;
-        
-        if(!dm_compute_command_update_buffer(app_data->vx_b, app_data->star_data->vel_x, data_size, 0, context)) return false;
-        if(!dm_compute_command_update_buffer(app_data->vy_b, app_data->star_data->vel_y, data_size, 0, context)) return false;
-        if(!dm_compute_command_update_buffer(app_data->vz_b, app_data->star_data->vel_z, data_size, 0, context)) return false;
         
         if(!dm_compute_command_bind_shader(app_data->physics, context)) return false;
         
@@ -343,13 +420,13 @@ bool dm_application_update(dm_context* context)
         if(!dm_compute_command_bind_buffer(app_data->fz_b, 0, 2, context)) return false;
         if(!dm_compute_command_bind_buffer(app_data->mb,   0, 3, context)) return false;
         
-        if(!dm_compute_command_bind_buffer(app_data->vx_b, 0, 4, context))  return false;
-        if(!dm_compute_command_bind_buffer(app_data->vy_b, 0, 5, context))  return false;
-        if(!dm_compute_command_bind_buffer(app_data->vz_b, 0, 6, context))  return false;
+        if(!dm_compute_command_bind_buffer(app_data->vx_b, 0, 4, context)) return false;
+        if(!dm_compute_command_bind_buffer(app_data->vy_b, 0, 5, context)) return false;
+        if(!dm_compute_command_bind_buffer(app_data->vz_b, 0, 6, context)) return false;
         
-        if(!dm_compute_command_bind_buffer(app_data->xb, 0, 7, context))  return false;
-        if(!dm_compute_command_bind_buffer(app_data->yb, 0, 8, context))  return false;
-        if(!dm_compute_command_bind_buffer(app_data->zb, 0, 9, context))  return false;
+        if(!dm_compute_command_bind_buffer(app_data->xb, 0, 7, context)) return false;
+        if(!dm_compute_command_bind_buffer(app_data->yb, 0, 8, context)) return false;
+        if(!dm_compute_command_bind_buffer(app_data->zb, 0, 9, context)) return false;
         
         dm_timer t = { 0 };
         dm_timer_start(&t, context);
@@ -360,21 +437,84 @@ bool dm_application_update(dm_context* context)
     #endif
         app_data->physics_timing += dm_timer_elapsed_ms(&t, context);
         
-        dm_memcpy(app_data->star_data->pos_x, dm_compute_command_get_buffer_data(app_data->xb, context), data_size);
-        dm_memcpy(app_data->star_data->pos_y, dm_compute_command_get_buffer_data(app_data->yb, context), data_size);
-        dm_memcpy(app_data->star_data->pos_z, dm_compute_command_get_buffer_data(app_data->zb, context), data_size);
-        
-        dm_memcpy(app_data->star_data->vel_x, dm_compute_command_get_buffer_data(app_data->vx_b, context), data_size);
-        dm_memcpy(app_data->star_data->vel_y, dm_compute_command_get_buffer_data(app_data->vy_b, context), data_size);
-        dm_memcpy(app_data->star_data->vel_z, dm_compute_command_get_buffer_data(app_data->vz_b, context), data_size);
-        
-        if(!app_data->star_data->pos_x || !app_data->star_data->pos_y || !app_data->star_data->pos_z)    return false;
-        if(!app_data->star_data->vel_x || !app_data->star_data->vel_y || !app_data->star_data->vel_z) return false;
-        
         app_data->accumulated_time -= FIXED_DT;
     }
     
+    dm_memcpy(app_data->star_data->pos_x, dm_compute_command_get_buffer_data(app_data->xb, context), data_size);
+    dm_memcpy(app_data->star_data->pos_y, dm_compute_command_get_buffer_data(app_data->yb, context), data_size);
+    dm_memcpy(app_data->star_data->pos_z, dm_compute_command_get_buffer_data(app_data->zb, context), data_size);
+    
+    dm_memcpy(app_data->star_data->vel_x, dm_compute_command_get_buffer_data(app_data->vx_b, context), data_size);
+    dm_memcpy(app_data->star_data->vel_y, dm_compute_command_get_buffer_data(app_data->vy_b, context), data_size);
+    dm_memcpy(app_data->star_data->vel_z, dm_compute_command_get_buffer_data(app_data->vz_b, context), data_size);
+    
+    if(!app_data->star_data->pos_x || !app_data->star_data->pos_y || !app_data->star_data->pos_z) return false;
+    if(!app_data->star_data->vel_x || !app_data->star_data->vel_y || !app_data->star_data->vel_z) return false;
+    
     app_data->physics_timing /= (double)app_data->physics_iters;
+#else
+    float f_x, f_y, f_z;
+    float r_x, r_y, r_z;
+    float dis_2, dis_6, inv_dis;
+    float grav;
+    
+    for(uint32_t i=0; i<ARRAY_LENGTH; i++)
+    {
+        for(uint32_t j=i+1; j<ARRAY_LENGTH; j++)
+        {
+            r_x = app_data->star_data->pos_x[j] - app_data->star_data->pos_x[i];
+            r_y = app_data->star_data->pos_y[j] - app_data->star_data->pos_y[i];
+            r_z = app_data->star_data->pos_z[j] - app_data->star_data->pos_z[i];
+            
+            dis_2  = r_x * r_x;
+            dis_2 += r_y * r_y;
+            dis_2 += r_z * r_z;
+            
+            dis_6   = dis_2 * dis_2 * dis_2 + 0.1f;
+            dis_6   = dm_sqrtf(dis_6);
+            inv_dis = 1.f / dis_6;
+            
+            grav  = G;
+            grav *= app_data->star_data->mass[i] * app_data->star_data->mass[j];
+            grav *= inv_dis;
+            
+            f_x = r_x * grav;
+            f_y = r_y * grav;
+            f_z = r_z * grav;
+            
+            app_data->star_data->force_x[i] += f_x;
+            app_data->star_data->force_y[i] += f_y;
+            app_data->star_data->force_z[i] += f_z;
+            
+            app_data->star_data->force_x[j] -= f_x;
+            app_data->star_data->force_y[j] -= f_y;
+            app_data->star_data->force_z[j] -= f_z;
+        }
+    }
+    
+    while(app_data->accumulated_time >= FIXED_DT)
+    {
+        float dt_mass;
+        for(uint32_t i=0; i<ARRAY_LENGTH; i++)
+        {
+            dt_mass = FIXED_DT / app_data->star_data->mass[i];
+            
+            app_data->star_data->pos_x[i] += app_data->star_data->vel_x[i] * FIXED_DT;
+            app_data->star_data->pos_y[i] += app_data->star_data->vel_y[i] * FIXED_DT;
+            app_data->star_data->pos_z[i] += app_data->star_data->vel_z[i] * FIXED_DT;
+            
+            app_data->star_data->vel_x[i] += app_data->star_data->force_x[i] * dt_mass;
+            app_data->star_data->vel_y[i] += app_data->star_data->force_y[i] * dt_mass;
+            app_data->star_data->vel_z[i] += app_data->star_data->force_z[i] * dt_mass;
+        }
+        
+        app_data->accumulated_time -= FIXED_DT;
+        app_data->physics_iters++;
+        
+        dm_memzero(app_data->star_data->force_x, data_size);
+        dm_memzero(app_data->star_data->force_y, data_size);
+        dm_memzero(app_data->star_data->force_z, data_size);
+    }
 #endif
     
     return true;
@@ -391,7 +531,7 @@ bool dm_application_render(dm_context* context)
     app_data->instance_creation_timing = 0;
     
     dm_vec3 pos;
-    dm_vec3 scale = { 0.15f,0.15f,0.15f };
+    dm_vec3 scale;
     
     dm_timer t = { 0 };
     
@@ -403,6 +543,58 @@ bool dm_application_render(dm_context* context)
         pos[0] = app_data->star_data->pos_x[i];
         pos[1] = app_data->star_data->pos_y[i];
         pos[2] = app_data->star_data->pos_z[i];
+        
+#ifdef BIG_SIM
+        switch(i)
+        {
+            case 0:
+                scale[0] = 0.5f;
+                scale[1] = 0.5f;
+                scale[2] = 0.5f;
+                
+                inst->color[0] = 1;
+                inst->color[1] = 1;
+                inst->color[2] = 0;
+                break;
+                
+            default:
+                scale[0] = 0.15f;
+                scale[1] = 0.15f;
+                scale[2] = 0.15f;
+                
+                inst->color[0] = 1;
+                inst->color[1] = 1;
+                inst->color[2] = 1;
+                break;
+        }
+    
+#else
+        switch(i)
+        {
+            case 0:
+                inst->color[0] = 1;
+                inst->color[1] = 0;
+                inst->color[2] = 0;
+                break;
+                
+            case 1:
+                inst->color[1] = 1;
+                inst->color[0] = 0;
+                inst->color[2] = 0;
+                break;
+                
+            case 2:
+                inst->color[2] = 1;
+                inst->color[0] = 0;
+                inst->color[1] = 0;
+                break;
+        }
+        
+        scale[0] = 0.2f;
+        scale[1] = 0.2f;
+        scale[2] = 0.2f;
+#endif
+        inst->color[3] = 1;
         
 #ifndef DRAW_BILBOARDS
         dm_mat_scale_make(scale, inst->model);
@@ -418,17 +610,6 @@ bool dm_application_render(dm_context* context)
 #ifdef DM_DIRECTX
         dm_mat4_transpose(inst->model, inst->model);
 #endif
-        
-#if 0
-        inst->color[0] = dm_fabs(app_data->star_data->vel_x[i]) / VEL_SCALE;
-        inst->color[1] = dm_fabs(app_data->star_data->vel_y[i]) / VEL_SCALE;
-        inst->color[2] = dm_fabs(app_data->star_data->vel_z[i]) / VEL_SCALE;
-#else
-        inst->color[0] = 1;
-        inst->color[1] = 1;
-        inst->color[2] = 1;
-#endif
-        inst->color[3] = 1;
     }
     
     app_data->instance_creation_timing = dm_timer_elapsed_ms(&t, context);
@@ -459,11 +640,16 @@ bool dm_application_render(dm_context* context)
     
     dm_free(instances);
     
+    // test grav calc
+    uint32_t index = 1;
+    
     // imgui
     dm_imgui_nuklear_context* imgui_ctx = &context->imgui_context.internal_context;
     struct nk_context* ctx = &imgui_ctx->ctx;
     
-    if(nk_begin(ctx, "Timings", nk_rect(100, 100, 250, 300), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE |
+    float test = app_data->star_data->force_x[index] / app_data->star_data->mass[index];
+    
+    if(nk_begin(ctx, "Timings", nk_rect(100, 100, 250, 350), NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE |
                 NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
     {
         nk_layout_row_dynamic(ctx, 30, 1);
@@ -483,6 +669,20 @@ bool dm_application_render(dm_context* context)
         
         nk_layout_row_dynamic(ctx, 30, 1);
         nk_value_float(ctx, "Previous frame (ms)", context->delta * 1000.0f);
+        
+        nk_layout_row_dynamic(ctx, 30, 3);
+        nk_value_float(ctx, "VX", app_data->star_data->vel_x[index]);
+        nk_value_float(ctx, "VY", app_data->star_data->vel_y[index]);
+        nk_value_float(ctx, "VZ", app_data->star_data->vel_z[index]);
+        
+        nk_layout_row_dynamic(ctx, 30, 3);
+        float inv_m = 1.f / app_data->star_data->mass[index];
+        float dvx = app_data->star_data->force_x[index] * inv_m * FIXED_DT * app_data->physics_iters;
+        float dvy = app_data->star_data->force_y[index] * inv_m * FIXED_DT * app_data->physics_iters;
+        float dvz = app_data->star_data->force_z[index] * inv_m * FIXED_DT * app_data->physics_iters;
+        nk_value_float(ctx, "DVX", dvx);
+        nk_value_float(ctx, "DVY", dvy);
+        nk_value_float(ctx, "DVZ", dvz);
     }
     nk_end(ctx);
     

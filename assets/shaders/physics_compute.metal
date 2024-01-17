@@ -1,7 +1,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-#define FIXED_DT     0.00833f
+#define FIXED_DT  0.00833f
 
 kernel void physics_update(constant const float* force_x [[buffer(0)]],
                            constant const float* force_y [[buffer(1)]],
@@ -10,9 +10,9 @@ kernel void physics_update(constant const float* force_x [[buffer(0)]],
                            device float* vel_x           [[buffer(4)]],
                            device float* vel_y           [[buffer(5)]],
                            device float* vel_z           [[buffer(6)]],
-                           device float* x               [[buffer(7)]],
-                           device float* y               [[buffer(8)]],
-                           device float* z               [[buffer(9)]],
+                           device float* pos_x           [[buffer(7)]],
+                           device float* pos_y           [[buffer(8)]],
+                           device float* pos_z           [[buffer(9)]],
                            uint index                    [[thread_position_in_grid]])
 {
     const float dt_m = FIXED_DT / m[index];
@@ -21,7 +21,7 @@ kernel void physics_update(constant const float* force_x [[buffer(0)]],
     vel_y[index] += force_y[index] * dt_m;
     vel_z[index] += force_z[index] * dt_m;
 
-    x[index] += vel_x[index] * FIXED_DT;
-    y[index] += vel_y[index] * FIXED_DT;
-    z[index] += vel_z[index] * FIXED_DT;
+    pos_x[index] += vel_x[index] * FIXED_DT;
+    pos_y[index] += vel_y[index] * FIXED_DT;
+    pos_z[index] += vel_z[index] * FIXED_DT;
 }
