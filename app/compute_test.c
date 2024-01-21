@@ -7,8 +7,8 @@
 #define BIG_SIM
 
 #ifdef BIG_SIM
-#define ARRAY_LENGTH 10000
-#define BLOCK_SIZE   128
+#define ARRAY_LENGTH 16000
+#define BLOCK_SIZE   512
 #else
 #define ARRAY_LENGTH 3
 
@@ -396,11 +396,7 @@ bool dm_application_update(dm_context* context)
         
         dm_timer t = { 0 };
         dm_timer_start(&t, context);
-#ifdef DM_METAL
-        if(!dm_compute_command_dispatch(ARRAY_LENGTH,1,1, 1024,1,1, context)) return false;
-#elif defined(DM_DIRECTX)
-        if(!dm_compute_command_dispatch(group_count,1,1, 1024,1,1, context)) return false;
-#endif
+        if(!dm_compute_command_dispatch(group_count,1,1, BLOCK_SIZE,1,1, context)) return false;
         app_data->gravity_timing = dm_timer_elapsed_ms(&t, context);
         
         if(!app_data->physics_gpu_data) return false;
@@ -418,11 +414,7 @@ bool dm_application_update(dm_context* context)
         
         dm_timer t = { 0 };
         dm_timer_start(&t, context);
-#ifdef DM_METAL
-        if(!dm_compute_command_dispatch(ARRAY_LENGTH,1,1, 1024,1,1, context)) return false;
-#elif defined(DM_DIRECTX)
-        if(!dm_compute_command_dispatch(group_count,1,1, 1024,1,1, context)) return false;
-#endif
+        if(!dm_compute_command_dispatch(group_count,1,1, BLOCK_SIZE,1,1, context)) return false;
         app_data->physics_timing += dm_timer_elapsed_ms(&t, context);
         
         app_data->accumulated_time -= FIXED_DT;

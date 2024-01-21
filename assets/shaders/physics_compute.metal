@@ -1,27 +1,29 @@
 #include <metal_stdlib>
 using namespace metal;
 
-#define FIXED_DT  0.00833f
-
-kernel void physics_update(constant const float* force_x [[buffer(0)]],
-                           constant const float* force_y [[buffer(1)]],
-                           constant const float* force_z [[buffer(2)]],
-                           constant const float* m       [[buffer(3)]],
-                           device float* vel_x           [[buffer(4)]],
-                           device float* vel_y           [[buffer(5)]],
-                           device float* vel_z           [[buffer(6)]],
-                           device float* pos_x           [[buffer(7)]],
-                           device float* pos_y           [[buffer(8)]],
-                           device float* pos_z           [[buffer(9)]],
-                           uint index                    [[thread_position_in_grid]])
+struct transform_elem
 {
-    const float dt_m = FIXED_DT / m[index];
+    float4 pos;
+};
 
-    vel_x[index] += force_x[index] * dt_m;
-    vel_y[index] += force_y[index] * dt_m;
-    vel_z[index] += force_z[index] * dt_m;
+struct physics_elem
+{
+    float4 vel;
+    float4 force;
+};
 
-    pos_x[index] += vel_x[index] * FIXED_DT;
-    pos_y[index] += vel_y[index] * FIXED_DT;
-    pos_z[index] += vel_z[index] * FIXED_DT;
+#define FIXED_DT     0.00833f
+#define OBJECT_COUNT 16000
+
+kernel void physics_update(device transform_elem* transform[[buffer(0)]],
+                           device physics_elem*   physics[[buffer(1)]],
+                           uint index             [[thread_position_in_grid]])
+{
+    if(index>=OBJECT_COUNT) return;
+
+    const float dt_m = FIXED_DT / physics[index].vel.w;
+
+    physics[index].vel.xyz += physics[index].force.xyz * dt_m;
+
+    transform[index].pos.xyz += physics[index].vel.xyz * FIXED_DT;
 }

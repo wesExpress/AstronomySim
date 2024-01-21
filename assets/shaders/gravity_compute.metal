@@ -1,9 +1,20 @@
 #include <metal_stdlib>
 using namespace metal;
 
+struct transform_elem
+{
+    float4 pos;
+};
+
+struct physics_elem
+{
+    float4 vel;
+    float4 force;
+};
+
 //#define USE_ASTRO_UNITS
 
-#define OBJECT_COUNT 1 << 14
+#define OBJECT_COUNT 16000
 
 #ifndef USE_ASTRO_UNITS
     #define G            6.67e-11f
@@ -11,38 +22,28 @@ using namespace metal;
     #define G            4.3e-3f
 #endif
 
-#define SOFTENING_2  0.1f
+#define SOFTENING_2  0.05f
 
-kernel void gravity_calc(constant const float* x [[buffer(0)]],
-                         constant const float* y [[buffer(1)]],
-                         constant const float* z [[buffer(2)]],
-                         constant const float* m [[buffer(3)]],
-                         device float* force_x   [[buffer(4)]],
-                         device float* force_y   [[buffer(5)]],
-                         device float* force_z   [[buffer(6)]],
-                         uint index              [[thread_position_in_grid]])
+kernel void gravity_calc(device transform_elem* transform[[buffer(0)]],
+                         device physics_elem*   physics[[buffer(1)]],
+                         uint index            [[thread_position_in_grid]])
 {
-    float r_x, r_y, r_z, distance_2, distance_6, inv_dis;
+    if(index>=OBJECT_COUNT) return;
+
+    float3 r, f;
+    float distance_2, distance_6, inv_dis;
     float grav;
 
-    float f_x = 0;
-    float f_y = 0;
-    float f_z = 0;
+    f.x = f.y = f.z = 0;
 
-    const float x_i = x[index];
-    const float y_i = y[index];
-    const float z_i = z[index];
-    const float m_i = m[index];
+    const float3 p_i = transform[index].pos.xyz;
+    const float  m_i = physics[index].vel.w;
 
     for(uint j=0; j<OBJECT_COUNT; j++)
     {
-        r_x = x[j] - x_i;
-        r_y = y[j] - y_i;
-        r_z = z[j] - z_i;
+        r = transform[j].pos.xyz - p_i;
 
-        distance_2  = r_x * r_x;
-        distance_2 += r_y * r_y;
-        distance_2 += r_z * r_z;
+        distance_2 = dot(r,r);
 
         // softening
         distance_2 += SOFTENING_2;
@@ -51,18 +52,14 @@ kernel void gravity_calc(constant const float* x [[buffer(0)]],
         distance_6 = sqrt(distance_6);
         inv_dis = 1.f / distance_6;
 
-        grav  = m[j] * m_i;
+        grav  = physics[j].vel.w * m_i;
         grav *= G;
         grav *= inv_dis;
 
-        f_x = (j==index) ? f_x : (f_x + grav * r_x);
-        f_y = (j==index) ? f_y : (f_y + grav * r_y);
-        f_z = (j==index) ? f_z : (f_z + grav * r_z);        
+        f = (j==index) ? f : (f + grav * r);  
     }
 
-    force_x[index] += f_x;
-    force_y[index] += f_y;
-    force_z[index] += f_z;
+    physics[index].force.xyz += f;
 }
 
 // CUDA Code
@@ -123,7 +120,7 @@ __global__ void calculate_forces(void *devX, void *devA)
     for (i = 0, tile = 0; i < N; i += p, tile++) 
     {     
         int idx = tile * blockDim.x + threadIdx.x;     
-        
+
         shPosition[threadIdx.x] = globalX[idx];    
         __syncthreads();     
         acc = tile_calculation(myPosition, acc);     
