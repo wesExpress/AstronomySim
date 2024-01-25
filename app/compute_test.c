@@ -4,15 +4,19 @@
 #include "default_render.h"
 #include "debug_render.h"
 
+#define OCTREE_LIMIT_DEPTH
 #include "octree.h"
 
 #include <assert.h>
 #include <string.h>
+#include <float.h>
 
-#define ARRAY_LENGTH 16000
+#define ARRAY_LENGTH 10000
 #define BLOCK_SIZE   128
 
 #define FIXED_DT 0.008333
+
+#define OCTREE_FUDGE_FACTOR 0.001f;
 
 //#define USE_ASTRO_UNITS
 
@@ -77,12 +81,11 @@ typedef struct application_data_t
     dm_compute_handle gravity, physics;
     dm_compute_handle transform_b, physics_b;
     
-    
-    
     basic_camera camera;
     
     double gravity_timing, physics_timing, instance_creation_timing;
     double accumulated_time;
+    double octree_creation_timing;
     
     uint32_t physics_iters, mesh_index_count, mesh_vertex_count;
     
@@ -91,7 +94,7 @@ typedef struct application_data_t
     uint32_t     octree_node_count;
     dm_vec3      octree_center;
     float        octree_half_extents;
-    uint16_t     octree_depth;
+    uint32_t     octree_depth;
     octree_node* octree;
     
     star_data_soa* star_data;
@@ -170,8 +173,8 @@ bool dm_application_init(dm_context* context)
         
         float r_i, vc;
         
-        dm_vec3 min_p = { 0 };
-        dm_vec3 max_p = { 0 };
+        dm_vec3 min_p = { FLT_MAX,FLT_MAX,FLT_MAX };
+        dm_vec3 max_p = { -FLT_MAX,-FLT_MAX,-FLT_MAX };
         
         for(uint32_t i=1; i<ARRAY_LENGTH; i++)
         {
@@ -179,14 +182,14 @@ bool dm_application_init(dm_context* context)
             p[1] = dm_random_float_normal(0, .5f, context) * WORLD_CUBE_SIZE;
             p[2] = dm_random_float_normal(0, .5f, context) * WORLD_CUBE_SIZE;
             
-            min_p[0] = p[0] < min_p[0] ? p[0] : min_p[0];
-            min_p[1] = p[1] < min_p[1] ? p[1] : min_p[1];
-            min_p[2] = p[2] < min_p[2] ? p[2] : min_p[2];
+            min_p[0] = p[0] <= min_p[0] ? p[0] : min_p[0];
+            min_p[1] = p[1] <= min_p[1] ? p[1] : min_p[1];
+            min_p[2] = p[2] <= min_p[2] ? p[2] : min_p[2];
             
             max_p[0] = p[0] > max_p[0] ? p[0] : max_p[0];
             max_p[1] = p[1] > max_p[1] ? p[1] : max_p[1];
             max_p[2] = p[2] > max_p[2] ? p[2] : max_p[2];
-        
+            
             app_data->star_data->pos_x[i] = p[0];
             app_data->star_data->pos_y[i] = p[1];
             app_data->star_data->pos_z[i] = p[2];
@@ -219,30 +222,30 @@ bool dm_application_init(dm_context* context)
         dm_vec3 extents, center;
         dm_vec3_sub_vec3(max_p, min_p, extents);
         dm_vec3_fabs(extents, extents);
+        dm_vec3_scale(extents, 0.5f, extents);
         
         float half_extents = extents[0];
         half_extents = DM_MAX(half_extents, extents[1]);
         half_extents = DM_MAX(half_extents, extents[2]);
-        half_extents *= 0.5f;
+        // fudge factor
+        half_extents += OCTREE_FUDGE_FACTOR;
         
-        dm_vec3_scale(extents, 0.5f, extents);
         dm_vec3_sub_vec3(max_p, extents, app_data->octree[0].center);
         app_data->octree[0].half_extents = half_extents;
         app_data->octree[0].first_child = -1;
-        app_data->octree[0].obj_index = -1;
         
         app_data->octree_node_count = 1;
         app_data->octree_depth = 0;
         
-        dm_timer_start(&oct_t, context);
+        dm_timer timer = { 0 };
+        dm_timer_start(&timer, context);
         for(uint32_t i=0; i<ARRAY_LENGTH; i++)
         {
             octree_insert(i, 0, 0, &app_data->octree_depth, &app_data->octree, &app_data->octree_node_count, app_data->star_data->pos_x, app_data->star_data->pos_y, app_data->star_data->pos_z);
         }
+        app_data->octree_creation_timing = dm_timer_elapsed_ms(&timer, context);
     }
-    double time = dm_timer_elapsed_ms(&oct_t, context);
-    DM_LOG_INFO("Inserting %u objects into octree took: %0.2lf ms", ARRAY_LENGTH, time);
-
+    
     // render passes
     {
         if(!default_render_init(ARRAY_LENGTH, &app_data->default_render_data, context)) return false;
@@ -251,7 +254,7 @@ bool dm_application_init(dm_context* context)
     
     // camera
     dm_vec3 cam_pos = { 0,0,WORLD_CUBE_SIZE };
-    float move_sens = 10.f;
+    float move_sens = 30.f;
     dm_vec3 cam_for = { 0,0,-1 };
     
     camera_init(cam_pos, cam_for, 0.001f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), move_sens, 1.0f, &app_data->camera);
@@ -286,14 +289,12 @@ bool dm_application_update(dm_context* context)
     
     if(dm_input_key_just_pressed(DM_KEY_SPACE, context)) app_data->pause = !app_data->pause;
     
-    dm_vec3 p = { 0,0,0 };
-    dm_vec4 d = { 10,10,10 };
-    dm_vec4 c = { 1,0,0,1 };
-    dm_quat o = { 0,0.5f,0,1 };
-    debug_render_aabb(p, d, c, &app_data->debug_render_data, context);
-    debug_render_cube(p, d, o, c, &app_data->debug_render_data, context);
+    // render octree
+    octree_render(0, 0, app_data->octree, &app_data->debug_render_data, context);
     
     if(app_data->pause) return true;
+    
+    dm_timer timer = { 0 };
     
     app_data->accumulated_time += context->delta;
     app_data->physics_timing = 0;
@@ -302,8 +303,8 @@ bool dm_application_update(dm_context* context)
     const int group_count = (int)dm_ceil((float)ARRAY_LENGTH / (float)BLOCK_SIZE);
     
     // update gpu buffers and get octree data
-    dm_vec3 min = { 0 };
-    dm_vec3 max = { 0 };
+    dm_vec3 min = { FLT_MAX,FLT_MAX,FLT_MAX };
+    dm_vec3 max = { -FLT_MAX,-FLT_MAX,-FLT_MAX };
     
     for (uint32_t i = 0; i < ARRAY_LENGTH; i++)
     {
@@ -320,33 +321,46 @@ bool dm_application_update(dm_context* context)
         app_data->physics_gpu_data[i].force[2] = 0;
         
         // octree
-        min[0] = app_data->star_data->pos_x[i] < min[0] ? app_data->star_data->pos_x[i] : min[0];
-        min[1] = app_data->star_data->pos_y[i] < min[1] ? app_data->star_data->pos_y[i] : min[1];
-        min[2] = app_data->star_data->pos_z[i] < min[2] ? app_data->star_data->pos_z[i] : min[2];
+        min[0] = app_data->star_data->pos_x[i] <= min[0] ? app_data->star_data->pos_x[i] : min[0];
+        min[1] = app_data->star_data->pos_y[i] <= min[1] ? app_data->star_data->pos_y[i] : min[1];
+        min[2] = app_data->star_data->pos_z[i] <= min[2] ? app_data->star_data->pos_z[i] : min[2];
         
         max[0] = app_data->star_data->pos_x[i] > max[0] ? app_data->star_data->pos_x[i] : max[0];
         max[1] = app_data->star_data->pos_y[i] > max[1] ? app_data->star_data->pos_y[i] : max[1];
         max[2] = app_data->star_data->pos_z[i] > max[2] ? app_data->star_data->pos_z[i] : max[2];
     }
     
-    dm_vec3 extents;
+    float half_extents;
+    dm_vec3 extents, center;
     dm_vec3_sub_vec3(max, min, extents);
     dm_vec3_fabs(extents, extents);
     dm_vec3_scale(extents, 0.5f, extents);
-    app_data->octree[0].half_extents = extents[0];
-    app_data->octree[0].half_extents = app_data->octree[0].half_extents > extents[1] ? app_data->octree[0].half_extents : extents[1];
-    app_data->octree[0].half_extents = app_data->octree[0].half_extents > extents[2] ? app_data->octree[0].half_extents : extents[2];
+    half_extents = extents[0];
+    half_extents = DM_MAX(half_extents, extents[1]);
+    half_extents = DM_MAX(half_extents, extents[2]);
+    // fudge factor
+    half_extents += OCTREE_FUDGE_FACTOR;
+    
+    dm_vec3_sub_vec3(max, extents, center);
+    dm_vec3 d = { half_extents * 2.f,half_extents * 2.f,half_extents * 2.f };
+    dm_vec4 c = { 1,1,1,1 };
+    
+    dm_timer_start(&timer, context);
+    octree_node_destroy(0, &app_data->octree);
+    dm_free(app_data->octree);
+    app_data->octree = dm_alloc(sizeof(octree_node));
+    app_data->octree_node_count = 1;
+    app_data->octree_depth = 0;
+    
+    app_data->octree[0].half_extents = half_extents;
     dm_vec3_sub_vec3(max, extents, app_data->octree[0].center);
     app_data->octree[0].first_child = -1;
-    app_data->octree[0].obj_index   = -1;
-    
-    app_data->octree = dm_realloc(app_data->octree, sizeof(octree_node));
-    app_data->octree_node_count = 1;
     
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
         octree_insert(i, 0, 0, &app_data->octree_depth, &app_data->octree, &app_data->octree_node_count, app_data->star_data->pos_x, app_data->star_data->pos_y, app_data->star_data->pos_z);
     }
+    app_data->octree_creation_timing = dm_timer_elapsed_ms(&timer, context);
     
     // gravity force calculation
     {
@@ -358,10 +372,9 @@ bool dm_application_update(dm_context* context)
         if (!dm_compute_command_bind_buffer(app_data->transform_b, 0, 0, context)) return false;
         if (!dm_compute_command_bind_buffer(app_data->physics_b, 0, 1, context)) return false;
         
-        dm_timer t = { 0 };
-        dm_timer_start(&t, context);
+        dm_timer_start(&timer, context);
         if(!dm_compute_command_dispatch(group_count,1,1, BLOCK_SIZE,1,1, context)) return false;
-        app_data->gravity_timing = dm_timer_elapsed_ms(&t, context);
+        app_data->gravity_timing = dm_timer_elapsed_ms(&timer, context);
         
         if(!app_data->physics_gpu_data) return false;
     }
@@ -376,10 +389,9 @@ bool dm_application_update(dm_context* context)
         if (!dm_compute_command_bind_buffer(app_data->transform_b, 0, 0, context)) return false;
         if (!dm_compute_command_bind_buffer(app_data->physics_b, 0, 1, context)) return false;
         
-        dm_timer t = { 0 };
-        dm_timer_start(&t, context);
+        dm_timer_start(&timer, context);
         if(!dm_compute_command_dispatch(group_count,1,1, BLOCK_SIZE,1,1, context)) return false;
-        app_data->physics_timing += dm_timer_elapsed_ms(&t, context);
+        app_data->physics_timing += dm_timer_elapsed_ms(&timer, context);
         
         app_data->accumulated_time -= FIXED_DT;
     }
@@ -419,7 +431,7 @@ bool dm_application_render(dm_context* context)
     application_data* app_data = context->app_data;
     
     if(!default_render_render(ARRAY_LENGTH, app_data->camera.view_proj, app_data->camera.inv_view, app_data->star_data->pos_x, app_data->star_data->pos_y, app_data->star_data->pos_z, &app_data->default_render_data, context)) return false;
-    if(!debug_render_pass_render(&app_data->debug_render_data, app_data->camera.inv_view, context)) return false;
+    if(!debug_render_pass_render(&app_data->debug_render_data, app_data->camera.view_proj, context)) return false;
     
     // imgui
     dm_imgui_nuklear_context* imgui_ctx = &context->imgui_context.internal_context;
@@ -441,7 +453,10 @@ bool dm_application_render(dm_context* context)
         nk_value_int(ctx, "Physics iterations", app_data->physics_iters);
         
         nk_layout_row_dynamic(ctx, 30, 1);
-        nk_value_float(ctx, "Instance creation (ms)", app_data->instance_creation_timing);
+        nk_value_float(ctx, "Octree creation", app_data->octree_creation_timing);
+        
+        nk_layout_row_dynamic(ctx, 30, 1);
+        nk_value_int(ctx, "Octree depth", app_data->octree_depth);
         
         nk_layout_row_dynamic(ctx, 30, 1);
         nk_value_float(ctx, "Previous frame (ms)", context->delta * 1000.0f);

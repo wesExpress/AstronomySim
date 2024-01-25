@@ -27,7 +27,7 @@ typedef struct debug_render_uniform_t
     dm_mat4 view_proj;
 } debug_render_uniform;
 
-#define DEBUG_MAX_INSTS_PER_FRAME 2048
+#define DEBUG_MAX_INSTS_PER_FRAME 10000
 typedef struct debug_render_data_t
 {
     dm_render_handle vb, instb[DEBUG_RENDER_SHAPE_UNKNOWN], ib, shader, pipe, uni;
@@ -339,8 +339,7 @@ void debug_render_aabb(const dm_vec3 pos, const dm_vec3 dim, const dm_vec4 color
     debug_render_instance inst = { 0 };
     dm_memcpy(inst.color, color, sizeof(inst.color));
     
-    dm_mat4_identity(inst.model);
-    dm_mat_scale(inst.model, dim, inst.model);
+    dm_mat_scale_make(dim, inst.model);
     dm_mat_translate(inst.model, pos, inst.model);
 #ifdef DM_DIRECTX
     dm_mat4_transpose(inst.model, inst.model);

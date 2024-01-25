@@ -16,7 +16,7 @@ RWStructuredBuffer<physics_elem>   physics    : register(u1);
 #define BLOCK_SIZE   128
 
 #define G            6.67e-11f
-#define SOFTENING_2  0.1f
+#define SOFTENING_2  0.01f
 
 [numthreads(BLOCK_SIZE,1,1)]
 void c_main(uint3 group_id : SV_GroupID, uint3 dispatch_id : SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID, uint group_index : SV_GroupIndex)

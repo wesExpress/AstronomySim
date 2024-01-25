@@ -3,202 +3,263 @@
 
 #include <assert.h>
 
-#define OCTREE_MAX_DEPTH      8
-#define OCTREE_CHILDREN_COUNT 8
+#ifdef  OCTREE_LIMIT_DEPTH
+#define OCTREE_MAX_DEPTH        6
+#endif
+
+#define OCTREE_CHILDREN_COUNT   8
+#define OCTREE_PRECISION_THRESH 1e-6f
 
 typedef struct octree_node_t
 {
-    dm_vec3 center;
-    float   half_extents;
+    dm_vec3   center;
+    float     half_extents;
     
-    int32_t first_child;
-    int32_t obj_index;
+    uint16_t  obj_count;
+    int32_t   first_child;
+    
+    uint32_t* obj_index_array;
 } octree_node;
 
 DM_INLINE
-void octree_node_init_children(uint32_t node_index, octree_node** octree, uint32_t* octree_node_count)
+bool octree_node_contains_object(const dm_vec3 pos, const uint32_t node_index, octree_node* octree)
 {
-    const uint32_t old_count = *octree_node_count;
-    const uint32_t new_count = old_count + OCTREE_CHILDREN_COUNT;
-    *octree = dm_realloc(*octree, sizeof(octree_node) * new_count);
+    octree_node node = octree[node_index];
     
-    octree_node* node = &((*octree)[node_index]);
+    dm_vec3 min, max;
+    dm_vec3_sub_scalar(node.center, node.half_extents, min);
+    dm_vec3_add_scalar(node.center, node.half_extents, max);
     
-    node->first_child  = old_count;
-    *octree_node_count = new_count;
-    
-    // set children's indices to -1
-    // set children's center and extents
-    octree_node* child = NULL;
-    const float new_half_extents = node->half_extents * 0.5f;
-    
-    child = &((*octree)[node->first_child]);
-    child->first_child  = -1;
-    child->obj_index    = -1;
-    child->half_extents = new_half_extents;
-    child->center[0] = node->center[0] - new_half_extents;
-    child->center[1] = node->center[1] - new_half_extents;
-    child->center[2] = node->center[2] - new_half_extents;
-    
-    child = &((*octree)[node->first_child + 1]);
-    child->first_child = -1;
-    child->obj_index   = -1;
-    child->half_extents = new_half_extents;
-    child->center[0] = node->center[0] + new_half_extents;
-    child->center[1] = node->center[1] - new_half_extents;
-    child->center[2] = node->center[2] - new_half_extents;
-    
-    child = &((*octree)[node->first_child + 2]);
-    child->first_child = -1;
-    child->obj_index   = -1;
-    child->half_extents = new_half_extents;
-    child->center[0] = node->center[0] - new_half_extents;
-    child->center[1] = node->center[1] + new_half_extents;
-    child->center[2] = node->center[2] - new_half_extents;
-    
-    child = &((*octree)[node->first_child + 3]);
-    child->first_child = -1;
-    child->obj_index   = -1;
-    child->half_extents = new_half_extents;
-    child->center[0] = node->center[0] + new_half_extents;
-    child->center[1] = node->center[1] + new_half_extents;
-    child->center[2] = node->center[2] - new_half_extents;
-    
-    child = &((*octree)[node->first_child + 4]);
-    child->first_child = -1;
-    child->obj_index   = -1;
-    child->half_extents = new_half_extents;
-    child->center[0] = node->center[0] - new_half_extents;
-    child->center[1] = node->center[1] - new_half_extents;
-    child->center[2] = node->center[2] + new_half_extents;
-    
-    child = &((*octree)[node->first_child + 5]);
-    child->first_child = -1;
-    child->obj_index   = -1;
-    child->half_extents = new_half_extents;
-    child->center[0] = node->center[0] + new_half_extents;
-    child->center[1] = node->center[1] - new_half_extents;
-    child->center[2] = node->center[2] + new_half_extents;
-    
-    child = &((*octree)[node->first_child + 6]);
-    child->first_child = -1;
-    child->obj_index   = -1;
-    child->half_extents = new_half_extents;
-    child->center[0] = node->center[0] - new_half_extents;
-    child->center[1] = node->center[1] + new_half_extents;
-    child->center[2] = node->center[2] + new_half_extents;
-    
-    child = &((*octree)[node->first_child + 7]);
-    child->first_child = -1;
-    child->obj_index   = -1;
-    child->half_extents = new_half_extents;
-    child->center[0] = node->center[0] + new_half_extents;
-    child->center[1] = node->center[1] + new_half_extents;
-    child->center[2] = node->center[2] + new_half_extents;
+    return dm_vec3_leq_vec3(pos, max) && dm_vec3_gt_vec3(pos, min);
 }
 
 DM_INLINE
-bool octree_node_contains_object(const dm_vec3 pos, octree_node* node)
+void octree_node_init_children(const uint32_t node_index, octree_node** node, octree_node** octree, uint32_t* node_count)
 {
-    dm_vec3 min, max;
+    const uint32_t old_count = *node_count;
+    const uint32_t new_count = old_count + OCTREE_CHILDREN_COUNT;
+    *node_count = new_count;
     
-    dm_vec3_sub_scalar(node->center, node->half_extents, min);
-    dm_vec3_add_scalar(node->center, node->half_extents, max);
+    *octree = dm_realloc(*octree, sizeof(octree_node) * new_count);
+    dm_memzero(*octree + old_count, sizeof(octree_node) * OCTREE_CHILDREN_COUNT);
     
-    const bool in_x = (pos[0] >= min[0]) && (pos[0] < max[0]);
-    const bool in_y = (pos[1] >= min[1]) && (pos[1] < max[1]);
-    const bool in_z = (pos[2] >= min[2]) && (pos[2] < max[2]);
+    *node = &(*octree)[node_index];
+    (*node)->first_child = old_count;
     
-    return in_x && in_y && in_z;
+    const float new_half_extents = (*node)->half_extents * 0.5f;
+    const float offset = new_half_extents;
+    
+    const uint32_t first_index = (*node)->first_child;
+    
+    octree_node* child  = &(*octree)[first_index];
+    child->first_child  = -1;
+    child->center[0]    = (*node)->center[0] - offset;
+    child->center[1]    = (*node)->center[1] - offset;
+    child->center[2]    = (*node)->center[2] - offset;
+    child->half_extents = new_half_extents;
+    
+    child++;
+    child->first_child  = -1;
+    child->obj_count    = 0;
+    child->center[0]    = (*node)->center[0] + offset;
+    child->center[1]    = (*node)->center[1] - offset;
+    child->center[2]    = (*node)->center[2] - offset;
+    child->half_extents = new_half_extents;
+    
+    child++;
+    child->first_child  = -1;
+    child->obj_count    = 0;
+    child->center[0]    = (*node)->center[0] - offset;
+    child->center[1]    = (*node)->center[1] + offset;
+    child->center[2]    = (*node)->center[2] - offset;
+    child->half_extents = new_half_extents;
+    
+    child++;
+    child->first_child  = -1;
+    child->obj_count    = 0;
+    child->center[0]    = (*node)->center[0] + offset;
+    child->center[1]    = (*node)->center[1] + offset;
+    child->center[2]    = (*node)->center[2] - offset;
+    child->half_extents = new_half_extents;
+    
+    child++;
+    child->first_child  = -1;
+    child->obj_count    = 0;
+    child->center[0]    = (*node)->center[0] - offset;
+    child->center[1]    = (*node)->center[1] - offset;
+    child->center[2]    = (*node)->center[2] + offset;
+    child->half_extents = new_half_extents;
+    
+    child++;
+    child->first_child  = -1;
+    child->obj_count    = 0;
+    child->center[0]    = (*node)->center[0] + offset;
+    child->center[1]    = (*node)->center[1] - offset;
+    child->center[2]    = (*node)->center[2] + offset;
+    child->half_extents = new_half_extents;
+    
+    child++;
+    child->first_child  = -1;
+    child->obj_count    = 0;
+    child->center[0]    = (*node)->center[0] - offset;
+    child->center[1]    = (*node)->center[1] + offset;
+    child->center[2]    = (*node)->center[2] + offset;
+    child->half_extents = new_half_extents;
+    
+    child++;
+    child->first_child  = -1;
+    child->obj_count    = 0;
+    child->center[0]    = (*node)->center[0] + offset;
+    child->center[1]    = (*node)->center[1] + offset;
+    child->center[2]    = (*node)->center[2] + offset;
+    child->half_extents = new_half_extents;
 }
 
-void octree_insert(const uint32_t object_index, const uint32_t node_index, uint16_t depth, uint16_t* max_depth, octree_node** octree, uint32_t* octree_node_count, const float* pos_x, const float* pos_y, const float* pos_z)
+bool octree_insert(const uint32_t object_index, const uint32_t node_index, const uint32_t depth, uint32_t* max_depth, octree_node** octree, uint32_t* node_count, const float* pos_x, const float* pos_y, const float* pos_z)
 {
     assert(octree);
     
-    *max_depth = depth > *max_depth ? depth : *max_depth;
-    
-    octree_node* node = &((*octree)[node_index]);
-    
-    const dm_vec3 new_object_pos = {
+    const dm_vec3 obj_pos = {
         pos_x[object_index],
         pos_y[object_index],
-        pos_z[object_index],
+        pos_z[object_index]
     };
     
-    if(!octree_node_contains_object(new_object_pos, node)) return;
+    // early out
+    if(!octree_node_contains_object(obj_pos, node_index, *octree)) return false;
     
-    // do we have children?
-    if(node->first_child != -1)
+    octree_node* node = &(*octree)[node_index];
+    
+#ifdef OCTREE_LIMIT_DEPTH
+    // are we at max depth?
+    if(depth >= OCTREE_MAX_DEPTH)
     {
-        // find child to insert into
-        octree_node* child = NULL;
-        octree_node children[OCTREE_CHILDREN_COUNT];
-        dm_memcpy(children, *octree + node->first_child, sizeof(octree_node) * OCTREE_CHILDREN_COUNT);
+        if(!node->obj_index_array) node->obj_index_array = dm_alloc(sizeof(uint32_t));
+        else                       node->obj_index_array = dm_realloc(node->obj_index_array, sizeof(uint32_t) * (node->obj_count + 1));
         
+        node->obj_index_array[node->obj_count++] = object_index;
+        
+        return true;
+    }
+#endif
+    
+    // otherwise continue down
+    *max_depth = depth > *max_depth ? depth : *max_depth;
+    
+    // we have children, so go down the tree
+    if(node->first_child!=-1)
+    {
+        // check children
+        uint32_t child_index = node->first_child;
         for(uint32_t i=0; i<OCTREE_CHILDREN_COUNT; i++)
         {
-            child = &(*octree)[node->first_child + i];
+            if(octree_insert(object_index, child_index, depth+1, max_depth, octree, node_count, pos_x, pos_y, pos_z)) return true;
             
-            if(!octree_node_contains_object(new_object_pos, child)) continue;
-            
-            octree_insert(object_index, node->first_child + i, depth + 1, max_depth, octree, octree_node_count, pos_x, pos_y, pos_z);
-            
-            return;
+            child_index++;
         }
         
-        DM_LOG_FATAL("Octree insertion failed somehow");
-        assert(false);
+        // can't fit in children for some reason, so object must go here
+        node = &(*octree)[node_index];
+        
+        if(!node->obj_index_array) node->obj_index_array = dm_alloc(sizeof(uint32_t));
+        else                       node->obj_index_array = dm_realloc(node->obj_index_array, sizeof(uint32_t) * (node->obj_count + 1));
+        
+        node->obj_index_array[node->obj_count++] = object_index;
+        
+        return true;
+    }
+    else
+    {
+        // are we empty?
+        if(node->obj_count==0)
+        {
+            node->obj_index_array = dm_alloc(sizeof(uint32_t));
+            node->obj_index_array[node->obj_count++] = object_index;
+            return true;
+        }
+        
+        octree_node_init_children(node_index, &node, octree, node_count);
+        assert(node->first_child!=-1);
+        assert(node->obj_index_array);
+        
+        uint32_t child_index = node->first_child;
+        
+        // reinsert any objects here
+        // SHOULD be at most one, but you never know...
+        for(uint32_t i=0; i<node->obj_count; i++)
+        {
+            for(uint32_t j=0; j<OCTREE_CHILDREN_COUNT; j++)
+            {
+                if(octree_insert(node->obj_index_array[i], child_index++, depth+1, max_depth, octree, node_count, pos_x, pos_y, pos_z)) 
+                {
+                    node->obj_count--;
+                    break;
+                }
+            }
+        }
+        
+        child_index = node->first_child;
+        bool failed = true;
+        for(uint32_t i=0; i<OCTREE_CHILDREN_COUNT; i++)
+        {
+            if(!octree_insert(object_index, child_index++, depth+1, max_depth, octree, node_count, pos_x, pos_y, pos_z)) continue;
+            
+            failed = false;
+            return true;
+        }
+        
+        if(failed)
+        {
+            node->obj_index_array[node->obj_count++] = object_index;
+            return true;
+        }
+        
     }
     
-    // are we empty?
-    if(node->obj_index == -1)
+}
+
+void octree_render(const uint32_t node_index, const uint32_t depth, octree_node* octree, void** render_data, dm_context* context)
+{
+    octree_node node = octree[node_index];
+    
+    // are we full?
+    if(node.obj_count>0)
     {
-        node->obj_index = object_index;
+        dm_vec3 extents = { node.half_extents * 2.f, node.half_extents * 2.f, node.half_extents * 2.f };
+        
+        float color = 1 - dm_powf(0.8f, (float)depth);
+        
+        dm_vec4 c = { color,color,color,color };
+        debug_render_aabb(node.center, extents, c, render_data, context);
         
         return;
     }
     
-    // init children
-    assert(node->first_child==-1);
-    octree_node_init_children(node_index, octree, octree_node_count);
-    node = &((*octree)[node_index]);
-    assert(node->first_child!=-1);
+    if(node.first_child==-1) return;
     
-    // reinsert old index
-    const dm_vec3 old_object_pos = {
-        pos_x[node->obj_index],
-        pos_y[node->obj_index],
-        pos_z[node->obj_index],
-    };
-    
-    octree_node* child = NULL;
+    uint32_t child_index = node.first_child;
     for(uint32_t i=0; i<OCTREE_CHILDREN_COUNT; i++)
     {
-        child = &(*octree)[node->first_child + i];
-        
-        if(!octree_node_contains_object(old_object_pos, child)) continue;
-        
-        octree_insert(node->obj_index, node->first_child + i, depth + 1, max_depth, octree, octree_node_count, pos_x, pos_y, pos_z);
-        
-        break;
+        octree_render(child_index++, depth+1, octree, render_data, context);
     }
-    
-    // insert new index
-    child = NULL;
-    for(uint32_t i=0; i<OCTREE_CHILDREN_COUNT; i++)
-    {
-        child = &(*octree)[node->first_child + i];
-        
-        if(!octree_node_contains_object(new_object_pos, child)) continue;
-        
-        octree_insert(object_index, node->first_child + i, depth + 1, max_depth, octree, octree_node_count, pos_x, pos_y, pos_z);
-        
-        break;
-    }
-    
-    node->obj_index = -1;
 }
 
+void octree_node_destroy(const uint32_t node_index, octree_node** octree)
+{
+    octree_node* node = &(*octree)[node_index];
+    
+    if(node->first_child==-1)
+    {
+        if(node->obj_index_array) dm_free(node->obj_index_array);
+        return;
+    }
+    
+    uint32_t child_index = node->first_child;
+    for(uint32_t i=0; i<OCTREE_CHILDREN_COUNT; i++)
+    {
+        octree_node_destroy(child_index, octree);
+        child_index++;
+    }
+}
 
 #endif
