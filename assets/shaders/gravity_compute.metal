@@ -14,7 +14,7 @@ struct physics_elem
 
 //#define USE_ASTRO_UNITS
 
-#define OBJECT_COUNT 16000
+#define OBJECT_COUNT 10000
 
 #ifndef USE_ASTRO_UNITS
     #define G            6.67e-11f

@@ -173,6 +173,7 @@ bool octree_insert(const uint32_t object_index, const uint32_t node_index, const
         // are we empty?
         if(node->obj_count==0)
         {
+            assert(!node->obj_index_array);
             node->obj_index_array = dm_alloc(sizeof(uint32_t));
             node->obj_index_array[node->obj_count++] = object_index;
             return true;
@@ -248,11 +249,8 @@ void octree_node_destroy(const uint32_t node_index, octree_node** octree)
 {
     octree_node* node = &(*octree)[node_index];
     
-    if(node->first_child==-1)
-    {
-        if(node->obj_index_array) dm_free(node->obj_index_array);
-        return;
-    }
+    if(node->obj_index_array) dm_free(node->obj_index_array);
+    if(node->first_child==-1) return;
     
     uint32_t child_index = node->first_child;
     for(uint32_t i=0; i<OCTREE_CHILDREN_COUNT; i++)
