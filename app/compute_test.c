@@ -1,6 +1,9 @@
 #include "dm.h"
 #include "camera.h"
 
+#include "gravity.h"
+#include "physics.h"
+
 #include "default_render.h"
 #include "debug_render.h"
 
@@ -11,10 +14,8 @@
 #include <string.h>
 #include <float.h>
 
-#define ARRAY_LENGTH 10000
-#define BLOCK_SIZE   128
-
-#define FIXED_DT 0.008333
+#define ARRAY_LENGTH 20000
+#define BLOCK_SIZE   256
 
 #define OCTREE_FUDGE_FACTOR 0.001f;
 
@@ -28,7 +29,7 @@
 #define MASS_SCALE      1e10f              // kg
 #define SMBH_MASS       MASS_SCALE * 1.f   // kg
 #else
-#define G          4.3e-3f                 // pc Msun^-1 km^2 / s^2
+#define G  4.3e-3f                         // pc Msun^-1 km^2 / s^2
 
 #define WORLD_CUBE_SIZE 10                 // pc
 
@@ -41,36 +42,58 @@
 /*
  object data
  */
-typedef struct star_data_soa_t
+typedef struct transform_soa_t
 {
     DM_ALIGN(16) float pos_x[ARRAY_LENGTH];
     DM_ALIGN(16) float pos_y[ARRAY_LENGTH];
     DM_ALIGN(16) float pos_z[ARRAY_LENGTH];
-    
-    DM_ALIGN(16) float mass[ARRAY_LENGTH];
-    
+} transform_soa;
+
+typedef struct physics_soa_t
+{
     DM_ALIGN(16) float vel_x[ARRAY_LENGTH];
     DM_ALIGN(16) float vel_y[ARRAY_LENGTH];
     DM_ALIGN(16) float vel_z[ARRAY_LENGTH];
     
+    DM_ALIGN(16) float mass[ARRAY_LENGTH];
+    DM_ALIGN(16) float inv_mass[ARRAY_LENGTH];
+    
     DM_ALIGN(16) float force_x[ARRAY_LENGTH];
     DM_ALIGN(16) float force_y[ARRAY_LENGTH];
     DM_ALIGN(16) float force_z[ARRAY_LENGTH];
-} star_data_soa;
+    
+    DM_ALIGN(16) float accel_x[ARRAY_LENGTH];
+    DM_ALIGN(16) float accel_y[ARRAY_LENGTH];
+    DM_ALIGN(16) float accel_z[ARRAY_LENGTH];
+} physics_soa;
 
-typedef struct transform_gpu_element_t
+typedef struct transform_t
 {
     dm_vec3 pos;
     float padding;
-} transform_gpu_element;
+} transform;
 
-typedef struct physics_gpu_element_t
+typedef struct physics_t
 {
     dm_vec3 vel;
     float   mass;
+    
     dm_vec3 force;
+    float   inv_mass;
+    
+    dm_vec3 accel;
     float   padding;
-} physics_gpu_element;
+} physics;
+
+typedef struct transform_aos_t
+{
+    transform data[ARRAY_LENGTH];
+} transform_aos;
+
+typedef struct physics_aos_t
+{
+    physics data[ARRAY_LENGTH];
+} physics_aos;
 
 /*
  app data
@@ -78,16 +101,9 @@ typedef struct physics_gpu_element_t
 #define MAX_INSTS_PER_FRAME 2048
 typedef struct application_data_t
 {
-    dm_compute_handle gravity, physics;
     dm_compute_handle transform_b, physics_b;
     
     basic_camera camera;
-    
-    double gravity_timing, physics_timing, instance_creation_timing;
-    double accumulated_time;
-    double octree_creation_timing;
-    
-    uint32_t physics_iters, mesh_index_count, mesh_vertex_count;
     
     bool pause;
     
@@ -97,9 +113,16 @@ typedef struct application_data_t
     uint32_t     octree_depth;
     octree_node* octree;
     
-    star_data_soa* star_data;
-    transform_gpu_element* transform_gpu_data;
-    physics_gpu_element* physics_gpu_data;
+    // data
+    transform_soa* transform_cpu;
+    physics_soa*   physics_cpu;
+    
+    transform_aos* transform_gpu;
+    physics_aos*   physics_gpu;
+    
+    // compute passes
+    void* grav_data;
+    void* physics_data;
     
     // render passes
     void* default_render_data;
@@ -119,57 +142,35 @@ bool dm_application_init(dm_context* context)
     context->app_data = dm_alloc(sizeof(application_data));
     application_data* app_data = context->app_data;
     
-    app_data->star_data = dm_alloc(sizeof(star_data_soa));
-    app_data->transform_gpu_data = dm_alloc(sizeof(transform_gpu_element) * ARRAY_LENGTH);
-    app_data->physics_gpu_data = dm_alloc(sizeof(physics_gpu_element) * ARRAY_LENGTH);
-    
-    dm_timer oct_t = { 0 };
+    app_data->transform_cpu = dm_alloc(sizeof(transform_soa));
+    app_data->physics_cpu   = dm_alloc(sizeof(physics_soa));
+    app_data->transform_gpu = dm_alloc(sizeof(transform_aos));
+    app_data->physics_gpu   = dm_alloc(sizeof(physics_aos));
     
     // compute data
     {
-        dm_compute_shader_desc gravity_desc = { 0 };
-#ifdef DM_METAL
-        strcpy(gravity_desc.path, "assets/shaders/gravity_compute.metallib");
-        strcpy(gravity_desc.function, "gravity_calc");
-#elif defined(DM_DIRECTX)
-        strcpy(gravity_desc.path, "assets/shaders/gravity_compute.fxc");
-#else
-        DM_LOG_FATAL("Compute shader isn't supported for this backend yet");
-        assert(false);
-#endif
-        
-        dm_compute_shader_desc physics_desc = { 0 };
-#ifdef DM_METAL
-        strcpy(physics_desc.path, "assets/shaders/physics_compute.metallib");
-        strcpy(physics_desc.function, "physics_update");
-#elif defined(DM_DIRECTX)
-        strcpy(physics_desc.path, "assets/shaders/physics_compute.fxc");
-#else
-        DM_LOG_FATAL("Compute shader isn't supported for this backend yet");
-        assert(false);
-#endif
-        
-        if(!dm_compute_create_shader(gravity_desc, &app_data->gravity, context)) return false;
-        if(!dm_compute_create_shader(physics_desc, &app_data->physics, context)) return false;
+        if(!gravity_init(&app_data->grav_data, context))    return false;
+        if(!physics_init(&app_data->physics_data, context)) return false;
         
         static const size_t data_size = sizeof(float) * ARRAY_LENGTH;
         
-        if(!dm_compute_create_buffer(sizeof(transform_gpu_element) * ARRAY_LENGTH, sizeof(transform_gpu_element), DM_COMPUTE_BUFFER_TYPE_READ_WRITE, &app_data->transform_b, context)) return false;
-        if(!dm_compute_create_buffer(sizeof(physics_gpu_element) * ARRAY_LENGTH, sizeof(physics_gpu_element), DM_COMPUTE_BUFFER_TYPE_READ_WRITE, &app_data->physics_b, context)) return false;
+        if(!dm_compute_create_buffer(sizeof(transform_aos), sizeof(transform), DM_COMPUTE_BUFFER_TYPE_READ_WRITE, &app_data->transform_b, context)) return false;
+        if(!dm_compute_create_buffer(sizeof(physics_aos), sizeof(physics), DM_COMPUTE_BUFFER_TYPE_READ_WRITE, &app_data->physics_b, context)) return false;
         
         dm_vec3 p, dir;
         float radius;
         const dm_vec3 up = { 0,1,0 };
         
-        app_data->star_data->mass[0] = SMBH_MASS;
+        app_data->physics_cpu->mass[0]     = SMBH_MASS;
+        app_data->physics_cpu->inv_mass[0] = 1.f / SMBH_MASS;
         
-        app_data->star_data->pos_x[0] = 0;
-        app_data->star_data->pos_y[0] = 0;
-        app_data->star_data->pos_z[0] = 0;
+        app_data->transform_cpu->pos_x[0] = 0;
+        app_data->transform_cpu->pos_y[0] = 0;
+        app_data->transform_cpu->pos_z[0] = 0;
         
-        app_data->star_data->vel_x[0] = 0;
-        app_data->star_data->vel_y[0] = 0;
-        app_data->star_data->vel_z[0] = 0;
+        app_data->physics_cpu->vel_x[0] = 0;
+        app_data->physics_cpu->vel_y[0] = 0;
+        app_data->physics_cpu->vel_z[0] = 0;
         
         float r_i, vc;
         
@@ -190,11 +191,12 @@ bool dm_application_init(dm_context* context)
             max_p[1] = p[1] > max_p[1] ? p[1] : max_p[1];
             max_p[2] = p[2] > max_p[2] ? p[2] : max_p[2];
             
-            app_data->star_data->pos_x[i] = p[0];
-            app_data->star_data->pos_y[i] = p[1];
-            app_data->star_data->pos_z[i] = p[2];
+            app_data->transform_cpu->pos_x[i] = p[0];
+            app_data->transform_cpu->pos_y[i] = p[1];
+            app_data->transform_cpu->pos_z[i] = p[2];
             
-            app_data->star_data->mass[i] = dm_random_float(context) * MASS_SCALE;
+            app_data->physics_cpu->mass[i]     = dm_random_float(context) * MASS_SCALE;
+            app_data->physics_cpu->inv_mass[i] = 1.f / app_data->physics_cpu->mass[i]; 
             
             //p[1] = 0;
             dm_vec3_negate(p, p);
@@ -202,18 +204,18 @@ bool dm_application_init(dm_context* context)
             dm_vec3_cross(p, up, dir);
             dm_vec3_norm(dir, dir);
             
-            r_i  = app_data->star_data->pos_x[i] * app_data->star_data->pos_x[i];
-            r_i += app_data->star_data->pos_y[i] * app_data->star_data->pos_y[i];
-            r_i += app_data->star_data->pos_z[i] * app_data->star_data->pos_z[i];
+            r_i  = app_data->transform_cpu->pos_x[i] * app_data->transform_cpu->pos_x[i];
+            r_i += app_data->transform_cpu->pos_y[i] * app_data->transform_cpu->pos_y[i];
+            r_i += app_data->transform_cpu->pos_z[i] * app_data->transform_cpu->pos_z[i];
             r_i  = dm_sqrtf(r_i);
             
-            vc = G * app_data->star_data->mass[0];
+            vc = G * app_data->physics_cpu->mass[0];
             vc /= r_i;
             vc = dm_sqrtf(vc) * 10.f;
             
-            app_data->star_data->vel_x[i] = dir[0] * vc;
-            app_data->star_data->vel_y[i] = dir[1] * vc;
-            app_data->star_data->vel_z[i] = dir[2] * vc;
+            app_data->physics_cpu->vel_x[i] = dir[0] * vc;
+            app_data->physics_cpu->vel_y[i] = dir[1] * vc;
+            app_data->physics_cpu->vel_z[i] = dir[2] * vc;
         }
         
         // set up octree
@@ -237,13 +239,10 @@ bool dm_application_init(dm_context* context)
         app_data->octree_node_count = 1;
         app_data->octree_depth = 0;
         
-        dm_timer timer = { 0 };
-        dm_timer_start(&timer, context);
         for(uint32_t i=0; i<ARRAY_LENGTH; i++)
         {
-            octree_insert(i, 0, 0, &app_data->octree_depth, &app_data->octree, &app_data->octree_node_count, app_data->star_data->pos_x, app_data->star_data->pos_y, app_data->star_data->pos_z);
+            octree_insert(i, 0, 0, &app_data->octree_depth, &app_data->octree, &app_data->octree_node_count, app_data->transform_cpu->pos_x, app_data->transform_cpu->pos_y, app_data->transform_cpu->pos_z);
         }
-        app_data->octree_creation_timing = dm_timer_elapsed_ms(&timer, context);
     }
     
     // render passes
@@ -268,11 +267,16 @@ void dm_application_shutdown(dm_context* context)
 {
     application_data* app_data = context->app_data;
     
-    dm_free(app_data->star_data);
-    dm_free(app_data->transform_gpu_data);
-    dm_free(app_data->physics_gpu_data);
+    dm_free(app_data->transform_cpu);
+    dm_free(app_data->transform_gpu);
+    
+    dm_free(app_data->physics_cpu);
+    dm_free(app_data->physics_gpu);
     
     if(app_data->octree) dm_free(app_data->octree);
+    
+    gravity_shutdown(&app_data->grav_data, context);
+    physics_shutdown(&app_data->physics_data, context);
     
     default_render_shutdown(&app_data->default_render_data, context);
     debug_render_pass_shutdown(&app_data->debug_render_data, context);
@@ -289,16 +293,9 @@ bool dm_application_update(dm_context* context)
     
     if(dm_input_key_just_pressed(DM_KEY_SPACE, context)) app_data->pause = !app_data->pause;
     
-    // render octree
-    octree_render(0, 0, app_data->octree, &app_data->debug_render_data, context);
-    
     if(app_data->pause) return true;
     
     dm_timer timer = { 0 };
-    
-    app_data->accumulated_time += context->delta;
-    app_data->physics_timing = 0;
-    app_data->physics_iters  = 0;
     
     const int group_count = (int)dm_ceil((float)ARRAY_LENGTH / (float)BLOCK_SIZE);
     
@@ -308,26 +305,32 @@ bool dm_application_update(dm_context* context)
     
     for (uint32_t i = 0; i < ARRAY_LENGTH; i++)
     {
-        app_data->transform_gpu_data[i].pos[0] = app_data->star_data->pos_x[i];
-        app_data->transform_gpu_data[i].pos[1] = app_data->star_data->pos_y[i];
-        app_data->transform_gpu_data[i].pos[2] = app_data->star_data->pos_z[i];
+        app_data->transform_gpu->data[i].pos[0] = app_data->transform_cpu->pos_x[i];
+        app_data->transform_gpu->data[i].pos[1] = app_data->transform_cpu->pos_y[i];
+        app_data->transform_gpu->data[i].pos[2] = app_data->transform_cpu->pos_z[i];
         
-        app_data->physics_gpu_data[i].vel[0] = app_data->star_data->vel_x[i];
-        app_data->physics_gpu_data[i].vel[1] = app_data->star_data->vel_y[i];
-        app_data->physics_gpu_data[i].vel[2] = app_data->star_data->vel_z[i];
-        app_data->physics_gpu_data[i].mass = app_data->star_data->mass[i];
-        app_data->physics_gpu_data[i].force[0] = 0;
-        app_data->physics_gpu_data[i].force[1] = 0;
-        app_data->physics_gpu_data[i].force[2] = 0;
+        app_data->physics_gpu->data[i].vel[0]   = app_data->physics_cpu->vel_x[i];
+        app_data->physics_gpu->data[i].vel[1]   = app_data->physics_cpu->vel_y[i];
+        app_data->physics_gpu->data[i].vel[2]   = app_data->physics_cpu->vel_z[i];
+        app_data->physics_gpu->data[i].mass     = app_data->physics_cpu->mass[i];
+        app_data->physics_gpu->data[i].inv_mass = 1.f / app_data->physics_cpu->mass[i];
+        
+        app_data->physics_gpu->data[i].accel[0] = app_data->physics_cpu->accel_x[i];
+        app_data->physics_gpu->data[i].accel[1] = app_data->physics_cpu->accel_y[i];
+        app_data->physics_gpu->data[i].accel[2] = app_data->physics_cpu->accel_z[i];
+        
+        app_data->physics_gpu->data[i].force[0] = 0;
+        app_data->physics_gpu->data[i].force[1] = 0;
+        app_data->physics_gpu->data[i].force[2] = 0;
         
         // octree
-        min[0] = app_data->star_data->pos_x[i] <= min[0] ? app_data->star_data->pos_x[i] : min[0];
-        min[1] = app_data->star_data->pos_y[i] <= min[1] ? app_data->star_data->pos_y[i] : min[1];
-        min[2] = app_data->star_data->pos_z[i] <= min[2] ? app_data->star_data->pos_z[i] : min[2];
+        min[0] = app_data->transform_cpu->pos_x[i] <= min[0] ? app_data->transform_cpu->pos_x[i] : min[0];
+        min[1] = app_data->transform_cpu->pos_y[i] <= min[1] ? app_data->transform_cpu->pos_y[i] : min[1];
+        min[2] = app_data->transform_cpu->pos_z[i] <= min[2] ? app_data->transform_cpu->pos_z[i] : min[2];
         
-        max[0] = app_data->star_data->pos_x[i] > max[0] ? app_data->star_data->pos_x[i] : max[0];
-        max[1] = app_data->star_data->pos_y[i] > max[1] ? app_data->star_data->pos_y[i] : max[1];
-        max[2] = app_data->star_data->pos_z[i] > max[2] ? app_data->star_data->pos_z[i] : max[2];
+        max[0] = app_data->transform_cpu->pos_x[i] > max[0] ? app_data->transform_cpu->pos_x[i] : max[0];
+        max[1] = app_data->transform_cpu->pos_y[i] > max[1] ? app_data->transform_cpu->pos_y[i] : max[1];
+        max[2] = app_data->transform_cpu->pos_z[i] > max[2] ? app_data->transform_cpu->pos_z[i] : max[2];
     }
     
     float half_extents;
@@ -340,10 +343,6 @@ bool dm_application_update(dm_context* context)
     half_extents = DM_MAX(half_extents, extents[2]);
     // fudge factor
     half_extents += OCTREE_FUDGE_FACTOR;
-    
-    dm_vec3_sub_vec3(max, extents, center);
-    dm_vec3 d = { half_extents * 2.f,half_extents * 2.f,half_extents * 2.f };
-    dm_vec4 c = { 1,1,1,1 };
     
     dm_timer_start(&timer, context);
     octree_node_destroy(0, &app_data->octree);
@@ -358,69 +357,44 @@ bool dm_application_update(dm_context* context)
     
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
-        octree_insert(i, 0, 0, &app_data->octree_depth, &app_data->octree, &app_data->octree_node_count, app_data->star_data->pos_x, app_data->star_data->pos_y, app_data->star_data->pos_z);
-    }
-    app_data->octree_creation_timing = dm_timer_elapsed_ms(&timer, context);
-    
-    // gravity force calculation
-    {
-        if(!dm_compute_command_bind_shader(app_data->gravity, context)) return false;
-        
-        if (!dm_compute_command_update_buffer(app_data->transform_b, app_data->transform_gpu_data, sizeof(transform_gpu_element) * ARRAY_LENGTH, 0, context)) return false;
-        if (!dm_compute_command_update_buffer(app_data->physics_b, app_data->physics_gpu_data, sizeof(physics_gpu_element) * ARRAY_LENGTH, 0, context)) return false;
-        
-        if (!dm_compute_command_bind_buffer(app_data->transform_b, 0, 0, context)) return false;
-        if (!dm_compute_command_bind_buffer(app_data->physics_b, 0, 1, context)) return false;
-        
-        dm_timer_start(&timer, context);
-        if(!dm_compute_command_dispatch(group_count,1,1, BLOCK_SIZE,1,1, context)) return false;
-        app_data->gravity_timing = dm_timer_elapsed_ms(&timer, context);
-        
-        if(!app_data->physics_gpu_data) return false;
+        octree_insert(i, 0, 0, &app_data->octree_depth, &app_data->octree, &app_data->octree_node_count, app_data->transform_cpu->pos_x, app_data->transform_cpu->pos_y, app_data->transform_cpu->pos_z);
     }
     
-    // physics update
-    while(app_data->accumulated_time >= FIXED_DT)
-    {
-        app_data->physics_iters++;
-        
-        if(!dm_compute_command_bind_shader(app_data->physics, context)) return false;
-        
-        if (!dm_compute_command_bind_buffer(app_data->transform_b, 0, 0, context)) return false;
-        if (!dm_compute_command_bind_buffer(app_data->physics_b, 0, 1, context)) return false;
-        
-        dm_timer_start(&timer, context);
-        if(!dm_compute_command_dispatch(group_count,1,1, BLOCK_SIZE,1,1, context)) return false;
-        app_data->physics_timing += dm_timer_elapsed_ms(&timer, context);
-        
-        app_data->accumulated_time -= FIXED_DT;
-    }
+    static bool draw_octree = false;
+    if(dm_input_key_just_pressed(DM_KEY_TILDE, context)) draw_octree = !draw_octree;
+    // render octree
+    if(draw_octree) octree_render(0, 0, app_data->octree, &app_data->debug_render_data, context);
     
-    dm_memcpy(app_data->transform_gpu_data, dm_compute_command_get_buffer_data(app_data->transform_b, context), sizeof(transform_gpu_element) * ARRAY_LENGTH);
-    dm_memcpy(app_data->physics_gpu_data, dm_compute_command_get_buffer_data(app_data->physics_b, context), sizeof(physics_gpu_element) * ARRAY_LENGTH);
+    if (!dm_compute_command_update_buffer(app_data->transform_b, app_data->transform_gpu, sizeof(transform_aos), 0, context)) return false;
+    if (!dm_compute_command_update_buffer(app_data->physics_b, app_data->physics_gpu, sizeof(physics_aos), 0, context)) return false;
     
-    if (!app_data->transform_gpu_data) return false;
-    if (!app_data->physics_gpu_data) return false;
+    if(!gravity_run(app_data->transform_b, app_data->physics_b, group_count, BLOCK_SIZE, app_data->grav_data, context)) return false;
+    if(!physics_run(app_data->transform_b, app_data->physics_b, group_count, BLOCK_SIZE, app_data->physics_data, context)) return false;
+    
+    dm_memcpy(app_data->transform_gpu, dm_compute_command_get_buffer_data(app_data->transform_b, context), sizeof(transform_aos));
+    dm_memcpy(app_data->physics_gpu, dm_compute_command_get_buffer_data(app_data->physics_b, context), sizeof(physics_aos));
+    
+    if (!app_data->transform_gpu) return false;
+    if (!app_data->physics_gpu) return false;
     
     // get the star data in order
-    transform_gpu_element* transform = NULL;
-    physics_gpu_element*   physics = NULL;
     for (uint32_t i = 0; i < ARRAY_LENGTH; i++)
     {
-        transform = &app_data->transform_gpu_data[i];
-        physics   = &app_data->physics_gpu_data[i];
+        app_data->transform_cpu->pos_x[i] = app_data->transform_gpu->data[i].pos[0];
+        app_data->transform_cpu->pos_y[i] = app_data->transform_gpu->data[i].pos[1];
+        app_data->transform_cpu->pos_z[i] = app_data->transform_gpu->data[i].pos[2];
         
-        app_data->star_data->pos_x[i] = transform->pos[0];
-        app_data->star_data->pos_y[i] = transform->pos[1];
-        app_data->star_data->pos_z[i] = transform->pos[2];
+        app_data->physics_cpu->vel_x[i] = app_data->physics_gpu->data[i].vel[0];
+        app_data->physics_cpu->vel_y[i] = app_data->physics_gpu->data[i].vel[1];
+        app_data->physics_cpu->vel_z[i] = app_data->physics_gpu->data[i].vel[2];
         
-        app_data->star_data->vel_x[i] = physics->vel[0];
-        app_data->star_data->vel_y[i] = physics->vel[1];
-        app_data->star_data->vel_z[i] = physics->vel[2];
+        app_data->physics_cpu->force_x[i] = app_data->physics_gpu->data[i].force[0];
+        app_data->physics_cpu->force_y[i] = app_data->physics_gpu->data[i].force[1];
+        app_data->physics_cpu->force_z[i] = app_data->physics_gpu->data[i].force[2];
         
-        app_data->star_data->force_x[i] = physics->force[0];
-        app_data->star_data->force_y[i] = physics->force[1];
-        app_data->star_data->force_z[i] = physics->force[2];
+        app_data->physics_cpu->accel_x[i] = app_data->physics_gpu->data[i].accel[0];
+        app_data->physics_cpu->accel_y[i] = app_data->physics_gpu->data[i].accel[1];
+        app_data->physics_cpu->accel_z[i] = app_data->physics_gpu->data[i].accel[2];
     }
     
     return true;
@@ -430,9 +404,10 @@ bool dm_application_render(dm_context* context)
 {
     application_data* app_data = context->app_data;
     
-    if(!default_render_render(ARRAY_LENGTH, app_data->camera.view_proj, app_data->camera.inv_view, app_data->star_data->pos_x, app_data->star_data->pos_y, app_data->star_data->pos_z, &app_data->default_render_data, context)) return false;
+    if(!default_render_render(ARRAY_LENGTH, app_data->camera.view_proj, app_data->camera.inv_view, app_data->transform_cpu->pos_x, app_data->transform_cpu->pos_y, app_data->transform_cpu->pos_z, &app_data->default_render_data, context)) return false;
     if(!debug_render_pass_render(&app_data->debug_render_data, app_data->camera.view_proj, context)) return false;
     
+#if 1
     // imgui
     dm_imgui_nuklear_context* imgui_ctx = &context->imgui_context.internal_context;
     struct nk_context* ctx = &imgui_ctx->ctx;
@@ -444,24 +419,13 @@ bool dm_application_render(dm_context* context)
         nk_value_int(ctx, "Num objects", ARRAY_LENGTH);
         
         nk_layout_row_dynamic(ctx, 30, 1);
-        nk_value_float(ctx, "Gravity compute (ms)", app_data->gravity_timing);
-        
-        nk_layout_row_dynamic(ctx, 30, 1);
-        nk_value_float(ctx, "Physics compute (average) (ms)", app_data->physics_timing);
-        
-        nk_layout_row_dynamic(ctx, 30, 1);
-        nk_value_int(ctx, "Physics iterations", app_data->physics_iters);
-        
-        nk_layout_row_dynamic(ctx, 30, 1);
-        nk_value_float(ctx, "Octree creation", app_data->octree_creation_timing);
-        
-        nk_layout_row_dynamic(ctx, 30, 1);
         nk_value_int(ctx, "Octree depth", app_data->octree_depth);
         
         nk_layout_row_dynamic(ctx, 30, 1);
         nk_value_float(ctx, "Previous frame (ms)", context->delta * 1000.0f);
     }
     nk_end(ctx);
+#endif
     
     return true;
 }

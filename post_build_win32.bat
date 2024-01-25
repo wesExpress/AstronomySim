@@ -51,7 +51,7 @@ IF /I "%vulkan%" EQU "1" (
 		)
 		ECHO !shader_flags!
 
-		fxc %fxc_flags% !shader_flags! !fname! /Zi /Fd /Fo !output!
+		fxc %fxc_flags% /O2 !shader_flags! !fname! /Zi /Fd /Fo !output!
 
 		COPY !output! %SRC_DIR%\build\assets\shaders
 		COPY !debug_shader! %SRC_DIR%\build\assets\shaders

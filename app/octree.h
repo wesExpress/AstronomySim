@@ -22,13 +22,11 @@ typedef struct octree_node_t
 } octree_node;
 
 DM_INLINE
-bool octree_node_contains_object(const dm_vec3 pos, const uint32_t node_index, octree_node* octree)
+bool octree_node_contains_object(const dm_vec3 pos, const octree_node* node)
 {
-    octree_node node = octree[node_index];
-    
     dm_vec3 min, max;
-    dm_vec3_sub_scalar(node.center, node.half_extents, min);
-    dm_vec3_add_scalar(node.center, node.half_extents, max);
+    dm_vec3_sub_scalar(node->center, node->half_extents, min);
+    dm_vec3_add_scalar(node->center, node->half_extents, max);
     
     return dm_vec3_leq_vec3(pos, max) && dm_vec3_gt_vec3(pos, min);
 }
@@ -125,10 +123,10 @@ bool octree_insert(const uint32_t object_index, const uint32_t node_index, const
         pos_z[object_index]
     };
     
-    // early out
-    if(!octree_node_contains_object(obj_pos, node_index, *octree)) return false;
-    
     octree_node* node = &(*octree)[node_index];
+    
+    // early out
+    if(!octree_node_contains_object(obj_pos, node)) return false;
     
 #ifdef OCTREE_LIMIT_DEPTH
     // are we at max depth?
