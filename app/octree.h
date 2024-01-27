@@ -126,7 +126,7 @@ bool octree_insert(const uint32_t object_index, const uint32_t node_index, const
     octree_node* node = &(*octree)[node_index];
     
     // early out
-    if(!octree_node_contains_object(obj_pos, node)) return false;
+    if(!octree_node_contains_object(obj_pos, node)) return true;
     
 #ifdef OCTREE_LIMIT_DEPTH
     // are we at max depth?
@@ -185,36 +185,35 @@ bool octree_insert(const uint32_t object_index, const uint32_t node_index, const
         
         // reinsert any objects here
         // SHOULD be at most one, but you never know...
+        // if we fail here, we just keep it in the current array
         for(uint32_t i=0; i<node->obj_count; i++)
         {
             for(uint32_t j=0; j<OCTREE_CHILDREN_COUNT; j++)
             {
-                if(octree_insert(node->obj_index_array[i], child_index++, depth+1, max_depth, octree, node_count, pos_x, pos_y, pos_z)) 
-                {
-                    node->obj_count--;
-                    break;
-                }
+                if(!octree_insert(node->obj_index_array[i], child_index++, depth+1, max_depth, octree, node_count, pos_x, pos_y, pos_z)) continue;
+                
+                node = &(*octree)[node_index];
+                node->obj_count--;
+                break;
             }
         }
+        node = &(*octree)[node_index];
         
         child_index = node->first_child;
-        bool failed = true;
         for(uint32_t i=0; i<OCTREE_CHILDREN_COUNT; i++)
         {
             if(!octree_insert(object_index, child_index++, depth+1, max_depth, octree, node_count, pos_x, pos_y, pos_z)) continue;
             
-            failed = false;
             return true;
         }
+        node = &(*octree)[node_index];
         
-        if(failed)
-        {
-            node->obj_index_array[node->obj_count++] = object_index;
-            return true;
-        }
-        
+        node->obj_index_array[node->obj_count++] = object_index;
+        return true;
     }
     
+    DM_LOG_FATAL("Octree insertion failed somehow...");
+    return false;
 }
 
 void octree_render(const uint32_t node_index, const uint32_t depth, octree_node* octree, void** render_data, dm_context* context)

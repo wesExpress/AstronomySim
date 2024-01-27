@@ -172,6 +172,10 @@ bool dm_application_init(dm_context* context)
         app_data->physics_cpu->vel_y[0] = 0;
         app_data->physics_cpu->vel_z[0] = 0;
         
+        app_data->physics_cpu->accel_x[0] = 0;
+        app_data->physics_cpu->accel_y[0] = 0;
+        app_data->physics_cpu->accel_z[0] = 0;
+        
         float r_i, vc;
         
         dm_vec3 min_p = { FLT_MAX,FLT_MAX,FLT_MAX };
@@ -216,6 +220,10 @@ bool dm_application_init(dm_context* context)
             app_data->physics_cpu->vel_x[i] = dir[0] * vc;
             app_data->physics_cpu->vel_y[i] = dir[1] * vc;
             app_data->physics_cpu->vel_z[i] = dir[2] * vc;
+            
+            app_data->physics_cpu->accel_x[i] = 0;
+            app_data->physics_cpu->accel_y[i] = 0;
+            app_data->physics_cpu->accel_z[i] = 0;
         }
         
         // set up octree
@@ -241,7 +249,7 @@ bool dm_application_init(dm_context* context)
         
         for(uint32_t i=0; i<ARRAY_LENGTH; i++)
         {
-            octree_insert(i, 0, 0, &app_data->octree_depth, &app_data->octree, &app_data->octree_node_count, app_data->transform_cpu->pos_x, app_data->transform_cpu->pos_y, app_data->transform_cpu->pos_z);
+            if(!octree_insert(i, 0, 0, &app_data->octree_depth, &app_data->octree, &app_data->octree_node_count, app_data->transform_cpu->pos_x, app_data->transform_cpu->pos_y, app_data->transform_cpu->pos_z)) return false;
         }
     }
     
@@ -297,7 +305,7 @@ bool dm_application_update(dm_context* context)
     
     dm_timer timer = { 0 };
     
-    const int group_count = (int)dm_ceil((float)ARRAY_LENGTH / (float)BLOCK_SIZE);
+    const uint32_t group_count = (uint32_t)dm_ceil((float)ARRAY_LENGTH / (float)BLOCK_SIZE);
     
     // update gpu buffers and get octree data
     dm_vec3 min = { FLT_MAX,FLT_MAX,FLT_MAX };
@@ -324,9 +332,9 @@ bool dm_application_update(dm_context* context)
         app_data->physics_gpu->data[i].force[2] = 0;
         
         // octree
-        min[0] = app_data->transform_cpu->pos_x[i] <= min[0] ? app_data->transform_cpu->pos_x[i] : min[0];
-        min[1] = app_data->transform_cpu->pos_y[i] <= min[1] ? app_data->transform_cpu->pos_y[i] : min[1];
-        min[2] = app_data->transform_cpu->pos_z[i] <= min[2] ? app_data->transform_cpu->pos_z[i] : min[2];
+        min[0] = app_data->transform_cpu->pos_x[i] < min[0] ? app_data->transform_cpu->pos_x[i] : min[0];
+        min[1] = app_data->transform_cpu->pos_y[i] < min[1] ? app_data->transform_cpu->pos_y[i] : min[1];
+        min[2] = app_data->transform_cpu->pos_z[i] < min[2] ? app_data->transform_cpu->pos_z[i] : min[2];
         
         max[0] = app_data->transform_cpu->pos_x[i] > max[0] ? app_data->transform_cpu->pos_x[i] : max[0];
         max[1] = app_data->transform_cpu->pos_y[i] > max[1] ? app_data->transform_cpu->pos_y[i] : max[1];
@@ -357,7 +365,7 @@ bool dm_application_update(dm_context* context)
     
     for(uint32_t i=0; i<ARRAY_LENGTH; i++)
     {
-        octree_insert(i, 0, 0, &app_data->octree_depth, &app_data->octree, &app_data->octree_node_count, app_data->transform_cpu->pos_x, app_data->transform_cpu->pos_y, app_data->transform_cpu->pos_z);
+        if(!octree_insert(i, 0, 0, &app_data->octree_depth, &app_data->octree, &app_data->octree_node_count, app_data->transform_cpu->pos_x, app_data->transform_cpu->pos_y, app_data->transform_cpu->pos_z)) return false;
     }
     
     static bool draw_octree = false;

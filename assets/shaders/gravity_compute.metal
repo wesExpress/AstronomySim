@@ -9,12 +9,16 @@ struct transform_elem
 struct physics_elem
 {
     float4 vel;
+
     float4 force;
+
+    float4 accel;
 };
 
 //#define USE_ASTRO_UNITS
 
-#define OBJECT_COUNT 10000
+#define ARRAY_LENGTH 20000
+#define BLOCK_SIZE   256
 
 #ifndef USE_ASTRO_UNITS
     #define G            6.67e-11f
@@ -22,44 +26,49 @@ struct physics_elem
     #define G            4.3e-3f
 #endif
 
-#define SOFTENING_2  0.05f
+#define SOFTENING_2  0.01f
 
 kernel void gravity_calc(device transform_elem* transform[[buffer(0)]],
                          device physics_elem*   physics[[buffer(1)]],
-                         uint index            [[thread_position_in_grid]])
+                         uint3 threadgroup_position_in_grid   [[ threadgroup_position_in_grid ]],
+                         uint3 thread_position_in_threadgroup [[ thread_position_in_threadgroup ]],
+                         uint3 threads_per_threadgroup        [[ threads_per_threadgroup ]],
+                         uint  thread_index_in_threadgroup    [[ thread_index_in_threadgroup]])
 {
-    if(index>=OBJECT_COUNT) return;
+    const uint3 dispatch_id = (threadgroup_position_in_grid * threads_per_threadgroup) + 
+        thread_position_in_threadgroup;
 
-    float3 r, f;
-    float distance_2, distance_6, inv_dis;
-    float grav;
-
-    f.x = f.y = f.z = 0;
-
-    const float3 p_i = transform[index].pos.xyz;
-    const float  m_i = physics[index].vel.w;
-
-    for(uint j=0; j<OBJECT_COUNT; j++)
+    if(dispatch_id.x<ARRAY_LENGTH)
     {
-        r = transform[j].pos.xyz - p_i;
+        float3 r, f;
+        float distance_2, distance_6, inv_dis;
+        float grav;
 
-        distance_2 = dot(r,r);
+        f.x = f.y = f.z = 0;
 
-        // softening
-        distance_2 += SOFTENING_2;
+        const float3 p_i = transform[dispatch_id.x].pos.xyz;
+        const float  m_i = physics[dispatch_id.x].vel.w;
 
-        distance_6 = distance_2 * distance_2 * distance_2;
-        distance_6 = sqrt(distance_6);
-        inv_dis = 1.f / distance_6;
+        for(uint j=0; j<ARRAY_LENGTH; j++)
+        {
+            r = transform[j].pos.xyz - p_i;
 
-        grav  = physics[j].vel.w * m_i;
-        grav *= G;
-        grav *= inv_dis;
+            distance_2 = dot(r, r);
+            distance_2 += SOFTENING_2;
 
-        f = (j==index) ? f : (f + grav * r);  
+            distance_6 = distance_2 * distance_2 * distance_2;
+            distance_6 = sqrt(distance_6);
+            inv_dis    = 1.f / distance_6;
+
+            grav = physics[j].vel.w * m_i;
+            grav *= G;
+            grav *= inv_dis;
+
+            f += grav * r;
+        }
+            
+        physics[dispatch_id.x].force.xyz += f;
     }
-
-    physics[index].force.xyz += f;
 }
 
 // CUDA Code

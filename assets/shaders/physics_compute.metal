@@ -9,21 +9,27 @@ struct transform_elem
 struct physics_elem
 {
     float4 vel;
+
     float4 force;
+
+    float4 accel;
 };
 
+#define ARRAY_LENGTH 20000
+#define BLOCK_SIZE   256
+
 #define FIXED_DT     0.00833f
-#define OBJECT_COUNT 16000
 
 kernel void physics_update(device transform_elem* transform[[buffer(0)]],
                            device physics_elem*   physics[[buffer(1)]],
                            uint index             [[thread_position_in_grid]])
 {
-    if(index>=OBJECT_COUNT) return;
+    if(index<ARRAY_LENGTH)
+    {
+        physics[index].vel.xyz   += physics[index].accel.xyz * FIXED_DT * 0.5f;
+        transform[index].pos.xyz += physics[index].vel.xyz * FIXED_DT;
 
-    const float dt_m = FIXED_DT / physics[index].vel.w;
-
-    physics[index].vel.xyz += physics[index].force.xyz * dt_m;
-
-    transform[index].pos.xyz += physics[index].vel.xyz * FIXED_DT;
+        physics[index].accel.xyz  = physics[index].force.xyz * physics[index].force.w;
+        physics[index].vel.xyz   += physics[index].accel.xyz * FIXED_DT * 0.5f;
+    }
 }
