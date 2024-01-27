@@ -23,7 +23,7 @@ RWStructuredBuffer<physics_elem>   physics    : register(u1);
 #define BLOCK_SIZE   256
 
 #define G            6.67e-11f
-#define SOFTENING_2  0.01f
+#define SOFTENING_2  0.05f
 
 groupshared float3 shared_pos[BLOCK_SIZE];
 groupshared float shared_mass[BLOCK_SIZE];
@@ -31,7 +31,7 @@ groupshared float shared_mass[BLOCK_SIZE];
 [numthreads(BLOCK_SIZE,1,1)]
 void c_main(uint3 group_id : SV_GroupID, uint3 dispatch_id : SV_DispatchThreadID, uint3 group_thread_id : SV_GroupThreadID, uint group_index : SV_GroupIndex)
 {
-	const uint dimx = uint(ceil(ARRAY_LENGTH / BLOCK_SIZE));
+	const uint dimx = uint(ceil((float)ARRAY_LENGTH / (float)BLOCK_SIZE));
 
 	float3 r, f;
 	float  distance_2, distance_6, inv_dis;

@@ -4,7 +4,7 @@ SetLocal EnableDelayedExpansion
 SET SRC_DIR=%cd%
 SET DM_DIR=%SRC_DIR%\DarkMatter
 
-SET /A debug=1
+SET /A debug=0
 REM SET /A vulkan=0
 SET /A opengl=0
 SET /A physics_mt=0

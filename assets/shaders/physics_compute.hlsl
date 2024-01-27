@@ -29,9 +29,9 @@ void c_main(uint3 id : SV_DispatchThreadID)
 {
 	const float dt_m_half = FIXED_DT * physics[id.x].inv_mass * 0.5f;
 
-	physics[id.x].vel    += physics[id.x].accel * dt_m_half;
+	physics[id.x].vel    += physics[id.x].accel * FIXED_DT * 0.5f;
 	transforms[id.x].pos += physics[id.x].vel * FIXED_DT;
 	
-	physics[id.x].accel   = physics[id.x].force;
-	physics[id.x].vel    += physics[id.x].accel * dt_m_half;
+	physics[id.x].accel   = physics[id.x].force * physics[id.x].inv_mass;
+	physics[id.x].vel    += physics[id.x].accel * FIXED_DT * 0.5f;
 }
