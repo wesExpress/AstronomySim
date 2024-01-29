@@ -16,16 +16,19 @@ elseif(WIN32)
 endif()
 
 set(SOURCES
-	#app/app.c
-	#app/components.c
-	#app/raytrace_app.c
 	app/camera.c
 	app/compute_test.c
 
+	app/gravity.c
+	app/physics.c
+	app/octree.c
+
+	app/default_render.c
+	app/debug_render.c
+	
 	DarkMatter/dm_impl.c
 	DarkMatter/dm_physics.c
 	DarkMatter/dm_imgui.c
-	#$VAR_SOURCES
 )
 
 add_executable(AstronomySim ${SOURCES} ${VAR_SOURCES})

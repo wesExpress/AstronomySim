@@ -14,7 +14,7 @@
 #include <string.h>
 #include <float.h>
 
-#define ARRAY_LENGTH 20000
+#define ARRAY_LENGTH 30000
 #define BLOCK_SIZE   256
 
 #define OCTREE_FUDGE_FACTOR 0.001f;
@@ -27,7 +27,7 @@
 #define WORLD_CUBE_SIZE 50                 // m
 
 #define MASS_SCALE      1e10f              // kg
-#define SMBH_MASS       MASS_SCALE * 1.f   // kg
+#define SMBH_MASS       MASS_SCALE * 1e4f  // kg
 #else
 #define G  4.3e-3f                         // pc Msun^-1 km^2 / s^2
 
@@ -129,6 +129,8 @@ typedef struct application_data_t
     void* debug_render_data;
 } application_data;
 
+void gravity_bh(transform_soa* transforms, physics_soa* physics, octree_node** octree);
+
 /*
  DarkMatter interface
  */
@@ -213,9 +215,9 @@ bool dm_application_init(dm_context* context)
             r_i += app_data->transform_cpu->pos_z[i] * app_data->transform_cpu->pos_z[i];
             r_i  = dm_sqrtf(r_i);
             
-            vc = G * app_data->physics_cpu->mass[0];
+            vc  = G * app_data->physics_cpu->mass[0];
             vc /= r_i;
-            vc = dm_sqrtf(vc) * 10.f;
+            vc  = dm_sqrtf(vc);
             
             app_data->physics_cpu->vel_x[i] = dir[0] * vc;
             app_data->physics_cpu->vel_y[i] = dir[1] * vc;
@@ -369,7 +371,7 @@ bool dm_application_update(dm_context* context)
     }
     
     static bool draw_octree = false;
-    if(dm_input_key_just_pressed(DM_KEY_TILDE, context)) draw_octree = !draw_octree;
+    if(dm_input_key_just_pressed(DM_KEY_1, context)) draw_octree = !draw_octree;
     // render octree
     if(draw_octree) octree_render(0, 0, app_data->octree, &app_data->debug_render_data, context);
     
@@ -436,4 +438,9 @@ bool dm_application_render(dm_context* context)
 #endif
     
     return true;
+}
+
+void gravity_bh(transform_soa* transforms, physics_soa* physics, octree_node** octree)
+{
+    
 }

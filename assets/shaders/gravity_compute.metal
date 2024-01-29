@@ -17,7 +17,7 @@ struct physics_elem
 
 //#define USE_ASTRO_UNITS
 
-#define ARRAY_LENGTH 20000
+#define ARRAY_LENGTH 30000
 #define BLOCK_SIZE   256
 
 #ifndef USE_ASTRO_UNITS
@@ -26,7 +26,7 @@ struct physics_elem
     #define G            4.3e-3f
 #endif
 
-#define SOFTENING_2  0.01f
+#define SOFTENING_2  0.05f
 
 kernel void gravity_calc(device transform_elem* transform[[buffer(0)]],
                          device physics_elem*   physics[[buffer(1)]],

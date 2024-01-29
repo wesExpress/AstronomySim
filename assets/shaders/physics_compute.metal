@@ -15,7 +15,7 @@ struct physics_elem
     float4 accel;
 };
 
-#define ARRAY_LENGTH 20000
+#define ARRAY_LENGTH 30000
 #define BLOCK_SIZE   256
 
 #define FIXED_DT     0.00833f
