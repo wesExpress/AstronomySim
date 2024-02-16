@@ -1,0 +1,13 @@
+#ifndef SIMULATION_DEFINES_H
+#define SIMULATION_DEFINES_H
+
+#define ARRAY_LENGTH 20000
+#define BLOCK_SIZE   256
+
+#define G 6.67e-11f
+
+#define FIXED_DT 0.00833f
+
+#define SOFTENING_2 0.01f
+
+#endif //SIMULATION_DEFINES_H

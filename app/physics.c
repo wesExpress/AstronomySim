@@ -1,4 +1,5 @@
 #include "physics.h"
+#include <assert.h>
 
 #define FIXED_DT 0.008333
 
@@ -11,7 +12,7 @@ bool physics_init(void** data, dm_context* context)
 #ifdef DM_METAL
     strcpy(physics_desc.path, "assets/shaders/physics_compute.metallib");
     strcpy(physics_desc.function, "physics_update");
-#elif defined(DM_DIRECTX)
+#elif defined(DM_DIRECTX11) || defined(DM_DIRECTX12)
     strcpy(physics_desc.path, "assets/shaders/physics_compute.fxc");
 #else
     DM_LOG_FATAL("Compute shader isn't supported for this backend yet");

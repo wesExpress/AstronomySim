@@ -24,7 +24,7 @@ typedef struct debug_render_uniform_t
     dm_mat4 view_proj;
 } debug_render_uniform;
 
-#define DEBUG_MAX_INSTS_PER_FRAME 10000
+#define DEBUG_MAX_INSTS_PER_FRAME 40000
 typedef struct debug_render_data_t
 {
     dm_render_handle vb, instb[DEBUG_RENDER_SHAPE_UNKNOWN], ib, shader, pipe, uni;

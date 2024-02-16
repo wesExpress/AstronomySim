@@ -1,4 +1,5 @@
 #include "gravity.h"
+#include <assert.h>
 
 bool gravity_init(void** data, dm_context* context)
 {
@@ -9,7 +10,7 @@ bool gravity_init(void** data, dm_context* context)
 #ifdef DM_METAL
     strcpy(gravity_desc.path, "assets/shaders/gravity_compute.metallib");
     strcpy(gravity_desc.function, "gravity_calc");
-#elif defined(DM_DIRECTX)
+#elif defined(DM_DIRECTX11) || defined(DM_DIRECTX12)
     strcpy(gravity_desc.path, "assets/shaders/gravity_compute.fxc");
 #else
     DM_LOG_FATAL("Compute shader isn't supported for this backend yet");

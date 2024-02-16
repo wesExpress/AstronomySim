@@ -19,11 +19,7 @@ struct physics_elem
 RWStructuredBuffer<transform_elem> transforms : register(u0);
 RWStructuredBuffer<physics_elem>   physics    : register(u1);
 
-#define ARRAY_LENGTH 20000
-#define BLOCK_SIZE   256
-
-#define G            6.67e-11f
-#define SOFTENING_2  0.05f
+#include "../../app/simulation_defines.h"
 
 groupshared float3 shared_pos[BLOCK_SIZE];
 groupshared float shared_mass[BLOCK_SIZE];
@@ -39,30 +35,6 @@ void c_main(uint3 group_id : SV_GroupID, uint3 dispatch_id : SV_DispatchThreadID
 
 	f.x = f.y = f.z = 0;
 
-#if 0
-    for(uint j=0; j<ARRAY_LENGTH; j++)
-    {
-		r = transforms[j].pos - transforms[dispatch_id.x].pos;
-
-		distance_2  = r.x * r.x;
-        distance_2 += r.y * r.y;
-        distance_2 += r.z * r.z;
-
-        // softening
-        distance_2 += SOFTENING_2;
-
-        distance_6 = distance_2 * distance_2 * distance_2;
-        distance_6 = sqrt(distance_6);
-        inv_dis = 1.f / distance_6;
-
-        grav  = physics[j].mass * physics[dispatch_id.x].mass;
-        grav *= G;
-        grav *= inv_dis;
-		
-		//f += grav * r;
-		f = (j==dispatch_id.x) ? f : (f + grav * r);   
-    }
-#else
 	const float3 p = transforms[dispatch_id.x].pos;
 	const float  m = physics[dispatch_id.x].mass;
 
@@ -97,7 +69,6 @@ void c_main(uint3 group_id : SV_GroupID, uint3 dispatch_id : SV_DispatchThreadID
 		}
 		GroupMemoryBarrierWithGroupSync();
 	}
-#endif
 
 	physics[dispatch_id.x].force += f;
 }

@@ -118,28 +118,13 @@ bool default_render_render(const uint32_t array_length, const dm_mat4 view_proj,
         pos[1] = pos_y[i];
         pos[2] = pos_z[i];
         
-        switch(i)
-        {
-            case 0:
-            scale[0] = 0.5f;
-            scale[1] = 0.5f;
-            scale[2] = 0.5f;
-            
-            inst->color[0] = 1;
-            inst->color[1] = 1;
-            inst->color[2] = 0;
-            break;
-            
-            default:
-            scale[0] = 0.15f;
-            scale[1] = 0.15f;
-            scale[2] = 0.15f;
-            
-            inst->color[0] = 1;
-            inst->color[1] = 1;
-            inst->color[2] = 1;
-            break;
-        }
+        scale[0] = 0.05f;
+        scale[1] = 0.05f;
+        scale[2] = 0.05f;
+        
+        inst->color[0] = 1;
+        inst->color[1] = 1;
+        inst->color[2] = 1;
         inst->color[3] = 1;
         
         dm_mat_scale(inv_view, scale, inst->model);
