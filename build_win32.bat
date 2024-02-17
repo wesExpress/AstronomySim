@@ -15,7 +15,7 @@ SET /A math_tests=0
 REM SET app=%SRC_DIR%\app\raytrace_app.c
 REM SET app=%SRC_DIR%\app\compute_test.c %SRC_DIR%\app\octree.c %SRC_DIR%\app\gravity.c %SRC_DIR%\app\physics.c
 SET app=%SRC_DIR%\app\render_test.c
-SET rendering=%SRC_DIR%\app\default_render.c %SRC_DIR%\app\debug_render.c
+REM SET rendering=%SRC_DIR%\app\default_render.c %SRC_DIR%\app\debug_render.c
 
 SET c_filenames=%app% %rendering% %SRC_DIR%\app\camera.c
 
@@ -59,7 +59,7 @@ IF /I "%vulkan%" EQU "1" (
 	SET defines=%defines% /DDM_OPENGL
 ) ELSE IF /I "%dx12%" EQU "1" (
 	SET dm_filenames=%dm_filenames% %DM_DIR%\rendering\dm_renderer_dx12.c
-	SET linker_flags=%linker_flags% d3d12.lib dxgi.lib %dxguid.lib d3dcompiler.lib
+	SET linker_flags=%linker_flags% d3d12.lib dxgi.lib %dxguid.lib d3dcompiler.lib 
 	SET defines=%defines% /DDM_DIRECTX12
 ) ELSE (
 	SET dm_filenames=%dm_filenames% %DM_DIR%\rendering\dm_renderer_dx11.c
